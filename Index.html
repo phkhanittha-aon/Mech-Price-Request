@@ -304,6 +304,86 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
 .viewtoggle button{padding:6px 13px;font-size:12px;font-weight:600;color:var(--muted);background:var(--surface)}
 .viewtoggle button.on{background:var(--orange);color:#fff}
 @media(max-width:820px){.kanban{grid-auto-columns:82vw;max-height:none;overflow-y:visible}.kcol{max-height:70vh}}
+
+/* ============================================================ v4.1 — PRICING GRID ZONES
+   ① ข้อมูลสินค้า (เทา) · ② ต้นทุน (ฟ้า) · ③ มาร์จิ้น (เขียว) · ④ ราคาขาย (ส้ม) + เส้นแบ่งโซนแนวตั้ง */
+:root{--z-prod:#efe9df;--z-cost:#e3edf9;--z-gp:#e0f1e7;--z-sell:#fde6cf}
+.cost-table thead tr.zone-row th{font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:none;padding:6px 8px;text-align:left;border-bottom:none}
+.cost-table thead tr.zone-row th:first-child{position:static}
+.cost-table th.z-prod{background:var(--z-prod);color:var(--ink-2)}
+.cost-table th.z-cost,.cost-table th.z-cost-h{background:var(--z-cost);color:var(--blue)}
+.cost-table th.z-gp,.cost-table th.z-gp-h{background:var(--z-gp);color:var(--green)}
+.cost-table th.z-sell,.cost-table th.z-sell-h{background:var(--z-sell);color:var(--orange-deep)}
+.cost-table td.z-cost-c{background:rgba(47,107,176,.035)}
+.cost-table td.z-gp-c{background:rgba(46,138,91,.045)}
+.cost-table td.z-sell-c{background:rgba(232,116,12,.05)}
+.cost-table .zs{border-left:2px solid var(--line-2)!important}
+.zone-legend{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);margin-left:8px}
+.zone-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-left:6px}
+.zone-legend i.z-prod{background:var(--z-prod)}.zone-legend i.z-cost{background:var(--z-cost);box-shadow:inset 0 0 0 1px var(--blue)}
+.zone-legend i.z-gp{background:var(--z-gp);box-shadow:inset 0 0 0 1px var(--green)}.zone-legend i.z-sell{background:var(--z-sell);box-shadow:inset 0 0 0 1px var(--orange)}
+.lc-zones{display:flex;gap:8px;margin-top:10px}
+.lc-zones>span{flex:1;border-radius:9px;padding:6px 9px;display:flex;justify-content:space-between;align-items:center;font-size:12px}
+.lc-zones i{font-style:normal;color:var(--muted);font-size:11px}
+.lc-zones .zc{background:var(--z-cost);color:var(--blue)}.lc-zones .zg{background:var(--z-gp);color:var(--green)}
+.lc-zones b{font-family:'JetBrains Mono',monospace}
+/* ---- live summary bar (ติดขอบล่างหน้าทำราคา) ---- */
+.livebar{position:sticky;bottom:0;z-index:25;margin-top:16px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--line);border:1px solid var(--line-2);border-radius:14px;overflow:hidden;box-shadow:0 -6px 24px rgba(40,28,12,.10)}
+.livebar:empty{display:none}
+.lb-item{background:var(--surface);padding:9px 14px;display:flex;flex-direction:column;min-width:0}
+.lb-item span{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+.lb-item b{font-family:'JetBrains Mono',monospace;font-size:19px;line-height:1.25}
+.lb-item i{font-style:normal;font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb-sell b{color:var(--orange-deep)}.lb-cost b{color:var(--blue)}.lb-gp b{color:var(--green)}
+.lb-pct.green{background:var(--green-soft)}.lb-pct.green b{color:var(--green)}
+.lb-pct.amber{background:var(--amber-soft)}.lb-pct.amber b{color:var(--amber)}
+.lb-pct.red{background:var(--red-soft)}.lb-pct.red b{color:var(--red)}
+@media(max-width:700px){.livebar{grid-template-columns:1fr 1fr}.lb-item b{font-size:16px}}
+/* ---- live sync / conflict ---- */
+.live-pill{font-size:11px;color:var(--muted);white-space:nowrap}
+.live-pill.on{color:var(--green);font-weight:600}
+@media(max-width:600px){#liveTxt{display:none}}
+.live-spin{display:inline-block;width:9px;height:9px;border:2px solid var(--line-2);border-top-color:var(--orange);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-1px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.conflict-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px;border-radius:12px;
+  background:var(--amber-soft);border:1px solid var(--amber);border-left:5px solid var(--amber)}
+@keyframes flashIn{0%{box-shadow:0 0 0 3px var(--orange)}100%{box-shadow:0 0 0 0 transparent}}
+.flash{animation:flashIn 2.4s ease-out}
+.flash-row td{animation:flashBg 2.4s ease-out}
+@keyframes flashBg{0%{background:var(--orange-soft)}100%{background:transparent}}
+/* ---- dual approval badges ---- */
+.abadge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.abadge.ok{background:var(--green-soft);color:var(--green)}
+.abadge.wait{background:var(--amber-soft);color:var(--amber);border-color:rgba(201,138,18,.35)}
+.abadge.mine{background:var(--amber);color:#fff}
+.abadge.warn{background:var(--red-soft);color:var(--red)}
+/* ---- approval cards (Dashboard) ---- */
+.agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(330px,100%),1fr));gap:10px}
+@media(max-width:520px){.acard{flex-wrap:wrap}.ac-gp{flex:0 0 72px}.ac-btn{width:100%}}
+.acard{display:flex;gap:12px;align-items:stretch;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--surface);cursor:pointer;transition:box-shadow .12s}
+.acard:hover{box-shadow:var(--shadow)}
+.acard.mine{border-color:var(--amber);box-shadow:inset 3px 0 0 var(--amber)}
+.ac-gp{flex:0 0 86px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ac-gp b{font-family:'Sora',sans-serif;font-size:24px;line-height:1.1}
+.ac-gp span{font-size:10px;font-weight:700;opacity:.8}
+.ac-gp.green{background:var(--green-soft);color:var(--green)}.ac-gp.amber{background:var(--amber-soft);color:var(--amber)}.ac-gp.red{background:var(--red-soft);color:var(--red)}
+.ac-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.ac-top{display:flex;justify-content:space-between;gap:6px}
+.ac-title{flex:1;min-width:0;font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acard .kc-doc{flex:0 0 auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap}
+.ac-nums{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+.ac-nums b{color:var(--ink);font-size:11.5px}
+.ac-badges,.kc-badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+.ac-btn{align-self:center;background:var(--green)}
+.kcard.mine{border-color:var(--amber);box-shadow:inset 3px 0 0 var(--amber)}
+.kcard .kc-gp{margin-top:7px;border-radius:9px;padding:5px 9px;font-family:'Sora',sans-serif;font-weight:700;font-size:22px;line-height:1.1;display:flex;align-items:baseline;gap:6px}
+.kcard .kc-gp span{font-size:10px;font-weight:700;opacity:.75}
+.kcard .kc-gp.green{background:var(--green-soft);color:var(--green)}.kcard .kc-gp.amber{background:var(--amber-soft);color:var(--amber)}.kcard .kc-gp.red{background:var(--red-soft);color:var(--red)}
+@media print{.livebar,.conflict-bar,.live-pill{display:none!important}}
+/* มือถือ: grid หลายคอลัมน์แบบ inline ยุบเป็นคอลัมน์เดียว + ให้ตารางเลื่อนในกล่องตัวเอง (เดิมทั้งหน้าล้นแนวนอน) */
+.grid>*{min-width:0}
+@media(max-width:760px){#content .grid[style*="fr"]{grid-template-columns:1fr!important}}
 </style>
 </head>
 <body>
@@ -321,7 +401,7 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
       <button class="btn full" onclick="doLogin()">เข้าสู่ระบบ →</button>
       <div class="login-err" id="loginErr"></div>
       <div class="login-hint">ลืมรหัสผ่าน? ติดต่อผู้ดูแลระบบเพื่อตั้งรหัสใหม่
-        <div style="margin-top:6px;opacity:.65;font-size:10.5px" class="mono" id="buildStamp">2026-08-10 · build 3.2</div></div>
+        <div style="margin-top:6px;opacity:.65;font-size:10.5px" class="mono" id="buildStamp">2026-10-08 · build 4.1</div></div>
     </div>
   </div>
 </div>
@@ -347,6 +427,7 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
       <div><h1 id="pageTitle">หน้าหลัก</h1></div>
       <div class="spacer"></div>
       <div class="row-flex" style="gap:8px"><span class="cloud-dot" id="cloudDot"></span><span class="sub" id="cloudTxt" style="font-size:12px">ออฟไลน์</span>
+        <span class="live-pill" id="liveTxt"></span>
         <span class="sub" id="queueBadge" style="font-size:11px;color:var(--amber);display:none"></span>
         <button class="btn sm ghost" id="syncBtn" style="padding:5px 10px" onclick="manualSync()" title="ดึงข้อมูลล่าสุดจาก Google Sheet">🔄 ซิงค์</button></div>
     </header>
@@ -370,14 +451,28 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const BUILD='2026-08-10 · build 4.0 · RBAC';
+const BUILD='2026-10-08 · build 4.1 · RBAC + Live Sync';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
    ============================================================ */
 const ROLE_TIER={'GM':'ADMIN','Admin':'ADMIN','Procurement Mgr':'MANAGEMENT','BD Mgr':'MANAGEMENT',
   'Sourcing':'INTERNAL','Sales':'SALES'};
-function tierOf(u){return ROLE_TIER[(u||CURRENT||{}).role]||'SALES'}
+/* ชื่อ role ที่สะกดต่างในแท็บ Users → ชื่อมาตรฐาน (ต้องตรงกับ ROLE_ALIASES ใน Code.gs)
+   เดิม "BD Manager" / "procurement mgr " หา ROLE_PERMS ไม่เจอ → ผู้จัดการถูกมองเป็น Sales และไม่เห็นราคา */
+const ROLE_ALIASES={'gm':'GM','general manager':'GM','admin':'Admin','administrator':'Admin',
+  'procurement mgr':'Procurement Mgr','procurement manager':'Procurement Mgr','procurement mgr.':'Procurement Mgr',
+  'bd mgr':'BD Mgr','bd manager':'BD Mgr','bd mgr.':'BD Mgr','business development manager':'BD Mgr',
+  'sourcing':'Sourcing','sales':'Sales'};
+function normRole(role){
+  const raw=String(role||'').trim();
+  if(ROLE_TIER[raw])return raw;
+  return ROLE_ALIASES[raw.toLowerCase().replace(/\s+/g,' ')]||raw;
+}
+function tierOf(u){return ROLE_TIER[normRole((u||CURRENT||{}).role)]||'SALES'}
+// BUSINESS RULE: tier ที่เห็นต้นทุน + ราคาขาย "ทุกใบ ทุกสถานะ" (ต้องตรงกับ FULL_DATA_TIERS ใน Code.gs)
+const FULL_DATA_TIERS=['ADMIN','MANAGEMENT','INTERNAL'];
+function canSeeCost(u){u=u||CURRENT;return !!u&&FULL_DATA_TIERS.indexOf(tierOf(u))>=0}
 /** ระบบทำราคาหลัก = Internal/Admin view เท่านั้น — Sales ต้องใช้แอปติดตามงานขาย
     นี่คือด่านที่ตัดปัญหา back-button / localStorage รั่วทั้งชุด เพราะ Sales
     จะไม่มี session ในแอปนี้ตั้งแต่แรก จึงไม่มีข้อมูลต้นทุนถูกโหลดลงเครื่องเลย */
@@ -461,12 +556,15 @@ function buildDefaultUsers(){
     {id:'sales_kong',name:'Kong',role:'Sales',pass:'1234',scope:'all'},
   ];
 }
+// UX permissions (ตัวจริงอยู่ที่ ROLE_MATRIX ใน Code.gs)
+// FIX v4.1: เดิมไม่มี 'Admin' → perms() คืน {} → Admin ไม่เห็นราคา/เมนูผู้จัดการเลย
 const ROLE_PERMS={
   'Sales':{create:false,approve:false,settings:false,users:false,margin:false},
   'Sourcing':{create:true,approve:false,settings:false,users:false,margin:false},
   'Procurement Mgr':{create:true,approve:true,settings:true,users:true,margin:true},
   'BD Mgr':{create:true,approve:true,settings:true,users:true,margin:true},
   'GM':{create:true,approve:true,settings:true,users:true,margin:true},
+  'Admin':{create:true,approve:true,settings:true,users:true,margin:true},
 };
 
 /* ---------- GROUP TYPES (project level) ---------- */
@@ -520,9 +618,6 @@ function buildDefaultSettings(){
 const SR_STATUSES=['Draft','Submitted','Accepted','Quoted','Cancelled'];
 const QT_STATUSES=['Requested','In Progress','Submitted','Partial Approved','Approved','Pending','Won','Closed'];
 const QT_DEFAULT_STATUS='In Progress';
-// legacy arrays — เก็บไว้กัน view เก่าพัง
-const STATUSES=['Requested','Pending','Won','Done','Closed'];
-const SALES_STATUSES=['Pending','Won','Closed'];
 
 /* ---- 1. Dual approval: ต้องได้ทั้ง 2 ขาถึงจะเป็น Approved ---- */
 // BUSINESS RULE: ใบเสนอราคาต้องผ่านทั้ง Procurement Mgr และ BD Mgr
@@ -567,8 +662,6 @@ const STATUS_TAG={
   // QT v3
   'Requested':'orange','In Progress':'orange','Submitted':'amber','Partial Approved':'amber',
   'Approved':'blue','Pending':'amber','Won':'green','Closed':'grey',
-  // legacy (เผื่อข้อมูลเก่าหลุดมา)
-  Costing:'orange',Sent:'amber',Lost:'grey',Delivered:'green',Done:'green',
 };
 // ราคาจะถูกมองเห็นได้ก็ต่อเมื่ออนุมัติครบแล้วเท่านั้น
 const PRICE_VISIBLE_STATUSES=['Approved','Pending','Won','Closed'];
@@ -576,31 +669,41 @@ const STATUS_TH={'Requested':'รอรับงาน','In Progress':'Sourcing 
   'Partial Approved':'อนุมัติบางส่วน','Approved':'อนุมัติแล้ว','Pending':'รอ Sales ติดตาม',
   'Won':'ปิดการขายได้','Closed':'ปิดงาน','Draft':'ร่าง','Accepted':'รับงานแล้ว','Quoted':'ทำราคาแล้ว','Cancelled':'ยกเลิก'};
 
-/* ---- 5. Migration: แปลงสถานะชุดเก่า → ชุดใหม่ (รันครั้งเดียวต่อใบ) ---- */
-const STATUS_V3_MAP={
-  'Costing':'In Progress','Draft':'In Progress',
-  'Sent':'Pending',
-  'Lost':'Closed',
-  'Delivered':'Won','Done':'Won',            // เคยส่งมอบแล้ว = ปิดการขายได้
-  'Requested':'Requested','In Progress':'In Progress','Submitted':'Submitted',
-  'Partial Approved':'Partial Approved','Approved':'Approved','Pending':'Pending',
-  'Won':'Won','Closed':'Closed',
-};
+/* ============================================================ STATUS MIGRATION (จุดเดียวที่แปลงสถานะ)
+   ข้อมูลรุ่นเก่ามี 2 รูปแบบ:
+     (ก) ไม่มี status เลย มีแค่ stage + followStatus   → statusFromLegacyStage()
+     (ข) มี status ชื่อเก่า (Costing/Sent/Lost/Delivered/Done) → LEGACY_STATUS_MAP
+   ทั้งสองแบบถูกแปลงที่ migrateStatusV3() ครั้งเดียวต่อใบ (ประทับ _sv=3)
+   หลังจากนั้นทั้งระบบใช้เฉพาะ QT_STATUSES / SR_STATUSES — ไม่มีโค้ดส่วนอื่นต้องรู้จักชื่อเก่าอีก
+   (ลบออกแล้ว: STATUSES, SALES_STATUSES, STATUS_V3_MAP แบบเต็ม, สี STATUS_TAG ของสถานะเก่า — ไม่มีที่ใช้)
+   ============================================================ */
+const LEGACY_STATUS_MAP={'Costing':'In Progress','Draft':'In Progress','Sent':'Pending','Lost':'Closed',
+  'Delivered':'Won','Done':'Won'};            // Delivered/Done = เคยส่งมอบแล้ว = ปิดการขายได้
+function normalizeQTStatus(st){
+  st=LEGACY_STATUS_MAP[st]||st;
+  return QT_STATUSES.indexOf(st)>=0?st:QT_DEFAULT_STATUS;
+}
+// (ก) stage + followStatus ชุดเก่า → สถานะ QT
+function statusFromLegacyStage(q){
+  const fs=q.followStatus||'',st=q.stage||'Draft';
+  if(fs==='Won'||fs==='Done')return 'Won';
+  if(fs==='Closed')return 'Closed';
+  if(st==='Approved'||st==='Submitted')return st;
+  // ใบร่างเดิมมักถูกตั้ง followStatus='Pending' ไว้ตั้งแต่ตอนสร้าง — ห้ามตีความว่าปล่อยราคาแล้ว
+  if(st==='Draft')return QT_DEFAULT_STATUS;
+  return fs==='Pending'?'Pending':QT_DEFAULT_STATUS;
+}
 function migrateStatusV3(q){
   if(q._sv===3)return q;
-  if(q.docType==='SR'){q._sv=3;return q;}    // SR ใช้สถานะชุดของตัวเองเหมือนเดิม
-  let st=q.status||migrateQTStatus(q);
-  st=STATUS_V3_MAP[st]||st;
-  if(QT_STATUSES.indexOf(st)<0)st=QT_DEFAULT_STATUS;
-  q.status=st;
-  if(!Array.isArray(q.approvalRoles)){
+  if(q.docType!=='SR'){                       // SR ใช้สถานะชุดของตัวเองเหมือนเดิม
+    const st=normalizeQTStatus(q.status||statusFromLegacyStage(q));
+    q.status=st;
     // ใบเก่าที่ผ่านการอนุมัติมาแล้ว ถือว่าครบ 2 ขา จะได้ไม่ถอยกลับไปรออนุมัติใหม่
-    q.approvalRoles=(PRICE_VISIBLE_STATUSES.indexOf(st)>=0)?REQUIRED_APPROVAL_ROLES.slice():[];
-  }
-  // ใบที่ถือว่าปล่อยราคาไปแล้วในระบบเดิม ต้องคง “สิทธิ์เห็นราคา” ของเจ้าของงานไว้
-  if(['Pending','Won','Closed'].indexOf(st)>=0){
+    if(!Array.isArray(q.approvalRoles))
+      q.approvalRoles=(PRICE_VISIBLE_STATUSES.indexOf(st)>=0)?REQUIRED_APPROVAL_ROLES.slice():[];
+    // ใบที่ถือว่าปล่อยราคาไปแล้วในระบบเดิม ต้องคง “สิทธิ์เห็นราคา” ของเจ้าของงานไว้
     const owner=q.header&&q.header.salesUserId;
-    if(owner&&(!Array.isArray(q.releasedTo)||q.releasedTo.indexOf(owner)<0))
+    if(['Pending','Won','Closed'].indexOf(st)>=0&&owner&&(!Array.isArray(q.releasedTo)||q.releasedTo.indexOf(owner)<0))
       q.releasedTo=[...new Set([...(q.releasedTo||[]),owner])];
   }
   q._sv=3;
@@ -614,6 +717,7 @@ let USERS=LS.get('users',null);
   if(!Array.isArray(USERS)||!USERS.length){USERS=def;}
   else{ // migrate older stored users: add scope, rename legacy names
     USERS.forEach(u=>{
+      u.role=normRole(u.role);                 // v4.1: ชื่อ role มาตรฐานเสมอ
       if(u.scope===undefined){const d=def.find(x=>x.id===u.id);u.scope=d?d.scope:'all';}
       if(u.id==='sourcing1'&&(u.name==='Sourcing 1'))u.name='Chatraporn';
       if(u.id==='sourcing2'&&(u.name==='Sourcing 2'))u.name='Napasorn';
@@ -714,20 +818,7 @@ window.addEventListener('beforeunload',function(e){
   if(dirty&&editing){e.preventDefault();e.returnValue='';return ''}
 });
 
-// Map old stage+followStatus → new QT.status
-function migrateQTStatus(q){
-  const fs=q.followStatus||'';const st=q.stage||'Draft';
-  if(fs==='Won')return 'Won';
-  if(fs==='Closed')return 'Closed';
-  if(fs==='Done')return 'Won';
-  if(st==='Approved')return 'Approved';
-  if(st==='Submitted')return 'Submitted';
-  // ใบร่างเดิมมักถูกตั้ง followStatus='Pending' ไว้ตั้งแต่ตอนสร้าง — ห้ามตีความว่าปล่อยราคาแล้ว
-  if(st==='Draft')return QT_DEFAULT_STATUS;
-  if(fs==='Pending')return 'Pending';
-  return QT_DEFAULT_STATUS;
-}
-// One-time migration: assign docType + status to every record
+// One-time migration: assign docType to every record (status ถูกจัดการต่อที่ migrateStatusV3)
 function migrateDocType(q){
   if(q.docType)return q;
   const isSR=(q.followStatus||'')==='Requested'||(q.id&&q.id.startsWith('REQ-'));
@@ -736,7 +827,7 @@ function migrateDocType(q){
     q.status='Submitted';q.quoteIds=q.quoteIds||[];q.assignedTo=null;
   }else{
     q.docType='QT';q.docNo=q.docNo||q.header.ref||'';
-    q.status=migrateQTStatus(q);q.srId=q.srId||null;
+    q.status=statusFromLegacyStage(q);q.srId=q.srId||null;
   }
   return q;
 }
@@ -795,7 +886,7 @@ function migrateQuotePricing(q){
   if(!H.rates)H.rates={USD:+H.exrate||FX_FALLBACK.USD,CNY:+(H.rateCNY||0)||(+SETTINGS.rateCNY||FX_FALLBACK.CNY)};
   q._pm=2; return q;
 }
-function perms(){return ROLE_PERMS[CURRENT.role]||{}}
+function perms(){return ROLE_PERMS[normRole(CURRENT&&CURRENT.role)]||{}}
 /* ============================================================ SALES FOLLOW-UP MODEL
    "Sales ต้องอัปเดตงานของตัวเองก่อน แล้วผู้ติดตามค่อยรวมสรุปส่งผู้บริหาร"
    BUSINESS RULE: งานที่ราคาถึงมือ Sales แล้ว (สถานะ Pending) ต้องอัปเดตอย่างน้อยทุก 7 วัน
@@ -808,8 +899,7 @@ const NEXT_STEPS=['โทรติดตาม','นัดเข้าพบล�
 function statusOf(q){
   if(!q)return QT_DEFAULT_STATUS;
   if(q.docType==='SR')return q.status||'Submitted';
-  const st=STATUS_V3_MAP[q.status||'']||q.status||QT_DEFAULT_STATUS;
-  return QT_STATUSES.indexOf(st)>=0?st:QT_DEFAULT_STATUS;
+  return normalizeQTStatus(q.status||QT_DEFAULT_STATUS);
 }
 function daysSince(iso){
   if(!iso)return null;
@@ -872,7 +962,9 @@ function updateChip(q){
   return `<span class="tag ${needsSalesUpdate(q)?'red':'green'}">${esc(agoTH(u.at))}</span>`;
 }
 /* ---- ฟอร์มอัปเดตความคืบหน้าของ Sales ---- */
-function openSalesUpdate(id){
+async function openSalesUpdate(id){
+  // v4.1: ดึงใบล่าสุดก่อน — กันเขียนทับสิ่งที่ Sales เพิ่งอัปเดตจากแอปติดตามงานขาย
+  if(cloudReady()){toast('กำลังดึงข้อมูลล่าสุด…','');await refreshQuote(id);}
   const q=QUOTES.find(x=>x.id===id);if(!q)return;
   const u=lastUpdate(q)||{};
   modal(`<div class="modal-h"><h3>📝 อัปเดตความคืบหน้ากับลูกค้า</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
@@ -929,7 +1021,7 @@ function isGatekeeper(u){return !!(u||CURRENT)&&(u||CURRENT).id===gatekeeperId()
 // NON คือ Sales Manager: เห็นราคาของทุกใบได้ตลอด (ก่อนปล่อยด้วย) และเห็นงานของทีมทั้งหมด
 // BUSINESS RULE: ยึดจาก SETTINGS.releaseGatekeeperId — เปลี่ยนคนได้ในหน้าตั้งค่า
 function isSalesManager(u){return isGatekeeper(u)||isReleaser(u)}   // NON = Sales Manager (+ ผู้รับมอบหมายเห็นราคาเพื่อปล่อยได้)
-function quoteApproved(q){return PRICE_VISIBLE_STATUSES.includes(q.status||QT_DEFAULT_STATUS)}
+function quoteApproved(q){return PRICE_VISIBLE_STATUSES.includes(statusOf(q))}
 /* ---- 1. Dual approval helpers ---- */
 function approvalState(q){
   const roles=Array.isArray(q.approvalRoles)?q.approvalRoles:[];
@@ -953,14 +1045,45 @@ function approvalChips(q){
     return `<span class="tag ${done?'green':'grey'}" style="font-size:11px">${done?'✓':'○'} ${esc(r)}</span>`;
   }).join(' ')+(a.override?` <span class="tag blue" style="font-size:11px">GM override</span>`:'');
 }
+/* ============================================================ PRICE VISIBILITY (v4.1)
+   กติกาเดียว อ่านจบในฟังก์ชันเดียว — ตรงกับ projectRow_() ใน Code.gs ทุกข้อ
+   1) GM / Admin / Procurement Mgr / BD Mgr / Sourcing  → เห็นราคาขาย + โครงสร้างต้นทุน ทุกใบ ทุกสถานะ (100%)
+   2) Sales → SR ไม่มีราคา · QT เห็นเฉพาะสถานะ Approved/Pending/Won/Closed
+              และต้องเป็นผู้ปล่อยราคา (NON/delegate) หรือถูกปล่อยราคาให้แล้ว (releasedTo)
+   ============================================================ */
+/* v4.1: ป้ายอนุมัติ 2 ฝ่าย อ่านออกในแวบเดียว — "รอฝั่ง Procurement อนุมัติ" / "✓ BD อนุมัติแล้ว" */
+const APPROVAL_SIDE_TH={'Procurement Mgr':'Procurement','BD Mgr':'BD'};
+function approvalBadges(q){
+  const a=approvalState(q);
+  if(a.override)return '<span class="abadge ok">✓ GM อนุมัติแทนทั้ง 2 ฝ่าย</span>';
+  return REQUIRED_APPROVAL_ROLES.map(r=>{
+    const done=a.roles.indexOf(r)>=0,side=APPROVAL_SIDE_TH[r]||r;
+    const mine=!done&&CURRENT&&CURRENT.role===r;
+    return `<span class="abadge ${done?'ok':mine?'mine':'wait'}" title="${esc(r)}">${done?('✓ '+side+' อนุมัติแล้ว'):('⏳ รอฝั่ง '+side+' อนุมัติ')}</span>`;
+  }).join('');
+}
+/* การ์ดอนุมัติสำหรับผู้จัดการ: %GP ตัวใหญ่ + ป้าย 2 ฝ่าย + ปุ่มอนุมัติได้จากหน้าการ์ด */
+function approvalCard(q){
+  const t=quoteTotals(q),cat=q.header.groupType,gc=gpClass(t.gp,cat),mine=canApprove(q);
+  return `<div class="acard ${mine?'mine':''} ${isFlash(q.id)?'flash':''}" onclick="openQuote('${q.id}')">
+    <div class="ac-gp ${gc}"><b>${pp(t.gp)}</b><span>%GP</span></div>
+    <div class="ac-body">
+      <div class="ac-top"><span class="ac-title">${esc(q.header.title||q.header.customer||'(ไม่มีชื่อ)')}</span>
+        <span class="kc-doc">${esc(q.docNo||q.header.ref||'—')}${q.round>1?' · R'+q.round:''}</span></div>
+      <div class="hint">${esc(q.header.customer||'—')} · ${esc(salesNameOf(q)||'ไม่ระบุ Sales')} · ${esc(creatorName(q))}</div>
+      <div class="ac-nums"><span>ยอดขาย <b class="mono">฿${fmt0(t.total)}</b></span><span>ต้นทุน <b class="mono">฿${fmt0(t.cost)}</b></span>
+        <span>กำไร <b class="mono" style="color:var(--green)">฿${fmt0(t.profit)}</b></span></div>
+      <div class="ac-badges">${approvalBadges(q)}${q.needsApproval?'<span class="abadge warn">⚠ ต่ำกว่าเกณฑ์</span>':''}</div>
+    </div>
+    ${mine?`<button class="btn sm ac-btn" onclick="event.stopPropagation();approve('${q.id}')">✓ อนุมัติ</button>`:''}
+  </div>`;
+}
 function canSeePrice(q,user){
   user=user||CURRENT; if(!user||!q)return false;
-  const p=ROLE_PERMS[user.role]||{};
-  if(p.margin||p.create)return true;                 // Manager & Sourcing always see prices
-  if(q.docType==='SR')return false;                  // SR carries no price
-  // 2: NON = Sales Manager → เห็นราคาได้ทุกใบ ทุกสถานะ (รวมก่อนปล่อยราคา)
-  if(isSalesManager(user))return true;
-  if(!quoteApproved(q))return false;                 // ยังอนุมัติไม่ครบ → Sales คนอื่นยังไม่เห็นราคา
+  if(canSeeCost(user))return true;                   // 1) internal ทุก role — ไม่มีเงื่อนไขสถานะ
+  if(q.docType==='SR')return false;                  // 2) SR ไม่มีราคา
+  if(!quoteApproved(q))return false;
+  if(isSalesManager(user))return true;               //    ผู้ปล่อยราคาต้องเห็นก่อนปล่อย
   return Array.isArray(q.releasedTo)&&q.releasedTo.indexOf(user.id)>=0;
 }
 function salesUsers(){return USERS.filter(u=>u.role==='Sales')}
@@ -1140,14 +1263,16 @@ async function doLogin(){
     salesAppNotice(u.name);return;
   }
   LS.set('lastUser',u.name||u.id);
+  SERVER_CAPS=null;LS.set('caps',null);   // v4.1: ไม่ใช้สิทธิ์ค้างของผู้ใช้คนก่อนบนเครื่องเดียวกัน
   // ด่านที่ 2: ขอ token จาก server — สิทธิ์จริงมาจากตรงนี้
   const sv=await serverLogin(u.id,await hashPass($('#loginPass').value));
   if(!sv.ok&&!sv.offline){
     $('#loginErr').textContent='เข้าสู่ระบบที่เซิร์ฟเวอร์ไม่สำเร็จ ('+esc(sv.error||'-')+')';return;
   }
-  if(sv.ok&&sv.user&&sv.user.role&&sv.user.role!==u.role){
-    u.role=sv.user.role;LS.set('users',USERS);   // role ที่เชื่อถือได้คือของ server
+  if(sv.ok&&sv.user&&sv.user.role&&normRole(sv.user.role)!==u.role){
+    u.role=normRole(sv.user.role);LS.set('users',USERS);   // role ที่เชื่อถือได้คือของ server
   }
+  if(!isInternalUser(u)){$('#loginErr').textContent='';salesAppNotice(u.name);return}
   const wasFactory=await isFactoryPass(u);
   CURRENT=u; LS.set('session',u.id); $('#loginErr').textContent='';$('#loginPass').value='';
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden'); mountApp();
@@ -1182,8 +1307,9 @@ async function saveFactoryPass(){
   closeModal();toast('ตั้งรหัสผ่านใหม่เรียบร้อย','good');
 }
 function logout(){
+  stopLive();_editConflict=null;_lastServerTime='';
   if(SESSION_TOKEN)postCloud({action:'logout',token:SESSION_TOKEN});
-  clearSession();
+  clearSession();_authWarned=false;
   CURRENT=null;localStorage.removeItem('mgs_session');
   $('#app').classList.add('hidden');$('#login').classList.remove('hidden');initLogin();}
 
@@ -1281,7 +1407,9 @@ function go(r,force){
   if(!routeAllowed(r)){route='denied';renderNav();render();toast('ไม่มีสิทธิ์เข้าหน้านี้','bad');return}
   route=r;if(r!=='new'){editing=null;dirty=false;}
   if(r!=='salesrequest'&&!_srEditPending)srEditId=null;      // ออกจากฟอร์ม = เลิกโหมดแก้ไข
-  syncHash();renderNav();render();
+  if(r!=='new')_editConflict=null;
+  syncHash();renderNav();render();setLiveStamp();
+  if(LIVE_POLL_ROUTES.indexOf(r)>=0)setTimeout(()=>pollChanges(),60);   // เข้าหน้า Dashboard = ดึงสถานะล่าสุดทันที
   document.getElementById('side').classList.remove('open');window.scrollTo(0,0)}
 function mountApp(){
   $('#uName').textContent=CURRENT.name;$('#uRole').textContent=CURRENT.role;$('#uAvatar').textContent=CURRENT.name[0].toUpperCase();
@@ -1289,6 +1417,7 @@ function mountApp(){
   renderNav();updateCloud();updateQueueBadge();render();
   auditCatalog();     // check catalog for duplicates/missing fields at boot
   initializeData();   // 2-way: pull latest from Google Sheet & merge, flush offline queue
+  startLive();        // v4.1: auto-sync ทุก 30 วินาที (Dashboard) + เฝ้า conflict หน้าแก้ไข
 }
 const TITLES={dashboard:'ภาพรวม',salessummary:'สรุปทีมขาย — สำหรับอัปเดตผู้บริหาร',summary:'สรุปยอดขาย & GP',srqueue:'คำขอราคา (SR)',new:'ทำราคาใหม่',quotes:'ใบเสนอราคา (QT)',followup:'ติดตามงาน',salesupdate:'อัพเดตโครงการ (Sales)',master:'ข้อมูลสินค้า & ราคา Default',settings:'ตั้งค่า Default',users:'จัดการผู้ใช้',preview:'ดูใบเสนอราคา',salesdash:'My Projects',salesrequest:'ขอราคาใหม่'};
 const SALES_ONLY_ROUTES=['salesdash','salesrequest','preview'];
@@ -1464,10 +1593,15 @@ function viewDashboard(){
   const srWaiting=QUOTES.filter(q=>srAwaitingIntake(q))
     .sort((a,b)=>(a.header.needBy||'9999').localeCompare(b.header.needBy||'9999')).slice(0,6);
   const srPending=QUOTES.filter(q=>srAwaitingIntake(q)).length;
+  // v4.1: คิวอนุมัติ 2 ฝ่าย — แยกให้เห็นว่ารอฝั่งไหน
+  const inAppr=LQ.filter(q=>!q.deleted&&inApprovalStage(q))
+    .sort((a,b)=>(canApprove(b)?1:0)-(canApprove(a)?1:0)||String(a.updatedAt||'').localeCompare(String(b.updatedAt||'')));
+  const waitSide=r=>inAppr.filter(q=>approvalState(q).missing.indexOf(r)>=0).length;
+  const showAppr=canSeeCost(CURRENT)&&inAppr.length>0;
   return `
   <div class="kpis">
     ${kpi('QT ทั้งหมด',total,'ใบเสนอราคา (ไม่รวม SR)','grid')}
-    ${kpi('รออนุมัติ',(byQT.Submitted||0)+(byQT['Partial Approved']||0),'ส่งตรวจ / รออีกฝ่าย','amber')}
+    ${kpi('รออนุมัติ',inAppr.length,'รอ Procurement '+waitSide('Procurement Mgr')+' · รอ BD '+waitSide('BD Mgr'),'amber')}
     ${kpi('Pending (รอลูกค้า)',byQT.Pending||0,'ปล่อยราคาให้ Sales แล้ว','orange')}
     ${kpi('Won',byQT.Won||0,'ปิดได้ · Win Rate '+pp(winRate),'green')}
   </div>
@@ -1486,26 +1620,33 @@ function viewDashboard(){
         <td style="font-size:12px">${esc(q.header.needBy||'—')}</td>
         <td>${perms().create?`<button class="btn tiny" onclick="takeSRAndCost('${q.id}')">รับงาน &amp; ทำราคา</button>`:''}</td></tr>`).join('')}
     </tbody></table></div></div></div>`:''}
+  ${showAppr?`<div class="card" style="border-left:4px solid var(--amber);margin-bottom:14px">
+    <div class="card-h" style="padding:12px 18px"><span style="font-size:20px">🗳</span>
+      <h2 style="margin-left:6px">รออนุมัติราคา (${inAppr.length})</h2>
+      <span class="hint" style="margin-left:8px">${perms().approve?('รอคุณ ('+esc(CURRENT.role)+') '+inAppr.filter(canApprove).length+' ใบ'):'ต้องผ่านทั้ง Procurement และ BD'}</span>
+      <div class="spacer"></div><span class="live-pill on" title="หน้านี้อัปเดตอัตโนมัติ">● Live</span></div>
+    <div class="card-b"><div class="agrid">${inAppr.slice(0,8).map(approvalCard).join('')}</div>
+      ${inAppr.length>8?`<div class="hint" style="margin-top:8px">และอีก ${inAppr.length-8} ใบ — ดูทั้งหมดที่ <a href="javascript:void(0)" onclick="qFilter='Submitted';go('quotes')">ใบเสนอราคา</a></div>`:''}</div></div>`:''}
   <div class="grid" style="grid-template-columns:1.5fr 1fr;gap:18px">
     <div class="card">
       <div class="card-h"><h2>QT ล่าสุด</h2><div class="spacer"></div><button class="btn sm" onclick="go('new')">+ ทำราคาใหม่</button></div>
       <div class="card-b" style="padding:0">
         ${recent.length?`<div class="tw" style="border:none"><table><thead><tr>
           <th>โครงการ</th><th>QT No</th><th>ลูกค้า</th><th>Sales</th><th>กลุ่ม</th>${mgr?'<th>GP</th>':''}<th>สถานะ</th></tr></thead>
-          <tbody>${recent.map(q=>{const t=mgr?quoteTotals(q):null;return `<tr style="cursor:pointer" onclick="openQuote('${q.id}')">
+          <tbody>${recent.map(q=>{const t=mgr?quoteTotals(q):null;return `<tr class="${isFlash(q.id)?'flash-row':''}" style="cursor:pointer" onclick="openQuote('${q.id}')">
             <td style="font-weight:600">${esc(q.header.title||q.header.project||'(ไม่มีชื่อ)')}${q.round>1?` <span class="tag orange" style="font-size:10px">รอบ ${q.round}</span>`:''}</td>
             <td class="mono" style="font-size:11.5px">${esc(q.docNo||q.header.ref||'—')}</td>
             <td>${esc(q.header.customer||'—')}</td><td>${esc(q.header.sales||'—')}</td>
             <td><span class="tag grey" style="font-size:10.5px">${esc(q.header.groupType||'—')}</span></td>
             ${mgr?`<td>${gpTag(t.gp)}</td>`:''}
-            <td><span class="tag ${STATUS_TAG[q.status||QT_DEFAULT_STATUS]}">${q.status||QT_DEFAULT_STATUS}</span></td></tr>`}).join('')}</tbody></table></div>`
+            <td><span class="tag ${STATUS_TAG[statusOf(q)]||'grey'}">${esc(STATUS_TH[statusOf(q)]||statusOf(q))}</span>${inApprovalStage(q)?`<div class="row-flex" style="gap:3px;margin-top:3px">${approvalBadges(q)}</div>`:''}</td></tr>`}).join('')}</tbody></table></div>`
         :emptyState('ยังไม่มีใบเสนอราคา','เริ่มทำราคาแรกของคุณได้เลย')}
       </div>
     </div>
     <div class="card"><div class="card-h"><h2>สถานะงาน (QT)</h2></div><div class="card-b">
       ${QT_STATUSES.map(s=>{const n=byQT[s]||0;const p=total?n/total*100:0;return `
         <div style="margin-bottom:13px"><div class="row-flex" style="justify-content:space-between;margin-bottom:5px">
-          <span class="tag ${STATUS_TAG[s]}">${s}</span><b class="mono">${n}</b></div>
+          <span class="tag ${STATUS_TAG[s]}">${esc(STATUS_TH[s]||s)}</span><b class="mono">${n}</b></div>
           <div style="height:7px;background:var(--surface-2);border-radius:4px;overflow:hidden"><div style="height:100%;width:${p}%;background:var(--orange)"></div></div></div>`}).join('')}
       <div class="divider"></div><div class="row-flex" style="justify-content:space-between"><span class="hint">In Progress (กำลังทำราคา)</span><b>${draft}</b></div>
       <div class="row-flex" style="justify-content:space-between"><span class="hint">รอ ${esc(gatekeeperName())} ปล่อยราคา</span><b>${byQT.Approved||0}</b></div>
@@ -1648,13 +1789,17 @@ function viewCosting(){
   if(!editing)editing=blankQuote();
   const H=editing.header;
   const opts=(arr,v)=>arr.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('');
+  const st=statusOf(editing);
   return `
   ${draftBanner()}
+  <div id="conflictBanner" class="no-print"></div>
   <div class="card" style="margin-bottom:18px">
     <div class="card-h"><h2>ข้อมูลโครงการ</h2>
       <span class="tag orange mono" style="margin-left:6px">${esc(H.ref)}</span>
       ${editing.round>1?`<span class="tag blue">รอบที่ ${editing.round}</span>`:''}
-      <div class="spacer"></div><span class="tag ${STATUS_TAG[editing.stage]||'orange'}">${editing.stage}</span></div>
+      <div class="spacer"></div>
+      ${inApprovalStage(editing)?`<span class="row-flex" style="gap:5px">${approvalBadges(editing)}</span>`:''}
+      <span class="tag ${STATUS_TAG[st]||'grey'}" title="สถานะเอกสาร">${esc(STATUS_TH[st]||st)}</span></div>
     <div class="card-b"><div class="grid" style="grid-template-columns:repeat(4,1fr)">
       <div style="grid-column:span 2"><label class="lbl">ชื่อโครงการ / หัวข้อ</label>
         <input class="inp" value="${esc(H.title)}" placeholder="เช่น Thaibev - BESS - 1st Round" oninput="hset('title',this.value)"></div>
@@ -1688,7 +1833,8 @@ function viewCosting(){
 
   <div class="card" style="margin-bottom:18px">
     <div class="card-h"><h2>รายการสินค้า</h2>
-      <span class="hint" style="margin-left:4px">%GP = กำไรขั้นต้นบนราคาขาย · แก้ Total U/P เพื่อคำนวณ %GP ย้อนกลับ</span>
+      <span class="zone-legend"><i class="z-prod"></i>สินค้า<i class="z-cost"></i>ต้นทุน<i class="z-gp"></i>มาร์จิ้น<i class="z-sell"></i>ราคาขาย</span>
+      <span class="hint" style="margin-left:4px">%GP = กำไรขั้นต้นบนราคาขาย · แก้ราคาขาย/หน่วย เพื่อคำนวณ %GP ย้อนกลับ</span>
       <div class="spacer"></div>
       <span class="hint" id="draftStamp" style="margin-right:8px"></span>
       <button class="btn sm ghost" onclick="exportCostCSV()" title="ส่งออกตารางต้นทุนเป็น CSV เปิดใน Excel ได้">⤓ CSV</button>
@@ -1713,9 +1859,10 @@ function viewCosting(){
   <div class="row-flex no-print" style="margin-top:18px;justify-content:flex-end">
     <button class="btn ghost" onclick="saveQuote('Draft')">บันทึกร่าง</button>
     <button class="btn ghost" onclick="saveQuote('Submitted')">บันทึก & ส่งตรวจ</button>
-    <button class="btn" onclick="previewCurrent()">ดูใบเสนอราคา →</button></div>`;
+    <button class="btn" onclick="previewCurrent()">ดูใบเสนอราคา →</button></div>
+  <div class="livebar no-print" id="liveBar"></div>`;
 }
-function initCosting(){refreshLines();renderRemarks();renderGlobalExtras()}
+function initCosting(){refreshLines();renderRemarks();renderGlobalExtras();renderConflictBanner()}
 // 2.4: every header edit is audited (exrate / incoterm / priceTerm matter most)
 const AUDIT_HEADER_FIELDS={title:'ชื่อโครงการ',customer:'ลูกค้า',project:'Project',currency:'สกุลเงิน',
   priceTerm:'Price Term',incoterm:'Incoterm',exrate:'Ex-rate',validity:'ยืนราคา(วัน)',
@@ -1791,32 +1938,39 @@ function refreshLines(){
   const cif=(H.incoterm||'').slice(0,3).toUpperCase()==='CIF';
   // 2.6: show the target unit price the Sales asked for (read-only reference) when the QT came from an SR
   const hasTarget=editing.lines.some(L=>(+L.targetUp||0)>0);
-  const nCols=13+(hasTarget?1:0);
+  const nCols=15+(hasTarget?1:0);
   const dutyTip=lockNote('duty',H), clrTip=lockNote('clr',H);
 
-  /* ---------- desktop table ---------- */
+  /* ---------- desktop table ----------
+     v4.1: แบ่ง 4 โซนชัดเจน (สีหัวตาราง + เส้นแบ่งแนวตั้ง .zs)
+       [ข้อมูลสินค้า] สินค้า · หมวด · Qty · หน่วย
+       [ต้นทุน]       ทุน U/P · สกุล · ทุน/ชิ้น (฿) · Duty% · Clr% · ต้นทุนรวม/ชิ้น (Landed)
+       [มาร์จิ้น]      %GP · กำไร/ชิ้น
+       [ราคาขาย]     (Target ของ Sales) · ราคาขาย/หน่วย · รวม                                   */
   let rows=editing.lines.map((L,i)=>{
     const r=computeLine(L,H);
     const cat=L.comGroup||comCategory(L.group);
     return `<tr id="row_${i}">
-      <td class="ic"><div style="display:flex;flex-direction:column;gap:3px;width:100%">
+      <td class="ic z-prod-c"><div style="display:flex;flex-direction:column;gap:3px;width:100%">
           <input class="cell-inp txt" style="width:100%;font-weight:600" value="${esc(L.code)}" oninput="lset(${i},'code',this.value)" placeholder="รหัสสินค้า">
           <input class="cell-inp txt" style="width:100%;font-size:11px;color:var(--muted)" value="${esc(L.desc)}" oninput="lset(${i},'desc',this.value)" placeholder="รายละเอียด" title="${esc(L.desc)}"></div></td>
       <td class="ic"><select class="cell-inp txt" style="font-size:11px" onchange="lset(${i},'group',this.value)">
           ${[...new Set([L.group,...visibleGroupList()])].filter(Boolean).map(g=>`<option ${L.group===g?'selected':''}>${esc(g)}</option>`).join('')}</select></td>
       <td class="ic"><input class="cell-inp" type="number" value="${L.qty}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Qty',this)" oninput="lset(${i},'qty',this.value)"></td>
       <td class="ic"><input class="cell-inp txt" style="font-size:12px" value="${esc(L.uom)}" oninput="lset(${i},'uom',this.value)" placeholder="หน่วย"></td>
-      <td class="ic"><input class="cell-inp" type="number" step="any" value="${L.up}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Unit Price',this)" oninput="lset(${i},'up',this.value)"></td>
-      <td class="ic"><select class="cell-inp txt" style="text-align:left" onchange="lset(${i},'costCur',this.value)">
+      <td class="ic zs z-cost-c"><input class="cell-inp" type="number" step="any" value="${L.up}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Unit Price',this)" oninput="lset(${i},'up',this.value)"></td>
+      <td class="ic z-cost-c"><select class="cell-inp txt" style="text-align:left" onchange="lset(${i},'costCur',this.value)">
           ${['USD','CNY','THB'].map(c=>`<option ${L.costCur===c?'selected':''}>${c}</option>`).join('')}</select></td>
-      <td class="r mono" id="pc_${i}" style="color:var(--ink-2)">${fmt(r.pricePC)}</td>
-      <td class="ic"><div class="pct-wrap lockwrap"><input class="cell-inp" style="${ddp?'opacity:.45;cursor:not-allowed':''}" type="number" step="any" value="${L.dutyPct}" ${ddp?`disabled title="${esc(dutyTip)}"`:''} onfocus="auditFocus(this)" onchange="auditLine(${i},'Duty%',this)" oninput="lset(${i},'dutyPct',this.value)">${ddp?`<span class="lock-ico" title="${esc(dutyTip)}">🔒</span>`:''}</div></td>
-      <td class="ic"><div class="pct-wrap lockwrap"><input class="cell-inp" style="${!cif?'opacity:.45;cursor:not-allowed':''}" type="number" step="any" value="${L.clearancePct}" ${!cif?`disabled title="${esc(clrTip)}"`:''} onfocus="auditFocus(this)" onchange="auditLine(${i},'Clearance%',this)" oninput="lset(${i},'clearancePct',this.value)">${!cif?`<span class="lock-ico" title="${esc(clrTip)}">🔒</span>`:''}</div></td>
-      ${hasTarget?`<td class="r mono" style="color:var(--blue);background:var(--blue-soft);font-size:12px" title="ราคาเป้าหมายที่ Sales ระบุมาใน SR (อ่านอย่างเดียว)">${(+L.targetUp||0)>0?fmt(+L.targetUp):'—'}</td>`:''}
-      <td class="ic"><div class="pct-wrap"><input class="cell-inp" id="op_${i}" type="number" step="any" value="${L.opPct}" style="font-weight:700;color:${gpColor(r.gp,cat)}" onfocus="auditFocus(this)" onchange="auditLine(${i},'%GP',this)" oninput="lset(${i},'opPct',this.value)" title="%GP = กำไรขั้นต้นบนราคาขาย (Price = Cost / (1 - %GP))"></div></td>
-      <td class="ic"><input class="cell-inp" id="tu_${i}" style="font-weight:600;background:var(--surface-2)" type="number" step="any" value="${r.totalUP}" onfocus="auditFocus(this)" onchange="auditTotal(${i},this);totalEdit(${i},this.value,this)" title="แก้ราคาขายนี้เพื่อคำนวณ %GP ย้อนกลับ"></td>
-      <td class="r mono" id="lt_${i}" style="font-weight:700;color:var(--orange-deep)">${fmt0(r.lineTotal)}</td>
-      <td style="text-align:center;white-space:nowrap">
+      <td class="r mono z-cost-c" id="pc_${i}" style="color:var(--ink-2)">${fmt(r.pricePC)}</td>
+      <td class="ic z-cost-c"><div class="pct-wrap lockwrap"><input class="cell-inp" style="${ddp?'opacity:.45;cursor:not-allowed':''}" type="number" step="any" value="${L.dutyPct}" ${ddp?`disabled title="${esc(dutyTip)}"`:''} onfocus="auditFocus(this)" onchange="auditLine(${i},'Duty%',this)" oninput="lset(${i},'dutyPct',this.value)">${ddp?`<span class="lock-ico" title="${esc(dutyTip)}">🔒</span>`:''}</div></td>
+      <td class="ic z-cost-c"><div class="pct-wrap lockwrap"><input class="cell-inp" style="${!cif?'opacity:.45;cursor:not-allowed':''}" type="number" step="any" value="${L.clearancePct}" ${!cif?`disabled title="${esc(clrTip)}"`:''} onfocus="auditFocus(this)" onchange="auditLine(${i},'Clearance%',this)" oninput="lset(${i},'clearancePct',this.value)">${!cif?`<span class="lock-ico" title="${esc(clrTip)}">🔒</span>`:''}</div></td>
+      <td class="r mono z-cost-c" id="lc_${i}" style="font-weight:700;color:var(--blue)" title="ทุน + Duty + Clearance + ค่าขนส่ง/ชิ้น">${fmt(r.baseCost)}</td>
+      <td class="ic zs z-gp-c"><div class="pct-wrap"><input class="cell-inp" id="op_${i}" type="number" step="any" value="${L.opPct}" style="font-weight:700;color:${gpColor(r.gp,cat)}" onfocus="auditFocus(this)" onchange="auditLine(${i},'%GP',this)" oninput="lset(${i},'opPct',this.value)" title="%GP = กำไรขั้นต้นบนราคาขาย (Price = Cost / (1 - %GP))"></div></td>
+      <td class="r mono z-gp-c" id="opu_${i}" style="color:var(--green);font-weight:600">${fmt(r.op)}</td>
+      ${hasTarget?`<td class="r mono zs" style="color:var(--blue);background:var(--blue-soft);font-size:12px" title="ราคาเป้าหมายที่ Sales ระบุมาใน SR (อ่านอย่างเดียว)">${(+L.targetUp||0)>0?fmt(+L.targetUp):'—'}</td>`:''}
+      <td class="ic z-sell-c${hasTarget?'':' zs'}"><input class="cell-inp" id="tu_${i}" style="font-weight:700;color:var(--orange-deep)" type="number" step="any" value="${r.totalUP}" onfocus="auditFocus(this)" onchange="auditTotal(${i},this);totalEdit(${i},this.value,this)" title="แก้ราคาขายนี้เพื่อคำนวณ %GP ย้อนกลับ"></td>
+      <td class="r mono z-sell-c" id="lt_${i}" style="font-weight:700;color:var(--orange-deep)">${fmt0(r.lineTotal)}</td>
+      <td class="zs" style="text-align:center;white-space:nowrap">
         <button class="x" style="width:24px;height:24px" onclick="toggleDet(${i})" title="Warranty / Lead time / ค่าขนส่งต่อชิ้น">⋯</button>
         <button class="x" style="width:24px;height:24px" onclick="delLine(${i})" title="ลบรายการนี้">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></td></tr>
@@ -1825,7 +1979,7 @@ function refreshLines(){
           <div class="f"><label>Warranty</label><input value="${esc(L.warranty||'')}" placeholder="เช่น 10 YEAR" oninput="lset(${i},'warranty',this.value)"></div>
           <div class="f"><label>Lead time</label><input value="${esc(L.lead||'')}" placeholder="เช่น 90 days after PO" oninput="lset(${i},'lead',this.value)"></div>
           <div class="f"><label>ค่าขนส่ง/ชิ้น (${esc(H.currency)})</label><input class="mono" type="number" step="any" value="${+L.freep||0}" oninput="lset(${i},'freep',this.value)"></div>
-          <div class="f"><label>ต้นทุนรวม/ชิ้น (Landed)</label><input class="mono" value="${fmt(r.baseCost)}" disabled title="ทุน + Duty + Clearance + ค่าขนส่ง/ชิ้น"></div>
+          <div class="f"><label>ต้นทุนรวม/ชิ้น (Landed)</label><input class="mono" id="dlc_${i}" value="${fmt(r.baseCost)}" disabled title="ทุน + Duty + Clearance + ค่าขนส่ง/ชิ้น"></div>
         </div>
         ${(ddp||!cif)?`<div class="lock-note">🔒 ${ddp?esc(dutyTip):''}${(ddp&&!cif)?'<br>':''}${!cif?esc(clrTip):''}</div>`:''}
       </td></tr>`;
@@ -1851,6 +2005,8 @@ function refreshLines(){
         <div class="f" style="grid-column:span 2"><label>ราคาขาย/หน่วย (${esc(H.currency)}) — แก้ได้เพื่อคิด %GP ย้อนกลับ</label>
           <input class="num" id="mtu_${i}" type="number" step="any" value="${r.totalUP}" style="font-weight:700;background:var(--surface-2)" onfocus="auditFocus(this)" onchange="auditTotal(${i},this);totalEdit(${i},this.value,this)"></div>
       </div>
+      <div class="lc-zones"><span class="zc"><i>ต้นทุน/ชิ้น</i><b id="mlc_${i}">${fmt(r.baseCost)}</b></span>
+        <span class="zg"><i>กำไร/ชิ้น</i><b id="mopu_${i}">${fmt(r.op)}</b></span></div>
       <div class="lc-sum"><span class="lbl2">รวมรายการนี้</span><b id="mlt_${i}">${fmt0(r.lineTotal)}</b></div>
       <button class="lc-more" id="mmore_${i}" onclick="toggleDet(${i})">▾ รายละเอียดต้นทุน</button>
       <div class="lc-det" id="mdet_${i}" style="display:none">
@@ -1874,13 +2030,22 @@ function refreshLines(){
     </div>`;
   }).join('');
 
-  tw.innerHTML=`<div class="lines-desktop"><table class="cost-table" style="width:${hasTarget?1136:1046}px"><colgroup>
-    <col style="width:188px"><col style="width:96px"><col style="width:60px"><col style="width:54px"><col style="width:82px"><col style="width:62px">
-    <col style="width:78px"><col style="width:64px"><col style="width:64px">${hasTarget?'<col style="width:90px">':''}<col style="width:72px"><col style="width:96px"><col style="width:90px"><col style="width:56px"></colgroup>
-    <thead><tr>
-    <th>สินค้า</th><th>หมวด</th><th class="r">Qty</th><th>หน่วย</th><th class="r">ทุน U/P</th><th>สกุล</th>
-    <th class="r">ทุน/ชิ้น</th><th class="r">Duty${ddp?' 🔒':''}</th><th class="r">Clr${!cif?' 🔒':''}</th>${hasTarget?'<th class="r" style="color:var(--blue)">Target U/P</th>':''}<th class="r">%GP</th><th class="r">Total U/P</th>
-    <th class="r">รวม</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  tw.innerHTML=`<div class="lines-desktop"><table class="cost-table" style="width:${hasTarget?1382:1292}px"><colgroup>
+    <col style="width:188px"><col style="width:96px"><col style="width:60px"><col style="width:54px">
+    <col style="width:82px"><col style="width:62px"><col style="width:100px"><col style="width:62px"><col style="width:62px"><col style="width:104px">
+    <col style="width:72px"><col style="width:96px">
+    ${hasTarget?'<col style="width:90px">':''}<col style="width:100px"><col style="width:96px"><col style="width:56px"></colgroup>
+    <thead><tr class="zone-row">
+      <th colspan="4" class="z-prod">① ข้อมูลสินค้า</th>
+      <th colspan="6" class="z-cost zs">② ต้นทุน (Cost &amp; Duty) · ${esc(H.currency)}</th>
+      <th colspan="2" class="z-gp zs">③ มาร์จิ้น / กำไร</th>
+      <th colspan="${hasTarget?3:2}" class="z-sell zs">④ ราคาขาย (Selling Price)</th><th class="zs"></th></tr>
+    <tr>
+    <th>สินค้า</th><th>หมวด</th><th class="r">Qty</th><th>หน่วย</th>
+    <th class="r zs z-cost-h">ทุน U/P</th><th class="z-cost-h">สกุล</th><th class="r z-cost-h">ทุน/ชิ้น</th><th class="r z-cost-h">Duty%${ddp?' 🔒':''}</th><th class="r z-cost-h">Clr%${!cif?' 🔒':''}</th><th class="r z-cost-h" title="ทุน + Duty + Clearance + ค่าขนส่ง/ชิ้น">Landed/ชิ้น</th>
+    <th class="r zs z-gp-h">%GP</th><th class="r z-gp-h">กำไร/ชิ้น</th>
+    ${hasTarget?'<th class="r zs z-sell-h" style="color:var(--blue)">Target U/P</th>':''}<th class="r z-sell-h${hasTarget?'':' zs'}">ราคาขาย/หน่วย</th><th class="r z-sell-h">รวม</th>
+    <th class="zs"></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="lines-mobile">${cards}
       <div class="hint" style="text-align:center;padding:2px 0 6px">แตะ “รายละเอียดต้นทุน” เพื่อแก้ Duty / Clearance / สกุลเงิน / Warranty / Lead time</div></div>`;
   renderSummary();
@@ -1896,6 +2061,8 @@ function recalcRow(i){
   const setHTML=(id,html)=>{const el=document.getElementById(id);if(el)el.innerHTML=html};
   const setVal=(id,v)=>{const el=document.getElementById(id);if(el&&document.activeElement!==el)el.value=v};
   setHTML('pc_'+i,fmt(r.pricePC));
+  setHTML('lc_'+i,fmt(r.baseCost));setHTML('opu_'+i,fmt(r.op));
+  setHTML('mlc_'+i,fmt(r.baseCost));setHTML('mopu_'+i,fmt(r.op));setVal('dlc_'+i,fmt(r.baseCost));
   setHTML('lt_'+i,fmt0(r.lineTotal));
   setHTML('mlt_'+i,fmt0(r.lineTotal));
   setVal('mpc_'+i,fmt(r.pricePC));
@@ -1969,12 +2136,12 @@ function gExtraSet(i,k,v){const e=editing.globalExtras[i];const oldV=e[k];
 let _auditFocus=null;
 function auditFocus(el){_auditFocus=el.value;}
 function auditLine(i,label,el){
-  if(_auditFocus==null||String(_auditFocus)===String(el.value))return;
+  if(!editing||_auditFocus==null||String(_auditFocus)===String(el.value))return;   // ออกจากหน้าแก้ไขแล้ว (onchange ยิงตอน DOM ถูกแทนที่)
   const code=editing.lines[i]?(editing.lines[i].code||editing.lines[i].desc||('item#'+(i+1))):'item';
   logAuditStatus(editing,label+' of '+code,_auditFocus,el.value);_auditFocus=null;
 }
 function auditTotal(i,el){
-  if(_auditFocus==null||String(_auditFocus)===String(el.value))return;
+  if(!editing||_auditFocus==null||String(_auditFocus)===String(el.value))return;   // ออกจากหน้าแก้ไขแล้ว (onchange ยิงตอน DOM ถูกแทนที่)
   const code=editing.lines[i]?(editing.lines[i].code||editing.lines[i].desc||('item#'+(i+1))):'item';
   logAuditStatus(editing,'Total U/P of '+code,_auditFocus,el.value);_auditFocus=null;
 }
@@ -2031,6 +2198,19 @@ function renderSummary(){
       <span class="hint">มูลค่าเสนอรวม</span>
       <span class="disp" style="font-size:24px;font-weight:700;color:var(--orange-deep)">฿${fmt0(t.total)}</span></div>
     ${comHTML}`;
+  renderLiveBar(t);
+}
+/* v4.1: แถบสรุปติดขอบล่าง — อัปเดตทุกครั้งที่พิมพ์ตัวเลข (เรียกจาก renderSummary ซึ่งถูกเรียกใน lset/totalEdit) */
+function renderLiveBar(t){
+  const bar=$('#liveBar');if(!bar||!editing)return;
+  t=t||quoteTotals(editing);
+  const cur=esc(editing.header.currency||'THB');
+  const gpc=gpClass(t.gp,editing.header.groupType);
+  const n=(editing.lines||[]).length;
+  bar.innerHTML=`<div class="lb-item lb-sell"><span>ยอดขายรวม (Revenue)</span><b>${fmt0(t.total)}</b><i>${cur} · ${n} รายการ</i></div>
+    <div class="lb-item lb-cost"><span>ต้นทุนรวม (Landed)</span><b>${fmt0(t.cost)}</b><i>${t.globalExtras>0?('รวม Extras '+fmt0(t.globalExtras)):cur}</i></div>
+    <div class="lb-item lb-gp"><span>กำไรขั้นต้น (GP)</span><b>${fmt0(t.profit)}</b><i>${cur}</i></div>
+    <div class="lb-item lb-pct ${gpc}"><span>%GP รวม</span><b>${pp(t.gp)}</b><i>${t.globalExtras>0?('สินค้าอย่างเดียว '+pp(t.gpProd)):(gpc==='green'?'ผ่านเกณฑ์':gpc==='amber'?'ใกล้เกณฑ์':'ต่ำกว่าเกณฑ์')}</i></div>`;
 }
 function renderRemarks(){
   const box=$('#remarkBox');if(!box)return;
@@ -2408,7 +2588,7 @@ function quotesRows(){
       <td style="font-size:12px">${esc(creatorName(q))}</td>
       <td>${q.round>1?`<span class="tag blue">R${q.round}</span>`:`<span class="hint">R1</span>`}</td>
       <td class="r mono" style="font-weight:600">${fmt0(t.total)}</td><td>${gpTag(t.gp,q.header.groupType)}</td>
-      <td><span class="tag ${STATUS_TAG[st]||'grey'}" title="เปลี่ยนสถานะได้ในหน้ารายละเอียดใบ / หน้าติดตามงาน">${esc(STATUS_TH[st]||st)}</span></td>
+      <td><span class="tag ${STATUS_TAG[st]||'grey'}" title="เปลี่ยนสถานะได้ในหน้ารายละเอียดใบ / หน้าติดตามงาน">${esc(STATUS_TH[st]||st)}</span>${inApprovalStage(q)?`<div class="row-flex" style="gap:3px;margin-top:3px">${approvalBadges(q)}</div>`:''}${(q._conflict||q._cloudNewer)?'<div><span class="abadge warn" title="ข้อมูลบน Cloud ถูกแก้โดยคนอื่น — เปิดแก้เพื่อเลือกเวอร์ชัน">⚠ Cloud ใหม่กว่า</span></div>':''}</td>
       <td style="font-size:12px;color:var(--muted)">${q.updated||'—'}</td>
       <td><div class="row-flex" style="flex-wrap:nowrap;gap:4px">
         ${canRelease(q)?`<button class="btn tiny" style="background:var(--blue)" onclick="event.stopPropagation();releasePrice('${q.id}')" title="ปล่อยราคาให้ ${esc(salesNameOf(q)||'Sales')}">🔓 ปล่อยราคา</button>`:''}
@@ -2462,7 +2642,17 @@ function setStatus(id,s){const q=QUOTES.find(x=>x.id===id);if(!q)return;
   updateStatus(q,s);q.isSynced=false;
   logAuditStatus(q,'สถานะเอกสาร',old,s);
   LS.set('quotes',QUOTES);toast('อัปเดตสถานะ → '+s,'good');syncCloud(q);renderNav();}
-function editQuote(id){editing=JSON.parse(JSON.stringify(QUOTES.find(q=>q.id===id)));go('new')}
+function editQuote(id){
+  const q=QUOTES.find(x=>x.id===id);if(!q)return;
+  editing=JSON.parse(JSON.stringify(q));go('new');
+  // รู้อยู่แล้วว่า Cloud ใหม่กว่า (จาก sync รอบก่อน) → เปิดแก้ได้ แต่ขึ้นแถบเตือนทันที
+  if(q._conflict||q._cloudNewer){
+    const c=q._conflict||{};
+    _editConflict={id,at:c.serverUpdatedAt||q._cloudNewer,by:c.serverBy||q._cloudNewerBy||'',status:c.serverStatus||''};
+    renderConflictBanner();return;
+  }
+  checkEditingFresh(true);            // v4.1: เปิดหน้าแก้ไข = ตรวจกับ Cloud ทันที
+}
 
 /* ---- DELETE WITH MANAGER APPROVAL ---- */
 let _confirmFn=null;
@@ -2517,7 +2707,8 @@ function deleteQuoteFinal(id){
 }
 function syncDelete(id){enqueueSync({action:'delete',id,by:CURRENT?CURRENT.name:'-'})}
 let previewId=null,previewMode='mgmt';
-function openQuote(id){previewId=id;previewMode='mgmt';route='preview';render();renderNav()}
+// v4.1: แสดงจากข้อมูลในเครื่องทันที แล้วดึงเวอร์ชันล่าสุดของใบนี้จาก Cloud เบื้องหลัง ถ้าใหม่กว่า → วาดใหม่
+function openQuote(id){previewId=id;previewMode='mgmt';route='preview';render();renderNav();setLiveStamp();refreshPreview(id)}
 
 /* ============================================================ PREVIEW */
 function priceLockedState(q){
@@ -2565,15 +2756,14 @@ function viewPreview(){
   if(!canSeePrice(q,CURRENT))return priceLockedState(q);
   const H=q.header,t=quoteTotals(q);
   const isMgr=perms().margin;
-  // "final" = the customer-facing state: once approved, non-managers only ever see the clean version
-  const final=quoteApproved(q)||['Approved','Sent','Won','Done','Closed'].includes(q.stage||'');   // legacy stage เผื่อข้อมูลเก่า
   const apv=approvalState(q);
-  // 2.2: a Manager can always switch back to the internal (%GP) view, even after approval.
-  //      Other roles are locked to the clean customer version once the quote is approved.
-  const canInternal=isMgr||!final;
+  // v4.1: ทุก role ภายใน (GM/Admin/Procurement/BD/Sourcing) สลับดูมุมมองภายใน (ต้นทุน + %GP) ได้เสมอ ทุกสถานะ
+  //       เดิม Sourcing ถูกล็อกเป็น "เวอร์ชันลูกค้า" ทันทีที่อนุมัติ และเงื่อนไขอ้าง stage ชุดเก่า (Sent/Done)
+  const canInternal=canSeeCost(CURRENT);
   const internal=canInternal&&previewMode!=='cust';
-  const gp=internal;                       // %GP columns / cost summary
+  const gp=internal;                       // %GP + โครงสร้างต้นทุนรายบรรทัด / cost summary
   const com=internal&&isMgr;               // commission grades: Manager only
+  const preCols=6+(gp?3:0);                // จำนวนคอลัมน์ก่อน "Amount" (ใช้กับ colspan แถวรวม)
   const comObj=Object.values(t.com)[0]||{grade:'—'};
   const validThru=safeDateAdd(H.offerDate,+H.validity||30);
   const lines=q.lines.map((L,i)=>({L,r:computeLine(L,H),i}));
@@ -2586,6 +2776,7 @@ function viewPreview(){
       ?`<div class="seg"><button class="${internal?'on':''}" onclick="previewMode='mgmt';render()">ภายใน (มี %GP)</button>
         <button class="${!internal?'on':''}" onclick="previewMode='cust';render()">สำหรับลูกค้า</button></div>`
       :`<span class="tag green">✓ อนุมัติแล้ว · เวอร์ชันสำหรับลูกค้า</span>`}
+    <span class="hint" id="qLive" style="font-size:11.5px"></span>
     <div class="row-flex">${canApprove(q)?`<button class="btn sm" style="background:var(--green)" onclick="approve('${q.id}')">✓ อนุมัติในนาม ${esc(CURRENT.role)}</button>`
       :((perms().approve&&q.docType!=='SR')?`<span class="tag ${inApprovalStage(q)?'amber':'grey'}" style="font-size:11px" title="${esc(inApprovalStage(q)?('บทบาท '+CURRENT.role+' อนุมัติใบนี้ไปแล้ว'):('อนุมัติได้เฉพาะตอนสถานะ ส่งตรวจ/อนุมัติบางส่วน · สถานะปัจจุบัน: '+(STATUS_TH[statusOf(q)]||statusOf(q))))}">${inApprovalStage(q)?('✓ '+esc(CURRENT.role)+' อนุมัติแล้ว'):('อนุมัติไม่ได้ · '+esc(STATUS_TH[statusOf(q)]||statusOf(q)))}</span>`:'')}
       ${canRelease(q)?`<button class="btn sm" style="background:var(--blue)" onclick="releasePrice('${q.id}')">🔓 ปล่อยราคาให้ ${esc(salesNameOf(q)||'Sales')}</button>`:''}
@@ -2598,8 +2789,9 @@ function viewPreview(){
         :`<button class="btn sm ghost" style="color:var(--red)" onclick="requestDelete('${q.id}')">🗑 ${perms().approve?'ลบใบนี้':'ขอลบ'}</button>`}
       <button class="btn sm" onclick="window.print()">🖨 พิมพ์ / PDF</button></div></div>
   ${inApprovalStage(q)?`<div class="no-print card" style="border-left:4px solid var(--amber);margin-bottom:12px"><div class="card-b" style="padding:11px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-    <b style="font-size:13px">การอนุมัติ 2 ฝ่าย:</b> ${approvalChips(q)}
-    <span class="hint">${apv.complete?'ครบแล้ว':'ยังรอ '+apv.missing.join(' และ ')}</span></div></div>`:''}
+    <b style="font-size:13px">การอนุมัติ 2 ฝ่าย:</b> ${approvalBadges(q)}
+    <span class="hint">${apv.complete?'ครบแล้ว':'ยังรอ '+apv.missing.join(' และ ')}</span>
+    ${internal?`<span style="margin-left:auto" class="row-flex"><span class="hint">%GP รวม</span>${gpBig(t.gp,H.groupType)}</span>`:''}</div></div>`:''}
   ${((q.status||'')==='Approved')?`<div class="no-print card" style="border-left:4px solid var(--blue);background:var(--blue-soft);margin-bottom:12px"><div class="card-b" style="padding:11px 16px;font-size:13px">
     🔒 อนุมัติครบแล้ว — รอ <b>${esc(gatekeeperName())}</b> กด “ปล่อยราคา” เพื่อส่งต่อให้ <b>${esc(salesNameOf(q)||'Sales เจ้าของงาน')}</b></div></div>`:''}
   ${q.needsApproval?`<div class="no-print card" style="border-left:4px solid var(--amber);background:var(--amber-soft);margin-bottom:12px"><div class="card-b" style="padding:11px 16px;font-size:13px">
@@ -2624,16 +2816,16 @@ function viewPreview(){
       ${gp?`<b>% GP โครงการรวม:</b><span>${com?`<span class="grade ${comObj.grade==='—'?'none':comObj.grade}" style="width:20px;height:20px;font-size:11px;vertical-align:middle">${comObj.grade}</span> &nbsp;`:''}${pp(t.gp)}</span>`:''}</div>
     <div class="tw" style="border:none"><table><thead><tr>
       <th>No.</th><th>Item No.</th><th>Description</th><th class="r">Qty</th><th>Unit</th>
-      ${gp?'<th class="r">%GP</th>':''}<th class="r">Unit Price</th><th class="r">Amount</th><th>Warranty</th></tr></thead>
+      ${gp?'<th class="r z-cost-h">ต้นทุน/หน่วย</th><th class="r z-gp-h">%GP</th><th class="r z-gp-h">กำไร/หน่วย</th>':''}<th class="r">Unit Price</th><th class="r">Amount</th><th>Warranty</th></tr></thead>
     <tbody>${lines.map(({L,r,i})=>`<tr>
       <td>${i+1}</td><td class="mono" style="font-size:11px">${esc(L.code)}</td>
       <td style="white-space:normal;max-width:300px">${esc(L.desc||L.code)}</td>
       <td class="r mono">${fmt0(L.qty)}</td><td>${esc(L.uom)}</td>
-      ${gp?`<td class="r mono">${pp(L.opPct)}</td>`:''}
+      ${gp?`<td class="r mono" style="color:var(--blue)">${fmt(r.baseCost)}</td><td class="r mono" style="font-weight:700;color:${gpColor(r.gp,L.comGroup||comCategory(L.group))}">${pp(L.opPct)}</td><td class="r mono" style="color:var(--green)">${fmt(r.op)}</td>`:''}
       <td class="r mono">${fmt(r.totalUP)}</td><td class="r mono" style="font-weight:600">${fmt(r.lineTotal)}</td><td>${esc(L.warranty||'—')}</td></tr>`).join('')}
-      ${(t.globalExtras>0)?`<tr><td colspan="${gp?7:6}" style="text-align:right">ค่าใช้จ่ายเพิ่มเติม (Extra Costs)</td>
+      ${(t.globalExtras>0)?`<tr><td colspan="${preCols}" style="text-align:right">ค่าใช้จ่ายเพิ่มเติม (Extra Costs)</td>
         <td class="r mono">${fmt(t.globalExtras)}</td><td></td></tr>`:''}
-      <tr style="background:var(--orange-soft)"><td colspan="${gp?7:6}" style="text-align:right;font-weight:700">รวมทั้งสิ้น (${esc(H.currency)})</td>
+      <tr style="background:var(--orange-soft)"><td colspan="${preCols}" style="text-align:right;font-weight:700">รวมทั้งสิ้น (${esc(H.currency)})</td>
         <td class="r mono" style="font-weight:700;font-size:13px">${fmt(t.total)}</td><td></td></tr></tbody></table></div>
     ${gp?`<div style="margin-top:14px;background:var(--surface-2);border-radius:10px;padding:12px 14px" class="no-print"><div class="row-flex" style="gap:28px;font-size:12px">
       <span><span class="hint">ต้นทุนรวม</span> <b class="mono">${fmt0(t.cost)}</b></span>
@@ -2670,14 +2862,46 @@ function viewPreview(){
 function fmtTime(iso){if(!iso)return'-';const d=new Date(iso);if(isNaN(d.getTime()))return String(iso);
   const p=n=>String(n).padStart(2,'0');return `${p(d.getDate())}/${p(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
-/* 1. Dual approval — ต้องครบ Procurement Mgr + BD Mgr ถึงจะเป็น Approved */
-function approve(id){
-  const q=QUOTES.find(x=>x.id===id);if(!q)return;
-  if(!inApprovalStage(q)){toast('ใบนี้ไม่ได้อยู่ในขั้นตอนอนุมัติ (สถานะ '+(q.status||'-')+')','bad');return}
+/* 1. Dual approval — ต้องครบ Procurement Mgr + BD Mgr ถึงจะเป็น Approved
+   v4.1: ส่งให้ server อนุมัติแบบ atomic (action 'approve') — server อ่าน approvalRoles ล่าสุดจาก Sheet เอง
+   แก้ปัญหา Procurement กับ BD กดอนุมัติจากเครื่องตัวเองใกล้ ๆ กัน แล้วการอนุมัติของอีกฝ่ายหาย */
+const APPROVE_ERR_TH={NOT_IN_APPROVAL:'ใบนี้ไม่ได้อยู่ในขั้นตอนอนุมัติแล้ว (มีคนเปลี่ยนสถานะก่อนหน้า)',
+  ALREADY_APPROVED:'บทบาทของคุณอนุมัติใบนี้ไปแล้ว',ROLE_CANNOT_APPROVE:'บทบาทของคุณไม่มีสิทธิ์อนุมัติ',
+  NO_DETAIL:'ข้อมูลใบนี้บน Sheet ไม่สมบูรณ์ — กดซิงค์แล้วลองใหม่',ACCESS_DENIED:'ไม่มีสิทธิ์อนุมัติ'};
+function approveCheck(q){
+  if(!inApprovalStage(q)){toast('ใบนี้ไม่ได้อยู่ในขั้นตอนอนุมัติ (สถานะ '+(STATUS_TH[statusOf(q)]||statusOf(q))+')','bad');return false}
   const role=CURRENT.role;
   if(REQUIRED_APPROVAL_ROLES.indexOf(role)<0&&APPROVAL_OVERRIDE_ROLES.indexOf(role)<0){
-    toast('บทบาท '+role+' ไม่มีสิทธิ์อนุมัติ (ต้องเป็น '+REQUIRED_APPROVAL_ROLES.join(' หรือ ')+')','bad');return}
-  if((q.approvalRoles||[]).indexOf(role)>=0){toast('บทบาท '+role+' อนุมัติใบนี้ไปแล้ว','bad');return}
+    toast('บทบาท '+role+' ไม่มีสิทธิ์อนุมัติ (ต้องเป็น '+REQUIRED_APPROVAL_ROLES.join(' หรือ ')+')','bad');return false}
+  if((q.approvalRoles||[]).indexOf(role)>=0){toast('บทบาท '+role+' อนุมัติใบนี้ไปแล้ว','bad');return false}
+  return true;
+}
+let _approving=false;
+async function approve(id){
+  const q=QUOTES.find(x=>x.id===id);if(!q||_approving)return;
+  if(!approveCheck(q))return;
+  if(!cloudReady()){approveLocal(id);return}               // ออฟไลน์ล้วน → แบบเดิม (เข้าคิว + conflict guard)
+  _approving=true;toast('กำลังบันทึกการอนุมัติ…','');
+  try{
+    const r=await postCloud({action:'approve',id});
+    if(r.ok&&r.data){
+      const d=r.data;
+      const m=mergeRemoteRow({id,detail:d.detail,updatedAt:d.updatedAt,by:CURRENT.name},{force:true});
+      if(!m)await refreshQuote(id,{force:true});
+      LS.set('quotes',QUOTES);_flashIds[id]=Date.now();
+      toast(d.complete
+        ?'อนุมัติครบ 2 ฝ่ายแล้ว — '+gatekeeperName()+' จะเห็นราคาก่อนแล้วกดปล่อยให้ Sales'
+        :'บันทึกการอนุมัติของ '+CURRENT.role+' แล้ว · ยังรอ: '+(d.missing||[]).join(', '),'good');
+      renderNav();render();return;
+    }
+    if(/unknown action/i.test(r.error||'')){approveLocal(id);return}   // Code.gs รุ่นเก่า
+    await refreshQuote(id);renderNav();render();
+    toast((APPROVE_ERR_TH[r.error]||('อนุมัติไม่สำเร็จ: '+(r.error||'-')))+' — แสดงข้อมูลล่าสุดแล้ว','bad');
+  }finally{_approving=false}
+}
+function approveLocal(id){
+  const q=QUOTES.find(x=>x.id===id);if(!q||!approveCheck(q))return;
+  const role=CURRENT.role;
 
   const old=q.status||QT_DEFAULT_STATUS;
   if(!Array.isArray(q.approvalRoles))q.approvalRoles=[];
@@ -2782,7 +3006,10 @@ function kanbanCard(q){
   const see=canSeePrice(q,CURRENT);
   const stale=needsSalesUpdate(q)||isOverdueFollow(q);
   const upd=lastUpdate(q);
-  return `<div class="kcard ${stale?'stale':''}" onclick="openQuote('${q.id}')">
+  const appr=inApprovalStage(q);
+  // v4.1: ผู้บริหารเห็น %GP ตัวใหญ่ + ป้ายรออนุมัติฝั่งไหน บนหน้าการ์ดเลย
+  const gpBox=(canSeeCost(CURRENT)&&appr)?(()=>{const t=quoteTotals(q);return `<div class="kc-gp ${gpClass(t.gp,q.header.groupType)}">${pp(t.gp)}<span>%GP</span></div>`})():'';
+  return `<div class="kcard ${stale?'stale':''} ${appr&&canApprove(q)?'mine':''} ${isFlash(q.id)?'flash':''}" onclick="openQuote('${q.id}')">
     <div class="kc-top">
       <div style="min-width:0">
         <div class="kc-cust">${esc(q.header.customer||'—')}</div>
@@ -2790,10 +3017,12 @@ function kanbanCard(q){
       </div>
       <div class="kc-doc">${esc(q.docNo||q.header.ref||'—')}</div>
     </div>
+    ${gpBox}
     <div class="kc-mid">
       <span class="kc-val">${see?('฿'+fmt0(quoteTotals(q).total)):'🔒'}</span>
       <span class="kc-sales">${esc(salesNameOf(q)||'ไม่ระบุ')}</span>
     </div>
+    ${appr?`<div class="kc-badges">${approvalBadges(q)}</div>`:''}
     <div class="kc-foot">
       <span>${q.updated?('อัปเดต '+esc(agoTH(q.updated))):'—'}</span>
       ${stale?'<span class="tag red" style="font-size:9px">ค้าง</span>':(upd&&statusOf(q)==='Pending'?'<span class="tag green" style="font-size:9px">อัปเดตแล้ว</span>':'')}
@@ -3031,7 +3260,7 @@ function grpColor(g){return ({'Mounting':'orange','EV Charger':'green','DC Cable
 function saveNote(id,v,el){const q=QUOTES.find(x=>x.id===id);if(q){const old=q.salesNote||'';q.salesNote=v;q.updated=todayISO();q.updatedAt=new Date().toISOString();q.isSynced=false;
   if(old!==v)logAuditStatus(q,'หมายเหตุ Sales',old||'—',v||'—');
   LS.set('quotes',QUOTES);flashSaved(el);syncCloud(q)}}
-function openCustomerQuote(id){previewId=id;previewMode='cust';route='preview';render();renderNav()}
+function openCustomerQuote(id){previewId=id;previewMode='cust';route='preview';render();renderNav();refreshPreview(id)}
 
 /* ============================================================ MASTER DATA + DEFAULT PRICE (points 3 & 8) */
 let mSearch='',mGroup='all';
@@ -3444,10 +3673,33 @@ function withTimeout(promise,ms){
     promise.then(r=>{if(!done){done=true;clearTimeout(t);resolve(r)}},e=>{if(!done){done=true;clearTimeout(t);resolve({ok:false,error:String(e)})}});
   });
 }
-async function postCloud(payload){return withTimeout(_postCloud(payload),CLOUD_TIMEOUT_MS)}
-async function cloudGet(type){return withTimeout(_cloudGet(type),CLOUD_TIMEOUT_MS)}
+async function postCloud(payload){
+  const r=await withTimeout(_postCloud(payload),CLOUD_TIMEOUT_MS);
+  if(r&&!r.ok&&r.error==='AUTH_REQUIRED'&&payload.action!=='login')onAuthExpired();
+  return r;
+}
+async function cloudGet(type,arg){
+  const r=await withTimeout(_cloudGet(type,arg),CLOUD_TIMEOUT_MS);
+  if(r&&r.ok===false&&r.error==='AUTH_REQUIRED')onAuthExpired();
+  return r;
+}
+/* v4.1: เซสชันหมดอายุ (SESSION_HOURS ใน Code.gs) — เดิมเงียบ แค่จุดเมฆเป็นสีแดง
+   ผู้ใช้จึงเห็นข้อมูลเก่าค้างจอโดยไม่รู้ตัว → ตอนนี้แจ้งชัด ๆ ครั้งเดียว แล้วพาไปล็อกอินใหม่
+   (รายการที่ค้างในคิวยังอยู่ และจะถูกส่งด้วย token ใหม่หลังล็อกอิน) */
+let _authWarned=false;
+function onAuthExpired(){
+  if(_authWarned||!CURRENT)return;
+  _authWarned=true;stopLive();
+  modal(`<div class="modal-h"><h3 style="color:var(--amber)">⏱ เซสชันหมดอายุ</h3><div class="spacer"></div></div>
+  <div class="modal-b"><p style="line-height:1.8;font-size:13.5px">ระบบไม่สามารถดึง/บันทึกข้อมูลจาก Google Sheet ได้ เพราะเซสชันหมดอายุแล้ว<br>
+    <b>ข้อมูลที่ยังไม่ได้ส่งจะถูกเก็บไว้ในคิว</b> และส่งให้อัตโนมัติหลังเข้าสู่ระบบใหม่</p></div>
+  <div class="modal-f"><button class="btn" onclick="closeModal();autosaveDraft();dirty=false;logout()">เข้าสู่ระบบใหม่</button></div>`);
+}
 async function _postCloud(payload){
-  if(SESSION_TOKEN&&!payload.token)payload.token=SESSION_TOKEN;
+  // FIX v4.1: เดิมเขียน token ลงใน payload ตัวเดียวกับที่อยู่ในคิว → หลังเซสชันหมดอายุ ทุกรายการในคิว
+  //           ส่งซ้ำด้วย token เก่าจนครบ 12 ครั้งแล้วถูกทิ้ง (ข้อมูลหาย) → ตอนนี้ใช้สำเนา + token ปัจจุบันเสมอ
+  payload=Object.assign({},payload);
+  if(SESSION_TOKEN)payload.token=SESSION_TOKEN;
   if(gsRun()){
     return new Promise(resolve=>{
       try{ google.script.run
@@ -3472,20 +3724,22 @@ async function _postCloud(payload){
   }catch(e){if(killer)clearTimeout(killer);return {ok:false,error:(e&&e.name==='AbortError')?'timeout':(e.message||String(e))}}
 }
 /* ---- unified GET ---- */
-async function _cloudGet(type){
+// arg = id (type 'quote') หรือ since (type 'changes') — ต้องใช้ Code.gs v4.1 ขึ้นไป
+async function _cloudGet(type,arg){
   if(gsRun()){
     return new Promise(resolve=>{
       try{ google.script.run
         .withSuccessHandler(r=>{try{resolve((typeof r==='string')?JSON.parse(r):r)}catch(e){resolve(null)}})
         .withFailureHandler(()=>resolve(null))
-        .apiGet(type||'quotations',SESSION_TOKEN||'');
+        .apiGet(type||'quotations',SESSION_TOKEN||'',arg==null?'':String(arg));
       }catch(e){resolve(null)}
     });
   }
   if(!SETTINGS.cloudUrl||!SETTINGS.cloudUrl.startsWith('http'))return null;
   const ac=(typeof AbortController!=='undefined')?new AbortController():null;
   const killer=ac?setTimeout(()=>ac.abort(),CLOUD_TIMEOUT_MS):null;
-  try{const res=await fetch(SETTINGS.cloudUrl+'?type='+(type||'quotations')+(SESSION_TOKEN?('&token='+encodeURIComponent(SESSION_TOKEN)):''),{redirect:'follow',signal:ac?ac.signal:undefined});
+  const argQ=arg==null||arg===''?'':((type==='quote'?'&id=':'&since=')+encodeURIComponent(arg));
+  try{const res=await fetch(SETTINGS.cloudUrl+'?type='+(type||'quotations')+(SESSION_TOKEN?('&token='+encodeURIComponent(SESSION_TOKEN)):'')+argQ,{redirect:'follow',signal:ac?ac.signal:undefined});
     if(killer)clearTimeout(killer);return await res.json();}catch(e){if(killer)clearTimeout(killer);return null}
 }
 /* ============================================================ 2.8 USERS SYNC (Users tab) */
@@ -3510,10 +3764,10 @@ async function pullUsers(){
     let scope=r.scope;
     if(typeof scope==='string'&&scope!=='all'){try{scope=JSON.parse(scope)}catch(e){scope=scope?scope.split(',').map(x=>x.trim()).filter(Boolean):'all'}}
     const u=USERS.find(x=>x.id===r.id);
-    if(!u){USERS.push({id:r.id,name:r.name||r.id,role:r.role||'Sales',scope:scope||'all',passHash:r.passHash||''});changed++;}
+    if(!u){USERS.push({id:r.id,name:r.name||r.id,role:normRole(r.role||'Sales'),scope:scope||'all',passHash:r.passHash||''});changed++;}
     else{
       if(r.name&&u.name!==r.name){u.name=r.name;changed++;}
-      if(r.role&&u.role!==r.role){u.role=r.role;changed++;}
+      if(r.role&&u.role!==normRole(r.role)){u.role=normRole(r.role);changed++;}
       if(scope&&JSON.stringify(u.scope)!==JSON.stringify(scope)){u.scope=scope;changed++;}
       if(r.passHash&&u.passHash!==r.passHash){u.passHash=r.passHash;delete u.pass;changed++;}
     }
@@ -3565,10 +3819,12 @@ function buildSalesProjection(q){
 }
 function quotePayload(q){
   const t=quoteTotals(q);
-  let detail=JSON.stringify(q);
+  // ฟิลด์ชั่วคราวฝั่ง client (สถานะ sync / conflict) ไม่ต้องลง Sheet
+  const clean=Object.assign({},q);TRANSIENT_KEYS.forEach(k=>delete clean[k]);
+  let detail=JSON.stringify(clean);
   // BUSINESS RULE: Google Sheets cells cap at ~50,000 chars; strip audit trail to last 20 entries if detail exceeds 45,000
   // TODO(schema-v3): store auditLogs in a separate sheet row
-  if(detail.length>45000){const s=Object.assign({},q,{auditLogs:(q.auditLogs||[]).slice(-20)});detail=JSON.stringify(s);}
+  if(detail.length>45000){const s=Object.assign({},clean,{auditLogs:(q.auditLogs||[]).slice(-20)});detail=JSON.stringify(s);}
   return {action:'save',id:q.id,docType:q.docType||'QT',docNo:q.docNo||'',status:q.status||'',
     needsApproval:q.needsApproval?1:0,releasedTo:(q.releasedTo||[]).join('|'),
     salesUserId:(q.header&&q.header.salesUserId)||'',assignedTo:q.assignedTo||'',
@@ -3577,14 +3833,24 @@ function quotePayload(q){
     priceTerm:q.header.priceTerm,exrate:q.header.exrate,offerDate:q.header.offerDate,stage:q.stage,
     followStatus:q.followStatus,salesNote:q.salesNote||'',total:t.total,cost:t.cost,profit:t.profit,gp:t.gp,
     lines:q.lines.length,updated:q.updated,by:CURRENT?CURRENT.name:'-',detail,
+    // v4.1 conflict guard: UpdatedAt ของ Sheet ที่ใบนี้อ้างอิงอยู่ — server ปฏิเสธ (409) ถ้ามีคนเขียนหลังจากนั้น
+    baseUpdatedAt:q._cloudAt||'',
     salesDetail:JSON.stringify(buildSalesProjection(q)).slice(0,45000)};
 }
-async function syncCloud(q){
+async function syncCloud(q,opts){
   if(!cloudReady()){q.isSynced=false;persistQuote(q);return {ok:false,offline:true}}
+  const force=!!((opts&&opts.force)||q._forceSave);delete q._forceSave;
   const payload=quotePayload(q);
+  if(force)payload.force=true;
   setCloudDot('sync');
   const res=await postCloud(payload);
-  if(res.ok){ q.isSynced=true; persistQuote(q); setCloudDot('on'); }
+  if(res.ok){ q.isSynced=true; delete q._conflict; delete q._cloudNewer; delete q._cloudNewerBy;
+    if(res.data&&res.data.updatedAt)q._cloudAt=res.data.updatedAt;      // baseline ใหม่สำหรับการบันทึกครั้งถัดไป
+    persistQuote(q); setCloudDot('on'); }
+  else if(res.error==='CONFLICT'){                                        // มีคนเขียนบน Sheet ก่อนเรา → ห้ามเข้าคิวส่งซ้ำ
+    q.isSynced=false; q._conflict=res.data||{}; persistQuote(q); setCloudDot('err');
+    conflictModal(q.id,res.data||{});
+  }
   else{ q.isSynced=false; persistQuote(q); enqueueSync(payload);
     if(!res.offline)toast('บันทึกขึ้น Google Sheet ไม่สำเร็จ: '+(res.error||'-')+' (เก็บคิวไว้ส่งภายหลัง กด 🔄 ซิงค์ เพื่อลองใหม่)','bad');
     setCloudDot(res.offline?'':'err'); }
@@ -3599,16 +3865,25 @@ async function flushQueue(){
   if(!cloudReady())return;
   let q=getQueue();if(!q.length){updateQueueBadge();return}
   _flushing=true;
-  const remain=[];let done=0;
+  // v4.1: ใบเดียวกันถูกบันทึกหลายครั้งตอนออฟไลน์ → ส่งเฉพาะครั้งล่าสุด (detail เต็มใบ ครั้งหลังครอบคลุมครั้งก่อนเสมอ)
+  //       ไม่งั้นครั้งที่ 2 จะชน conflict guard ของครั้งที่ 1 ที่เพิ่งส่งสำเร็จ
+  const lastSave={};q.forEach((it,i)=>{if(it.payload&&it.payload.action==='save')lastSave[it.payload.id]=i;});
+  q=q.filter((it,i)=>!(it.payload&&it.payload.action==='save'&&lastSave[it.payload.id]!==i));
+  const remain=[];let done=0,conflicts=[];
   for(const item of q){
     const tries=(item.tries||0);
     const r=await postCloud(item.payload);
+    const tid=item.payload.id;const lq=QUOTES.find(x=>x.id===tid);
     if(r.ok){done++;
-      const tid=item.payload.id;const lq=QUOTES.find(x=>x.id===tid);if(lq){lq.isSynced=true;}}
+      if(lq){lq.isSynced=true;delete lq._conflict;delete lq._cloudNewer;delete lq._cloudNewerBy;if(r.data&&r.data.updatedAt)lq._cloudAt=r.data.updatedAt;}}
+    else if(r.error==='CONFLICT'){        // ไม่ส่งซ้ำ — ให้ผู้ใช้ตัดสินใจเอง (โหลดของ Cloud / บันทึกทับ)
+      if(lq){lq.isSynced=false;lq._conflict=r.data||{};}conflicts.push(tid);}
     else {item.tries=tries+1;
       // BUSINESS RULE: drop an item after 12 failed attempts so a poisoned payload can't block the queue forever
       if(item.tries<=12)remain.push(item);}
   }
+  if(conflicts.length){toast('มี '+conflicts.length+' ใบที่ข้อมูลบน Cloud ถูกแก้โดยคนอื่นระหว่างออฟไลน์ — เปิดใบเพื่อเลือกเวอร์ชัน','bad');
+    conflictModal(conflicts[0],(QUOTES.find(x=>x.id===conflicts[0])||{})._conflict||{});}
   setQueue(remain);if(done)LS.set('quotes',QUOTES);
   updateQueueBadge();
   _flushing=false;
@@ -3630,7 +3905,57 @@ function updateQueueBadge(){
 window.addEventListener('online',()=>{_flushDelay=5000;toast('กลับมาออนไลน์ — กำลังส่งรายการค้าง','good');flushQueue();});
 window.addEventListener('offline',()=>{setCloudDot('');updateQueueBadge();});
 
-/* ---- startup: pull Sheet -> merge into localStorage (never lose data on cache clear) ---- */
+/* ============================================================ LIVE SYNC (v4.1)
+   หลักการ: Google Sheet คือความจริงหนึ่งเดียว · localStorage เป็นแค่ cache + คิวออฟไลน์
+   1) mergeRemoteRow()   — กติกาการรวมข้อมูล "ที่เดียว" ใช้ทั้งตอนเปิดแอป / polling / เปิดดูใบ
+   2) refreshQuote(id)   — เปิดดู/แก้ใบไหน ดึงใบนั้นจาก Cloud เบื้องหลังทันที ถ้าใหม่กว่า → อัปเดตจอ
+   3) pollChanges()      — หน้า Dashboard / บอร์ดทีมขาย ดึงเฉพาะแถวที่เปลี่ยนทุก 30 วินาที (type=changes)
+   4) Conflict           — _cloudAt = UpdatedAt ของ Sheet ที่ใบในเครื่องอ้างอิง · ส่งเป็น baseUpdatedAt ตอนบันทึก
+                           server ปฏิเสธ (409) ถ้ามีคนเขียนหลังจากนั้น + หน้าแก้ไขเตือนล่วงหน้าทุก 30 วินาที
+   ============================================================ */
+// BUSINESS RULE: ความถี่ auto-sync (ปรับได้) — 30 วินาทีเบาพอสำหรับ quota ของ Apps Script
+const LIVE_POLL_MS=30000;
+const LIVE_POLL_ROUTES=['dashboard','salessummary'];   // หน้าที่ polling รายการทั้งหมด
+const LIVE_OVERLAP_MS=90000;      // ขอข้อมูลซ้อนย้อนหลัง 90 วิ กันแถวที่เขียนระหว่างอ่านหลุด (merge ซ้ำได้ปลอดภัย)
+const LEGACY_FULL_PULL_MS=120000; // Code.gs รุ่นเก่า (ไม่มี type=changes) → ดึงทั้งชุดห่างขึ้นเป็น 2 นาที
+let _liveTimer=null,_lastServerTime='',_polling=false,_lastPollAt=0,_lastFullPull=0;
+let _editConflict=null,_renderPending=false,_flashIds={};
+const TRANSIENT_KEYS=['_conflict','_cloudNewer','_cloudNewerBy','_forceSave','_cloudAt','_cloudBy'];
+
+/* แถวจาก server → ใบเสนอราคาในเครื่อง (null = ข้ามแถวนี้) */
+function remoteFromRow(row){
+  let remote=null;try{remote=(row&&row.detail)?JSON.parse(row.detail):null}catch(e){remote=null}
+  // FIX v4.1: Detail ที่ใหญ่เกิน cell ถูกเก็บเป็น {id,_oversize:true} → เดิม migrateQuote() พังที่ q.header
+  //           แล้ว exception ทำให้ "ทั้งรอบ" ไม่มีใบไหนถูกอัปเดตเลย — ตอนนี้ข้ามเฉพาะใบนั้น
+  if(!remote||!remote.id||remote._oversize||!remote.header)return null;
+  try{remote=migrateQuote(remote)}catch(e){return null}
+  TRANSIENT_KEYS.forEach(k=>delete remote[k]);
+  remote.isSynced=true;
+  remote._cloudAt=row.updatedAt||remote.updatedAt||'';
+  if(row.by)remote._cloudBy=row.by;
+  return remote;
+}
+/* กติกาการรวม — คืน 'added' | 'merged' | 'kept-local' | 'same' | null */
+function mergeRemoteRow(row,opts){
+  const remote=remoteFromRow(row);if(!remote)return null;
+  const i=QUOTES.findIndex(x=>x.id===remote.id);
+  // FIX v4.1: เดิมใบที่ถูกลบบน Cloud แต่ไม่มีในเครื่อง ไปเข้า else แล้วอ่าน QUOTES[-1] → crash ทั้งรอบการ sync
+  if(i<0){if(remote.deleted)return null;QUOTES.push(remote);return 'added'}
+  const local=QUOTES[i];
+  if(opts&&opts.force){QUOTES[i]=remote;return 'merged'}
+  const rt=Date.parse(remote._cloudAt)||0;
+  if(local.isSynced===false){
+    // ในเครื่องมีงานที่ยังไม่ได้ส่ง → ไม่ทับ แต่จำไว้ว่า Cloud ใหม่กว่า (ใช้เตือน conflict)
+    if(local._cloudAt&&rt>(Date.parse(local._cloudAt)||0)+1000){local._cloudNewer=remote._cloudAt;local._cloudNewerBy=row.by||'';return 'kept-local'}
+    return 'same';
+  }
+  const lt=Date.parse(local._cloudAt||local.updatedAt||local.updated||'')||0;
+  if(rt>lt){QUOTES[i]=remote;return 'merged'}
+  if(!local._cloudAt&&remote._cloudAt)local._cloudAt=remote._cloudAt;   // ใบเก่า: ตั้ง baseline ให้ conflict guard
+  return 'same';
+}
+
+/* ---- startup / manual: ดึงทั้งชุด ---- */
 async function initializeData(){
   if(!cloudReady()){setCloudDot('');return {ok:false,offline:true}}
   // pull settings first so newer commission/defaults from another device take effect before quotes render
@@ -3645,25 +3970,14 @@ async function initializeData(){
     const data=await cloudGet('quotations');
     const rows=(data&&(data.quotations||data.rows))||[];
     let added=0,merged=0;
-    rows.forEach(row=>{
-      let remote=null;try{remote=row.detail?JSON.parse(row.detail):null}catch(e){remote=null}
-      if(!remote||!remote.id)return;
-      remote=migrateQuote(remote);remote.isSynced=true;
-      const i=QUOTES.findIndex(x=>x.id===remote.id);
-      // don't restore locally-deleted quotes from remote; they'll be synced as deletes on next flush
-      if(i<0&&!remote.deleted){QUOTES.push(remote);added++;}
-      else{
-        // BUSINESS RULE: prefer updatedAt (ms-precision) over updated (date-only) for conflict resolution
-        const lt=Date.parse(QUOTES[i].updatedAt||QUOTES[i].updated||'')||0, rt=Date.parse(remote.updatedAt||remote.updated||'')||0;
-        // remote newer AND local already synced -> take remote; if local has unsynced edits, keep local
-        if(rt>lt && QUOTES[i].isSynced!==false){QUOTES[i]=remote;merged++;}
-      }
-    });
+    rows.forEach(row=>{const r=mergeRemoteRow(row);if(r==='added')added++;else if(r==='merged')merged++;});
     QUOTES.forEach(q=>{if(q.isSynced==null)q.isSynced=true});
     LS.set('quotes',QUOTES);
-    if(added+merged>0){renderNav();render();toast('ดึงจาก Google Sheet: ใหม่ '+added+' · อัปเดต '+merged,'good');}
-    setCloudDot(data?'on':'err');
-    result={ok:!!data,added,merged};
+    _lastFullPull=Date.now();
+    _lastServerTime=(data&&data.serverTime)||'';          // ว่าง = Code.gs รุ่นเก่า → polling แบบดึงทั้งชุด
+    if(added+merged>0){renderNav();liveRender();toast('ดึงจาก Google Sheet: ใหม่ '+added+' · อัปเดต '+merged,'good');}
+    setCloudDot(data&&data.ok!==false?'on':'err');setLiveStamp();
+    result={ok:!!data&&data.ok!==false,added,merged};
   }catch(e){setCloudDot('err');/* keep local data, silent */}
   updateQueueBadge();
   flushQueue();
@@ -3683,6 +3997,163 @@ async function manualSync(){
   if(r&&r.ok&&(r.added+r.merged)===0)toast('ข้อมูลเป็นเวอร์ชันล่าสุดแล้ว','good');
   else if(r&&!r.ok)toast('ซิงค์ไม่สำเร็จ — ตรวจการเชื่อมต่อในหน้าตั้งค่า','bad');
 }
+
+/* ---- ใบเดียว: เปิดดู / เปิดแก้ / ก่อนอัปเดตแทน Sales ---- */
+async function refreshQuote(id,opts){
+  if(!id||!cloudReady())return null;
+  const d=await cloudGet('quote',id);
+  if(!d||d.ok===false)return null;                         // ออฟไลน์ / Code.gs รุ่นเก่า → ใช้ข้อมูลในเครื่องต่อ
+  if(!d.quote)return {status:'missing',row:null};
+  const res=mergeRemoteRow(d.quote,opts);
+  if(res==='added'||res==='merged'){LS.set('quotes',QUOTES);_flashIds[id]=Date.now();}
+  setLiveStamp();
+  return {status:res,row:d.quote};
+}
+async function refreshPreview(id){
+  const el=document.getElementById('qLive');
+  if(el)el.innerHTML='<span class="live-spin"></span> ตรวจข้อมูลล่าสุด…';
+  const before=QUOTES.find(x=>x.id===id),prevSt=before?statusOf(before):null;
+  const r=await refreshQuote(id);
+  if(route!=='preview'||previewId!==id)return;
+  if(r&&(r.status==='merged'||r.status==='added')){
+    const q=QUOTES.find(x=>x.id===id);
+    liveRender();
+    toast(q&&prevSt&&statusOf(q)!==prevSt?('🔔 สถานะเปลี่ยน: '+(STATUS_TH[prevSt]||prevSt)+' → '+(STATUS_TH[statusOf(q)]||statusOf(q))):'อัปเดตเป็นข้อมูลล่าสุดจาก Cloud แล้ว','good');
+    return;
+  }
+  const el2=document.getElementById('qLive');
+  if(el2)el2.innerHTML=r?(r.status==='kept-local'
+      ?'<span style="color:var(--amber)">⚠ Cloud มีเวอร์ชันใหม่กว่า แต่ในเครื่องมีงานที่ยังไม่ได้ส่ง</span>'
+      :'☁ ข้อมูลล่าสุดแล้ว · '+fmtTime(new Date().toISOString()))
+    :'<span class="hint">ใช้ข้อมูลในเครื่อง (ออฟไลน์)</span>';
+}
+
+/* ---- Dashboard polling: ดึงเฉพาะที่เปลี่ยน ---- */
+async function pollChanges(force){
+  if(_polling||!CURRENT||_authWarned||!cloudReady())return;
+  if(document.hidden&&!force)return;                       // แท็บไม่ได้เปิดอยู่ = ไม่เปลือง quota
+  if(!force&&Date.now()-_lastPollAt<8000)return;
+  _polling=true;_lastPollAt=Date.now();
+  try{
+    let data;
+    if(_lastServerTime){
+      const since=new Date((Date.parse(_lastServerTime)||Date.now())-LIVE_OVERLAP_MS).toISOString();
+      data=await cloudGet('changes',since);
+      if(data&&data.ok===false&&data.error!=='AUTH_REQUIRED'){_lastServerTime='';data=null;}   // server ไม่รองรับ → โหมดดึงทั้งชุด
+    }else{
+      if(Date.now()-_lastFullPull<LEGACY_FULL_PULL_MS)return;
+      data=await cloudGet('quotations');_lastFullPull=Date.now();
+    }
+    if(!data||data.ok===false){setCloudDot('err');return}
+    if(data.serverTime)_lastServerTime=data.serverTime;
+    const changes=[];
+    (data.quotations||data.rows||[]).forEach(row=>{
+      const prev=QUOTES.find(x=>x.id===row.id),prevSt=prev?statusOf(prev):null;
+      const r=mergeRemoteRow(row);
+      if(r==='added'||r==='merged'){const q=QUOTES.find(x=>x.id===row.id);if(q){changes.push({q,prevSt});_flashIds[q.id]=Date.now();}}
+    });
+    if(changes.length){LS.set('quotes',QUOTES);renderNav();liveRender();announceChanges(changes);}
+    setCloudDot('on');setLiveStamp();
+  }finally{_polling=false}
+}
+function announceChanges(changes){
+  const moved=changes.filter(c=>c.prevSt&&c.q.docType!=='SR'&&statusOf(c.q)!==c.prevSt);
+  if(moved.length===1){const c=moved[0];
+    toast('🔔 '+(c.q.docNo||c.q.header.ref||'')+': '+(STATUS_TH[c.prevSt]||c.prevSt)+' → '+(STATUS_TH[statusOf(c.q)]||statusOf(c.q)),'good');}
+  else if(moved.length>1)toast('🔔 สถานะเปลี่ยน '+moved.length+' ใบ (อัปเดตอัตโนมัติจาก Cloud)','good');
+  else toast('↻ อัปเดตข้อมูลล่าสุดจาก Cloud '+changes.length+' ใบ','good');
+}
+/* วาดหน้าจอใหม่หลังข้อมูลเปลี่ยน โดยไม่ขัดจังหวะผู้ใช้ */
+function liveRender(){
+  if(!CURRENT)return;
+  if(route==='new'){renderConflictBanner();return}          // หน้าแก้ไข: ห้ามทับสิ่งที่กำลังพิมพ์ — แค่เตือน
+  if($('#modalRoot').innerHTML){_renderPending=true;return} // มี modal เปิดอยู่ → วาดหลังปิด
+  const ae=document.activeElement;
+  if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&$('#content').contains(ae)){_renderPending=true;return}
+  _renderPending=false;
+  const y=window.scrollY;render();window.scrollTo(0,y);
+}
+function isFlash(id){return _flashIds[id]&&(Date.now()-_flashIds[id]<6000)}
+function setLiveStamp(){
+  const el=$('#liveTxt');if(!el)return;
+  const live=LIVE_POLL_ROUTES.indexOf(route)>=0;
+  el.className='live-pill'+(live?' on':'');
+  el.textContent=(live?'● Live · ':'')+'อัปเดต '+fmtTime(new Date().toISOString()).slice(-5);
+  el.title=live?('หน้านี้อัปเดตอัตโนมัติทุก '+(LIVE_POLL_MS/1000)+' วินาที'):'เวลาที่ดึงข้อมูลจาก Cloud ล่าสุด';
+}
+function liveTick(){
+  if(!CURRENT||_authWarned)return;
+  if(LIVE_POLL_ROUTES.indexOf(route)>=0)pollChanges();
+  else if(route==='new')checkEditingFresh(false);
+  else if(route==='preview'&&previewId&&!document.hidden)refreshPreview(previewId);
+}
+function startLive(){stopLive();_liveTimer=setInterval(liveTick,LIVE_POLL_MS)}
+function stopLive(){if(_liveTimer){clearInterval(_liveTimer);_liveTimer=null}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&CURRENT)liveTick()});
+
+/* ---- หน้าแก้ไข: ตรวจว่ามีคนแก้ใบเดียวกันบน Cloud ไปแล้วหรือยัง ---- */
+async function checkEditingFresh(onOpen){
+  if(!editing||route!=='new'||document.hidden&&!onOpen)return;
+  const id=editing.id;
+  const r=await refreshQuote(id);
+  if(!r||!r.row||route!=='new'||!editing||editing.id!==id)return;
+  const cloudAt=Date.parse(r.row.updatedAt||'')||0;
+  if(!editing._cloudAt){if(!dirty)editing._cloudAt=r.row.updatedAt;return}
+  if(cloudAt<=(Date.parse(editing._cloudAt)||0)+1000)return;
+  if(onOpen&&!dirty){                          // เพิ่งเปิด ยังไม่ได้แก้อะไร → ใช้เวอร์ชันล่าสุดให้เลย
+    const fresh=QUOTES.find(x=>x.id===id);
+    if(fresh){editing=JSON.parse(JSON.stringify(fresh));render();toast('โหลดเวอร์ชันล่าสุดจาก Cloud แล้ว','good');}
+    return;
+  }
+  _editConflict={id,at:r.row.updatedAt,by:r.row.by||'',status:r.row.status||''};
+  renderConflictBanner();
+}
+function renderConflictBanner(){
+  const box=document.getElementById('conflictBanner');if(!box)return;
+  const c=_editConflict;
+  if(!c||!editing||c.id!==editing.id){box.innerHTML='';return}
+  box.innerHTML=`<div class="conflict-bar">
+    <span style="font-size:20px">⚠️</span>
+    <div style="flex:1;min-width:220px"><b>ข้อมูลบน Cloud มีการเปลี่ยนแปลง</b>
+      <div class="hint">ใบนี้ถูกแก้โดย <b>${esc(c.by||'ผู้ใช้อื่น')}</b> เมื่อ ${esc(fmtTime(c.at))}${c.status?(' · สถานะบน Cloud: <b>'+esc(STATUS_TH[c.status]||c.status)+'</b>'):''}
+        หลังจากที่คุณเปิดหน้านี้ — ถ้าบันทึกตอนนี้จะทับงานของอีกฝ่าย</div></div>
+    <button class="btn sm" onclick="resolveConflict('${esc(c.id)}','cloud')">↺ โหลดเวอร์ชัน Cloud (ทิ้งที่แก้)</button>
+    <button class="btn sm ghost" onclick="keepMineOnSave()">เก็บของฉัน · บันทึกทับตอนกดบันทึก</button></div>`;
+}
+function keepMineOnSave(){
+  if(!editing)return;
+  editing._forceSave=true;editing._cloudAt=(_editConflict&&_editConflict.at)||editing._cloudAt;
+  _editConflict=null;renderConflictBanner();
+  toast('ตกลง — เมื่อกดบันทึก ระบบจะบันทึกทับเวอร์ชันบน Cloud (บันทึกในประวัติ)','good');
+}
+function conflictModal(id,info){
+  const q=QUOTES.find(x=>x.id===id);
+  const nm=q?(q.docNo||(q.header&&q.header.ref)||''):id;
+  modal(`<div class="modal-h"><h3 style="color:var(--amber)">⚠️ ข้อมูลบน Cloud ถูกแก้ไขโดยคนอื่น</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
+  <div class="modal-b"><p style="line-height:1.85;font-size:13.5px">ใบ <b>${esc(nm)}</b> ถูกแก้บน Google Sheet โดย <b>${esc(info.serverBy||'ผู้ใช้อื่น')}</b>
+    เมื่อ ${esc(fmtTime(info.serverUpdatedAt))}${info.serverStatus?(' (สถานะ <b>'+esc(STATUS_TH[info.serverStatus]||info.serverStatus)+'</b>)'):''}
+    หลังจากที่เครื่องนี้ดึงข้อมูลครั้งล่าสุด</p>
+    <p class="hint" style="margin-top:8px">ระบบ <b>ยังไม่ได้บันทึกทับ</b> เพื่อกันงานของอีกฝ่ายหาย (เช่น การอนุมัติ / ปล่อยราคา / อัปเดตจาก Sales) — เลือกเวอร์ชันที่จะใช้</p></div>
+  <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ตัดสินใจทีหลัง</button>
+    <button class="btn ghost" onclick="resolveConflict('${esc(id)}','mine')">บันทึกทับด้วยเวอร์ชันของฉัน</button>
+    <button class="btn" onclick="resolveConflict('${esc(id)}','cloud')">↺ ใช้เวอร์ชันบน Cloud</button></div>`);
+}
+async function resolveConflict(id,mode){
+  closeModal();
+  if(mode==='cloud'){
+    const r=await refreshQuote(id,{force:true});
+    if(!r||!r.row){toast('ดึงข้อมูลจาก Cloud ไม่สำเร็จ — ลองใหม่','bad');return}
+    setQueue(getQueue().filter(it=>!(it.payload&&it.payload.id===id&&it.payload.action==='save')));updateQueueBadge();
+    if(editing&&editing.id===id){const fresh=QUOTES.find(x=>x.id===id);editing=fresh?JSON.parse(JSON.stringify(fresh)):null;dirty=false;clearDraft();}
+    _editConflict=null;renderNav();render();toast('ใช้เวอร์ชันล่าสุดจาก Cloud แล้ว','good');
+    return;
+  }
+  const q=(editing&&editing.id===id)?editing:QUOTES.find(x=>x.id===id);if(!q)return;
+  logAction(q.id,'Overwrote newer cloud version',null,'บันทึกทับเวอร์ชันของ '+((q._conflict&&q._conflict.serverBy)||'ผู้ใช้อื่น'));
+  const res=await syncCloud(q,{force:true});
+  if(res.ok){_editConflict=null;toast('บันทึกทับเวอร์ชันบน Cloud แล้ว','good');renderNav();render();}
+}
+
 function syncProduct(p){
   const _bp=BOIS[p.code]!=null?BOIS[p.code]:(p.boiPrice||'');
   postCloud({action:'saveProduct',code:p.code,desc:p.desc,group:p.group,comGroup:p.comGroup||'',uom:p.uom,warranty:p.warranty,
@@ -3934,7 +4405,8 @@ function runSelfTest(){
 
 /* ============================================================ MODAL / TOAST / BOOT */
 function modal(html,wide){$('#modalRoot').innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()"><div class="modal ${wide?'wide':''}">${html}</div></div>`}
-function closeModal(){$('#modalRoot').innerHTML=''}
+function closeModal(){$('#modalRoot').innerHTML='';
+  if(_renderPending){_renderPending=false;setTimeout(liveRender,0)}}   // v4.1: วาดข้อมูลที่ Live sync เข้ามาระหว่างเปิด modal
 let toastT;
 function toast(msg,kind){const t=$('#toast');t.className='toast '+(kind||'')+' show';t.textContent=msg;
   clearTimeout(toastT);toastT=setTimeout(()=>t.className='toast '+(kind||''),2600)}

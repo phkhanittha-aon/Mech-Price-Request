@@ -1,6 +1,17 @@
 /*************************************************************
- * MGS PROJECT PRICING — APPS SCRIPT BACKEND  (v4.0 · RBAC)
- * ใช้คู่กับ  Index.html (build 4.0)  และ  Sales.html (build 4.0)
+ * MGS PROJECT PRICING — APPS SCRIPT BACKEND  (v4.1 · RBAC + Live Sync)
+ * ใช้คู่กับ  Index.html (build 4.1)  และ  Sales.html (build 4.0 ใช้ต่อได้ — API เดิมไม่เปลี่ยน)
+ *
+ * สิ่งที่เปลี่ยนใน v4.1
+ *  A) Visibility: สิทธิ์เห็นต้นทุนตัดสินจาก "tier" ที่เดียว (seesFullData_)
+ *     ADMIN / MANAGEMENT / INTERNAL = Full Data เสมอ ทุกสถานะ · เฉพาะ SALES เท่านั้นที่ถูกตัด
+ *     + normRole_() — ชื่อ role ในแท็บ Users ที่สะกดต่าง/มีช่องว่าง (เช่น "BD Manager", "procurement mgr ")
+ *       เดิมตกไปเป็นสิทธิ์ Sales ทั้งหมด → ผู้จัดการไม่เห็นต้นทุน  ตอนนี้แปลงเป็นชื่อมาตรฐานก่อนเสมอ
+ *  B) Live Sync: type=quote&id=…  (ดึงใบเดียว) · type=changes&since=…  (ดึงเฉพาะแถวที่เปลี่ยน)
+ *     ทุกคำตอบมี serverTime เพื่อให้ client ใช้นาฬิกาของ server เป็นเกณฑ์
+ *  C) Conflict guard: action 'save' รับ baseUpdatedAt — ถ้าบน Sheet ใหม่กว่า ตอบ CONFLICT (409) ไม่เขียนทับ
+ *  D) action 'approve' — อนุมัติ 2 ฝ่ายแบบ atomic ฝั่ง server (กัน Procurement/BD กดพร้อมกันแล้วทับกัน)
+ *  * ไม่ต้องรัน setup() ใหม่ — schema เดิม · แค่วางไฟล์ทับแล้ว Deploy → New version
  *
  * สิ่งที่เปลี่ยนจาก v2.1 (สำคัญ — ต้องอัปเดต HTML ทั้ง 2 ไฟล์พร้อมกัน)
  *  1) ทุก request ต้องมี session token ที่ออกโดย server (action:'login')
@@ -66,7 +77,33 @@ var ROLE_MATRIX = {
 };
 var DEFAULT_CAPS = ROLE_MATRIX['Sales'];   // role ที่ไม่รู้จัก → ได้สิทธิ์ต่ำสุดเสมอ
 
-function capsOf_(role) { return ROLE_MATRIX[role] || DEFAULT_CAPS; }
+/** ชื่อเรียกอื่นที่พบในแท็บ Users → ชื่อ role มาตรฐาน (คีย์เป็นตัวพิมพ์เล็ก เว้นวรรคเดียว) */
+var ROLE_ALIASES = {
+  'gm':'GM', 'general manager':'GM',
+  'admin':'Admin', 'administrator':'Admin',
+  'procurement mgr':'Procurement Mgr', 'procurement manager':'Procurement Mgr', 'procurement mgr.':'Procurement Mgr',
+  'bd mgr':'BD Mgr', 'bd manager':'BD Mgr', 'bd mgr.':'BD Mgr', 'business development manager':'BD Mgr',
+  'sourcing':'Sourcing', 'sales':'Sales'
+};
+/** คืนชื่อ role มาตรฐานเสมอ — ไม่รู้จัก = 'Sales' (สิทธิ์ต่ำสุด) */
+function normRole_(role) {
+  var raw = String(role || '').trim();
+  if (ROLE_MATRIX[raw]) return raw;
+  return ROLE_ALIASES[raw.toLowerCase().replace(/\s+/g, ' ')] || 'Sales';
+}
+function capsOf_(role) { return ROLE_MATRIX[normRole_(role)] || DEFAULT_CAPS; }
+
+/** BUSINESS RULE: tier ที่ได้ข้อมูลเต็ม (Cost / Profit / GP / Detail) เสมอ ทุกสถานะ — ไม่มีการ strip
+ *  เฉพาะ tier SALES เท่านั้นที่ถูกตัดต้นทุน */
+var FULL_DATA_TIERS = ['ADMIN', 'MANAGEMENT', 'INTERNAL'];
+function seesFullData_(sess) {
+  return !!(sess && sess.caps && FULL_DATA_TIERS.indexOf(sess.caps.tier) >= 0 && sess.caps.viewCost);
+}
+
+/* ---- dual approval (ต้องตรงกับ REQUIRED_APPROVAL_ROLES / APPROVAL_OVERRIDE_ROLES ใน Index.html) ---- */
+var REQUIRED_APPROVAL_ROLES = ['Procurement Mgr', 'BD Mgr'];
+var APPROVAL_OVERRIDE_ROLES = ['GM'];      // GM อนุมัติแทนได้ทั้ง 2 ขาในครั้งเดียว
+var PRICE_STATES = ['Approved', 'Pending', 'Won', 'Closed'];
 
 /** คีย์ที่ห้ามหลุดไปหา role ที่ไม่มี viewCost — ตัดแบบ recursive ทั้งก่อนส่งออกและก่อนบันทึก */
 var COST_KEYS = ['up','costcur','dutypct','clearancepct','freep','oppct','extras','exrate','rates',
@@ -94,7 +131,8 @@ function stripCost_(v) {
 /* ============================================================ ENTRY POINTS */
 
 function doGet(e) {
-  var type = (e && e.parameter && e.parameter.type) || '';
+  var prm = (e && e.parameter) || {};
+  var type = prm.type || '';
   if (!type) {
     var page = String((e && e.parameter && e.parameter.app) || (e && e.parameter && e.parameter.page) || DEFAULT_PAGE).toLowerCase();
     var isSales = (page === 'sales');
@@ -103,8 +141,7 @@ function doGet(e) {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, viewport-fit=cover')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
-  var token = (e && e.parameter && e.parameter.token) || '';
-  return json_(apiGetObj_(type, token));
+  return json_(apiGetObj_(type, prm.token || '', prm.id || prm.since || ''));
 }
 
 function doPost(e) {
@@ -121,7 +158,8 @@ function apiPost(jsonStr) {
   return JSON.stringify(handle_(payload));
 }
 
-function apiGet(type, token) { return JSON.stringify(apiGetObj_(type, token)); }
+/** google.script.run.apiGet(type, token, arg) — arg = id (type 'quote') หรือ since (type 'changes') */
+function apiGet(type, token, arg) { return JSON.stringify(apiGetObj_(type, token, arg)); }
 
 /* ============================================================ SESSION / AUTH */
 
@@ -149,7 +187,7 @@ function login_(p) {
   var stored = String(cell_(found, idx, 'PassHash') || '');
   if (!stored || stored !== hash) { logRow_('login-fail', '', name, '', 'bad password'); return { ok:false, error:'AUTH_FAILED' }; }
 
-  var role = String(cell_(found, idx, 'Role') || 'Sales');
+  var role = normRole_(cell_(found, idx, 'Role'));   // ชื่อ role มาตรฐานเสมอ (กันสะกดต่าง → ตกเป็น Sales)
   var caps = capsOf_(role);
   var token = newToken_(), now = new Date();
   var exp = new Date(now.getTime() + SESSION_HOURS * 3600000);
@@ -181,7 +219,7 @@ function auth_(token) {
   var r = ss.getRange(row, 1, 1, ss.getLastColumn()).getValues()[0];
   var expMs = expiryMs_(r, idx);
   if (expMs && expMs < Date.now()) { ss.deleteRow(row); return null; }
-  var role = String(cell_(r, idx, 'Role') || 'Sales');
+  var role = normRole_(cell_(r, idx, 'Role'));
   return { token:token, userId:String(cell_(r, idx, 'UserId')), name:String(cell_(r, idx, 'Name')),
            role:role, caps:capsOf_(role) };
 }
@@ -222,14 +260,15 @@ function handle_(p) {
   catch (e) { return { ok:false, error:'busy — ระบบกำลังเขียนข้อมูลอยู่ ลองใหม่อีกครั้ง' }; }
   try {
     if (action === 'login') return login_(p);
-    if (action === 'ping')  return { ok:true, pong:true, time:nowISO_(), version:'4.0' };
+    if (action === 'ping')  return { ok:true, pong:true, time:nowISO_(), version:'4.1' };
 
     var sess = auth_(p.token);
     if (!sess) return { ok:false, error:'AUTH_REQUIRED', code:401 };
     if (action === 'logout') return logout_(p);
 
     switch (action) {
-      case 'whoami':       return { ok:true, user:{ id:sess.userId, name:sess.name, role:sess.role, caps:sess.caps } };
+      case 'whoami':       return { ok:true, user:{ id:sess.userId, name:sess.name, role:sess.role, tier:sess.caps.tier, caps:sess.caps } };
+      case 'approve':      return need_(sess,'approve') || approve_(p, sess);
       case 'save':         return need_(sess,'writeQuote') || saveQuote_(p, sess);
       case 'saveSR':       return saveSR_(p, sess);
       case 'salesPatch':   return salesPatch_(p, sess);
@@ -257,12 +296,27 @@ function need_(sess, cap) {
 
 /* ============================================================ READ ROUTER */
 
-function apiGetObj_(type, token) {
+function apiGetObj_(type, token, arg) {
   try {
     var sess = auth_(token);
     if (!sess) return { ok:false, error:'AUTH_REQUIRED', code:401 };
+    // serverTime ถูกจับ "ก่อน" อ่านข้อมูล → รอบ polling ถัดไปใช้ค่านี้เป็น since ได้โดยไม่พลาดแถวที่เขียนระหว่างอ่าน
+    var serverTime = nowISO_();
+    var view = seesFullData_(sess) ? 'internal' : 'sales';
     switch (type) {
-      case 'quotations': return { ok:true, quotations:getQuotations_(sess), view:(sess.caps.viewCost ? 'internal' : 'sales') };
+      case 'quotations': return { ok:true, quotations:getQuotations_(sess), view:view, serverTime:serverTime };
+      case 'changes': {
+        // Live polling: ส่งเฉพาะแถวที่ UpdatedAt ใหม่กว่า since (เบากว่าดึงทั้งชีททุก 30 วินาทีมาก)
+        var sinceMs = toMs_(arg);
+        if (!sinceMs) return { ok:false, error:'missing since' };
+        return { ok:true, quotations:getQuotations_(sess, { sinceMs:sinceMs }), view:view, serverTime:serverTime };
+      }
+      case 'quote': {
+        // เปิดดู/แก้ใบเดียว → ดึงเวอร์ชันล่าสุดของใบนั้นจาก Sheet (ผ่านกฎ projection เดียวกันทุกประการ)
+        if (!arg) return { ok:false, error:'missing id' };
+        var one = getQuotations_(sess, { id:String(arg) });
+        return { ok:true, quote:one.length ? one[0] : null, view:view, serverTime:serverTime };
+      }
       case 'products':   return { ok:true, products:getProducts_(sess) };
       case 'settings':   return getSettings_(sess);
       case 'users':      return { ok:true, users:getUsers_(sess) };
@@ -278,6 +332,25 @@ function saveQuote_(p, sess) {
   if (!p.id) return { ok:false, error:'missing id' };
   var sh = sheet_(SH.QUOTES), idx = headerIndex_(sh);
   var row = findRow_(sh, idx, 'Id', p.id);
+
+  // CONFLICT GUARD (optimistic lock): client ส่ง baseUpdatedAt = UpdatedAt ของ Sheet ที่ตัวเองเห็นล่าสุด
+  // ถ้าบน Sheet มีคนเขียนหลังจากนั้น (แก้ราคา / อนุมัติ / ปล่อยราคา / Sales อัปเดต) → ไม่เขียนทับ ตอบ 409
+  // ไม่ส่ง baseUpdatedAt (ใบใหม่ / client รุ่นเก่า) = ข้ามการตรวจ เหมือนพฤติกรรมเดิม
+  if (row && p.baseUpdatedAt && !p.force) {
+    var cur = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
+    var curRaw = cell_(cur, idx, 'UpdatedAt');
+    var curMs = toMs_(curRaw), baseMs = toMs_(p.baseUpdatedAt);
+    // ถ้า Sheets แปลง ISO string เป็น Date เอง ความละเอียดอาจหาย → เผื่อ 1 วินาทีกัน conflict หลอก
+    // ถ้ายังเป็น string อยู่ → เทียบตรงระดับ ms
+    var tol = (curRaw instanceof Date) ? 1000 : 0;
+    if (curMs && baseMs && curMs > baseMs + tol) {
+      logRow_('conflict', p.docNo || '', p.id, sess.name, 'base ' + p.baseUpdatedAt + ' < sheet ' + toIso_(cell_(cur, idx, 'UpdatedAt')));
+      return { ok:false, error:'CONFLICT', code:409, id:p.id,
+               serverUpdatedAt:toIso_(cell_(cur, idx, 'UpdatedAt')), serverBy:String(cell_(cur, idx, 'By') || ''),
+               serverStatus:String(cell_(cur, idx, 'Status') || '') };
+    }
+  }
+  var stamp = nowISO_();
   var detail = safeDetail_(p.detail);
   var salesText = '';
   if (p.salesDetail) {
@@ -296,13 +369,13 @@ function saveQuote_(p, sess) {
     ReleasedTo:p.releasedTo || '', SalesNote:p.salesNote || '',
     Lines:num_(p.lines, 0), Total:num_(p.total, 0), Cost:num_(p.cost, 0),
     Profit:num_(p.profit, 0), GP:num_(p.gp, 0),
-    Updated:p.updated || todayStr_(), UpdatedAt:nowISO_(), By:sess.name,
+    Updated:p.updated || todayStr_(), UpdatedAt:stamp, By:sess.name,
     Detail:detail.text
   };
   if (salesText) vals.SalesDetail = salesText;
   writeRow_(sh, idx, row, vals);
-  logRow_('save', p.docNo || p.ref || '', p.id, sess.name, detail.note);
-  return { ok:true, id:p.id, trimmed:detail.trimmed };
+  logRow_('save', p.docNo || p.ref || '', p.id, sess.name, detail.note + (p.force ? ' (force)' : ''));
+  return { ok:true, id:p.id, trimmed:detail.trimmed, updatedAt:stamp };
 }
 
 /** Sales สร้าง/แก้คำขอราคา (SR) ได้ — server บังคับเจ้าของงานและตัดฟิลด์ต้นทุนทิ้งเสมอ */
@@ -345,6 +418,7 @@ function saveSR_(p, sess) {
     };
   });
   var d = safeDetail_(JSON.stringify(doc));
+  var stamp = nowISO_();
 
   writeRow_(sh, idx, row, {
     Id:p.id, DocType:'SR', DocNo:doc.docNo || '', Ref:(doc.header && doc.header.ref) || '',
@@ -354,11 +428,11 @@ function saveSR_(p, sess) {
     Round:1, Currency:(doc.header && doc.header.currency) || '', Status:doc.status || 'Submitted',
     FollowStatus:doc.followStatus || 'Requested', SalesNote:doc.salesNote || '',
     Lines:(doc.lines || []).length, Total:0, Cost:0, Profit:0, GP:0,
-    Updated:todayStr_(), UpdatedAt:nowISO_(), By:sess.name,
+    Updated:todayStr_(), UpdatedAt:stamp, By:sess.name,
     Detail:d.text, SalesDetail:d.text
   });
   logRow_('saveSR', doc.docNo || '', p.id, sess.name, '');
-  return { ok:true, id:p.id };
+  return { ok:true, id:p.id, updatedAt:stamp };
 }
 
 /** Sales อัปเดตเฉพาะ field ของตัวเอง — เขียนทับทั้งใบไม่ได้ */
@@ -385,12 +459,13 @@ function salesPatch_(p, sess) {
 
   var audit = { timestamp:nowISO_(), user:sess.name, role:sess.role,
                 action:String(p.note || 'Sales update').slice(0, 300) };
-  patchDetailCells_(sh, idx, row, applied, audit);
-  var vals = { Updated:todayStr_(), UpdatedAt:nowISO_(), By:sess.name };
+  var stamp = nowISO_();
+  patchDetailCells_(sh, idx, row, applied, audit, stamp);
+  var vals = { Updated:todayStr_(), UpdatedAt:stamp, By:sess.name };
   if (applied.salesNote !== undefined) vals.SalesNote = applied.salesNote;
   writeRow_(sh, idx, row, vals);
   logRow_('salesPatch', String(cell_(cur, idx, 'DocNo') || ''), p.id, sess.name, Object.keys(applied).join(','));
-  return { ok:true, id:p.id };
+  return { ok:true, id:p.id, updatedAt:stamp };
 }
 
 /** ปล่อยราคา — server ตัดสินเองว่าให้สิทธิ์ใคร โดยอ่านเจ้าของงานจากเอกสาร */
@@ -402,7 +477,7 @@ function release_(p, sess) {
   var cur = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
 
   if (!(sess.caps.approve || isReleaser_(sess.userId))) return { ok:false, error:'ACCESS_DENIED', code:403 };
-  if (String(cell_(cur, idx, 'Status')) !== 'Approved') return { ok:false, error:'NOT_APPROVED', code:409 };
+  if (String(cell_(cur, idx, 'Status')) !== 'Approved') return { ok:false, error:'NOT_APPROVED', code:409, serverStatus:String(cell_(cur, idx, 'Status') || '') };
 
   var owner = String(cell_(cur, idx, 'SalesUserId') || '');
   if (!owner) return { ok:false, error:'NO_OWNER', code:409 };
@@ -412,16 +487,23 @@ function release_(p, sess) {
 
   var audit = { timestamp:nowISO_(), user:sess.name, role:sess.role,
                 action:'Released price — Approved → Pending · ให้สิทธิ์ ' + owner };
-  patchDetailCells_(sh, idx, row, { status:'Pending', followStatus:'Sent', releasedTo:rel,
-                                    releasedAt:nowISO_(), releasedBy:sess.userId }, audit);
+  var stamp = nowISO_();
+  var detailText = patchDetailCells_(sh, idx, row, { status:'Pending', followStatus:'Sent', releasedTo:rel,
+                                    releasedAt:stamp, releasedBy:sess.userId }, audit, stamp);
   writeRow_(sh, idx, row, { Status:'Pending', FollowStatus:'Sent', ReleasedTo:rel.join('|'),
-                            Updated:todayStr_(), UpdatedAt:nowISO_(), By:sess.name });
+                            Updated:todayStr_(), UpdatedAt:stamp, By:sess.name });
   logRow_('release', String(cell_(cur, idx, 'DocNo') || ''), p.id, sess.name, owner);
-  return { ok:true, id:p.id, releasedTo:rel };
+  var out = { ok:true, id:p.id, releasedTo:rel, updatedAt:stamp };
+  if (seesFullData_(sess)) out.detail = detailText;      // Sales (NON) ไม่ได้รับ Detail ตัวเต็มเด็ดขาด
+  return out;
 }
 
-/** แก้ JSON ทั้ง Detail และ SalesDetail พร้อมกัน เพื่อให้สองมุมมองไม่หลุดจากกัน */
-function patchDetailCells_(sh, idx, row, patch, audit) {
+/** แก้ JSON ทั้ง Detail และ SalesDetail พร้อมกัน เพื่อให้สองมุมมองไม่หลุดจากกัน
+ *  - SalesDetail ถูกล้างฟิลด์ต้นทุนซ้ำ (stripCost_) ทุกครั้ง เผื่อ patch มีคีย์ภายใน เช่น approvalRoles
+ *  - คืนข้อความ Detail ฉบับใหม่ (ให้ผู้เรียกส่งกลับ client ของ role ภายในได้ทันที ไม่ต้องดึงซ้ำ) */
+function patchDetailCells_(sh, idx, row, patch, audit, stamp) {
+  var detailOut = '';
+  stamp = stamp || nowISO_();
   ['Detail', 'SalesDetail'].forEach(function (col) {
     if (!idx[col]) return;
     var cellRange = sh.getRange(row, idx[col]);
@@ -429,11 +511,61 @@ function patchDetailCells_(sh, idx, row, patch, audit) {
     if (!raw) return;
     var d; try { d = JSON.parse(raw); } catch (e) { return; }
     for (var k in patch) if (patch.hasOwnProperty(k)) d[k] = patch[k];
-    d.updatedAt = nowISO_();
+    d.updatedAt = stamp;
     if (col === 'Detail') { if (audit) { if (!d.auditLogs) d.auditLogs = []; d.auditLogs.push(audit); } }
-    else { delete d.auditLogs; }
-    cellRange.setValue(safeDetail_(JSON.stringify(d)).text);
+    else { delete d.auditLogs; d = stripCost_(d); }
+    var text = safeDetail_(JSON.stringify(d)).text;
+    cellRange.setValue(text);
+    if (col === 'Detail') detailOut = text;
   });
+  return detailOut;
+}
+
+/** อนุมัติ 2 ฝ่ายแบบ atomic (อยู่ใต้ ScriptLock ของ handle_)
+ *  อ่าน approvalRoles ล่าสุดจาก Sheet → เติม role ของผู้กด → คำนวณสถานะใหม่ → เขียนกลับในครั้งเดียว
+ *  แก้ปัญหา: Procurement กับ BD กดอนุมัติจากเครื่องตัวเองใกล้ ๆ กัน แล้วอีกฝ่ายเขียนทับ approvalRoles หายไป 1 ขา */
+function approve_(p, sess) {
+  if (!p.id) return { ok:false, error:'missing id' };
+  var role = sess.role;
+  if (REQUIRED_APPROVAL_ROLES.indexOf(role) < 0 && APPROVAL_OVERRIDE_ROLES.indexOf(role) < 0)
+    return { ok:false, error:'ROLE_CANNOT_APPROVE', code:403, need:REQUIRED_APPROVAL_ROLES.concat(APPROVAL_OVERRIDE_ROLES) };
+  var sh = sheet_(SH.QUOTES), idx = headerIndex_(sh);
+  var row = findRow_(sh, idx, 'Id', p.id);
+  if (!row) return { ok:false, error:'not found', code:404 };
+  var cur = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
+  var status = String(cell_(cur, idx, 'Status') || '');
+  if (String(cell_(cur, idx, 'DocType') || 'QT') === 'SR') return { ok:false, error:'NOT_A_QUOTE', code:409 };
+  if (status !== 'Submitted' && status !== 'Partial Approved')
+    return { ok:false, error:'NOT_IN_APPROVAL', code:409, serverStatus:status };
+
+  var d; try { d = JSON.parse(String(cell_(cur, idx, 'Detail') || '{}')); } catch (e) { d = null; }
+  if (!d || !d.id || d._oversize) return { ok:false, error:'NO_DETAIL', code:409 };
+  var roles = (Object.prototype.toString.call(d.approvalRoles) === '[object Array]') ? d.approvalRoles.slice() : [];
+  if (roles.indexOf(role) >= 0) return { ok:false, error:'ALREADY_APPROVED', code:409, approvalRoles:roles, serverStatus:status };
+  roles.push(role);
+
+  var override = roles.some(function (r) { return APPROVAL_OVERRIDE_ROLES.indexOf(r) >= 0; });
+  var missing = override ? [] : REQUIRED_APPROVAL_ROLES.filter(function (r) { return roles.indexOf(r) < 0; });
+  var complete = missing.length === 0;
+  var newStatus = complete ? 'Approved' : 'Partial Approved';
+  var stamp = nowISO_();
+  var approvals = (Object.prototype.toString.call(d.approvals) === '[object Array]') ? d.approvals.slice() : [];
+  approvals.push({ by:sess.name, role:role, act:'อนุมัติ', at:stamp });
+
+  var patch = { approvalRoles:roles, approvals:approvals, status:newStatus, _sv:3,
+                stage:complete ? 'Approved' : 'Submitted', followStatus:'Pending',
+                rev:(Number(d.rev) || 0) + 1, updated:todayStr_() };
+  if (complete) patch.needsApproval = false;
+  var audit = { timestamp:stamp, user:sess.name, role:role,
+                action:'Approved by ' + role + ': ' + status + ' → ' + newStatus + (complete ? '' : ' (รอ ' + missing.join(', ') + ')') };
+  var detailText = patchDetailCells_(sh, idx, row, patch, audit, stamp);
+  var vals = { Status:newStatus, Stage:patch.stage, FollowStatus:'Pending',
+               Updated:todayStr_(), UpdatedAt:stamp, By:sess.name };
+  if (complete) vals.NeedsApproval = '';
+  writeRow_(sh, idx, row, vals);
+  logRow_('approve', String(cell_(cur, idx, 'DocNo') || ''), p.id, sess.name, role + ' → ' + newStatus);
+  return { ok:true, id:p.id, status:newStatus, approvalRoles:roles, missing:missing,
+           complete:complete, updatedAt:stamp, detail:detailText };
 }
 
 function deleteQuote_(p, sess) {
@@ -449,10 +581,10 @@ function deleteQuote_(p, sess) {
     if (String(cell_(cur, idx, 'AssignedTo') || '')) return { ok:false, error:'SR_LOCKED', code:409 };
   }
   var stamp = nowISO_();
-  patchDetailCells_(sh, idx, row, { deleted:true, deletedAt:stamp, deletedBy:sess.name }, null);
+  patchDetailCells_(sh, idx, row, { deleted:true, deletedAt:stamp, deletedBy:sess.name }, null, stamp);
   writeRow_(sh, idx, row, { Deleted:'TRUE', DeletedAt:stamp, DeletedBy:sess.name, UpdatedAt:stamp });
   logRow_('delete', '', p.id, sess.name, '');
-  return { ok:true, id:p.id, deleted:true };
+  return { ok:true, id:p.id, deleted:true, updatedAt:stamp };
 }
 
 /* ---------------- projection ---------------- */
@@ -496,85 +628,115 @@ function isReleaser_(userId) {
   return userId === gatekeeperId_() || (releaseDelegateId_() && userId === releaseDelegateId_());
 }
 
-function getQuotations_(sess) {
+/**
+ * อ่านใบเสนอราคาตามสิทธิ์ของผู้เรียก — ใช้ร่วมกันทั้ง 3 แบบ: ทั้งชีท / เฉพาะที่เปลี่ยน (sinceMs) / ใบเดียว (id)
+ * กฎ visibility ทั้งหมดอยู่ใน projectRow_() ที่เดียว ไม่มีเงื่อนไขกระจายอยู่หลายที่อีกต่อไป
+ *   opts.sinceMs : คืนเฉพาะแถวที่ UpdatedAt > sinceMs   (Live polling)
+ *   opts.id      : คืนเฉพาะใบนี้                       (เปิดดูรายละเอียด / เปิดแก้ไข)
+ */
+function getQuotations_(sess, opts) {
+  opts = opts || {};
   var sh = sheet_(SH.QUOTES), last = sh.getLastRow();
   if (last < 2) return [];
   var idx = headerIndex_(sh);
-  var data = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
-  var internal = !!sess.caps.viewCost;
-  // PERF: resolve ครั้งเดียวก่อนเข้าลูป — เดิมเรียก isReleaser_() ต่อแถว ทำให้อ่าน Users sheet
-  //       และ Settings ซ้ำหลายร้อยรอบต่อการโหลดหนึ่งครั้ง จนหน้าจอโหลดไม่ขึ้น
-  var gate = internal ? '' : gatekeeperId_();
-  var delegate = internal ? '' : releaseDelegateId_();
-  var iAmReleaser = !internal && (sess.userId === gate || (delegate && sess.userId === delegate));
+  var data;
+  if (opts.id) {
+    var row = findRow_(sh, idx, 'Id', opts.id);
+    if (!row) return [];
+    data = [sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0]];
+  } else {
+    data = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+  }
+  var ctx = projectionCtx_(sess);
   var out = [];
-
   for (var i = 0; i < data.length; i++) {
     var r = data[i];
-    var id = cell_(r, idx, 'Id');
-    if (!id) continue;
-
-    var base = {
-      id:String(id),
-      docType:cell_(r, idx, 'DocType'), docNo:cell_(r, idx, 'DocNo'), ref:cell_(r, idx, 'Ref'),
-      title:cell_(r, idx, 'Title'), status:cell_(r, idx, 'Status'),
-      customer:cell_(r, idx, 'Customer'), sales:cell_(r, idx, 'Sales'),
-      salesUserId:cell_(r, idx, 'SalesUserId'), assignedTo:cell_(r, idx, 'AssignedTo'),
-      group:cell_(r, idx, 'Group'), round:cell_(r, idx, 'Round'), currency:cell_(r, idx, 'Currency'),
-      releasedTo:cell_(r, idx, 'ReleasedTo'),
-      updated:cell_(r, idx, 'Updated'), updatedAt:cell_(r, idx, 'UpdatedAt'),
-      deleted:String(cell_(r, idx, 'Deleted')).toUpperCase() === 'TRUE'
-    };
-
-    if (internal) {
-      base.needsApproval = String(cell_(r, idx, 'NeedsApproval')).toUpperCase() === 'TRUE';
-      base.total  = Number(cell_(r, idx, 'Total'))  || 0;
-      base.cost   = Number(cell_(r, idx, 'Cost'))   || 0;
-      base.profit = Number(cell_(r, idx, 'Profit')) || 0;
-      base.gp     = Number(cell_(r, idx, 'GP'))     || 0;
-      base.detail = cell_(r, idx, 'Detail');
-      out.push(base);
-      continue;
-    }
-
-    /* ---------- SALES PROJECTION (ไม่มี cost / profit / gp / Detail เด็ดขาด) ---------- */
-    // 1) row-level: เห็นเฉพาะงานของตัวเอง (gatekeeper / Sales Manager เห็นทั้งทีม)
-    var owner = String(base.salesUserId || '');
-    if (!sess.caps.viewAllSales && sess.userId !== gate && owner !== sess.userId) continue;
-
-    // 2) field-level: ราคาออกไปได้ต่อเมื่อปล่อยราคาแล้วเท่านั้น
-    //    ยกเว้น gatekeeper/ผู้รับมอบหมาย — ต้องเห็นราคาตั้งแต่ Approved เพื่อ "ตรวจก่อนปล่อย"
-    //    (ถ้าไม่ยกเว้น จะเกิด deadlock: NON ต้องเห็นราคาถึงจะปล่อยได้ แต่ราคาถูกซ่อนเพราะยังไม่ปล่อย)
-    var docType = String(base.docType || 'QT');
-    var status  = String(base.status || '');
-    var rel = String(base.releasedTo || '').split('|').filter(function (x) { return x; });
-    var releaser = iAmReleaser;
-    var released = (rel.indexOf(sess.userId) >= 0);
-    var priceStates = ['Approved','Pending','Won','Closed'];
-    var inPriceState = priceStates.indexOf(status) >= 0;
-    var maySeePrice = (docType === 'SR') ? false
-      : ((released && inPriceState) || (releaser && inPriceState));
-
-    base.releasedTo = rel.join('|');
-    base.canRelease = (!!releaser && status === 'Approved' && docType !== 'SR');   // ให้ฝั่ง Sales รู้ว่าปุ่มปล่อยราคาต้องขึ้นไหม
-    if (docType === 'SR') {
-      base.salesDetail = cell_(r, idx, 'SalesDetail') || cell_(r, idx, 'Detail');
-      base.priceLocked = false;
-    } else if (maySeePrice) {
-      base.salesValue  = Number(cell_(r, idx, 'Total')) || 0;
-      base.salesDetail = cell_(r, idx, 'SalesDetail');   // ห้ามใช้ Detail เด็ดขาด
-      base.priceLocked = false;
-    } else {
-      base.salesDetail = '';                              // ยังไม่ปล่อยราคา → ไม่ส่งราคาออกไปเลย
-      base.priceLocked = true;
-    }
-    out.push(base);
+    if (!cell_(r, idx, 'Id')) continue;
+    if (opts.sinceMs && !(toMs_(cell_(r, idx, 'UpdatedAt')) > opts.sinceMs)) continue;
+    var o = projectRow_(r, idx, sess, ctx);
+    if (o) out.push(o);
   }
-
   out.sort(function (a, b) {
     return String(b.updatedAt || b.updated || '').localeCompare(String(a.updatedAt || a.updated || ''));
   });
   return out.slice(0, MAX_RETURN_ROWS);
+}
+
+/** ค่าที่ใช้ซ้ำทุกแถว — resolve ครั้งเดียวต่อ request
+ *  PERF: เดิมเรียก isReleaser_() ต่อแถว ทำให้อ่าน Users/Settings ซ้ำหลายร้อยรอบ */
+function projectionCtx_(sess) {
+  var full = seesFullData_(sess);
+  var gate = full ? '' : gatekeeperId_();
+  var delegate = full ? '' : releaseDelegateId_();
+  return { full:full, gate:gate,
+           iAmReleaser:!full && (sess.userId === gate || (!!delegate && sess.userId === delegate)) };
+}
+
+/**
+ * VISIBILITY RULES (ตัวจริง — client เป็นแค่กระจกเงา)
+ *  1) ADMIN / MANAGEMENT / INTERNAL (GM, Admin, Procurement Mgr, BD Mgr, Sourcing)
+ *     → Full Data ทุกใบ ทุกสถานะ: Detail + Total/Cost/Profit/GP + NeedsApproval   (ไม่มีการ strip)
+ *  2) SALES เท่านั้นที่ถูกตัด
+ *     - row  : เห็นเฉพาะงานของตัวเอง (ยกเว้น viewAllSales / gatekeeper)
+ *     - field: ไม่มี Detail / Cost / Profit / GP เด็ดขาด — ได้เฉพาะ SalesDetail (ผ่าน stripCost_ ซ้ำอีกชั้น)
+ *     - ราคา : เฉพาะสถานะ Approved / Pending / Won / Closed  และต้อง (ถูกปล่อยราคาให้แล้ว หรือ เป็นผู้ปล่อยราคา)
+ *              ผู้ปล่อยราคา (NON / delegate) ต้องเห็นตั้งแต่ Approved เพื่อ "ตรวจก่อนปล่อย" ไม่งั้นเกิด deadlock
+ */
+function projectRow_(r, idx, sess, ctx) {
+  var base = {
+    id:String(cell_(r, idx, 'Id')),
+    docType:cell_(r, idx, 'DocType'), docNo:cell_(r, idx, 'DocNo'), ref:cell_(r, idx, 'Ref'),
+    title:cell_(r, idx, 'Title'), status:cell_(r, idx, 'Status'),
+    customer:cell_(r, idx, 'Customer'), sales:cell_(r, idx, 'Sales'),
+    salesUserId:cell_(r, idx, 'SalesUserId'), assignedTo:cell_(r, idx, 'AssignedTo'),
+    group:cell_(r, idx, 'Group'), round:cell_(r, idx, 'Round'), currency:cell_(r, idx, 'Currency'),
+    releasedTo:cell_(r, idx, 'ReleasedTo'),
+    updated:cell_(r, idx, 'Updated'), updatedAt:toIso_(cell_(r, idx, 'UpdatedAt')),
+    by:String(cell_(r, idx, 'By') || ''),
+    deleted:String(cell_(r, idx, 'Deleted')).toUpperCase() === 'TRUE'
+  };
+
+  if (ctx.full) {
+    base.needsApproval = String(cell_(r, idx, 'NeedsApproval')).toUpperCase() === 'TRUE';
+    base.total  = Number(cell_(r, idx, 'Total'))  || 0;
+    base.cost   = Number(cell_(r, idx, 'Cost'))   || 0;
+    base.profit = Number(cell_(r, idx, 'Profit')) || 0;
+    base.gp     = Number(cell_(r, idx, 'GP'))     || 0;
+    base.detail = cell_(r, idx, 'Detail');
+    return base;
+  }
+
+  /* ---------- SALES PROJECTION ---------- */
+  var owner = String(base.salesUserId || '');
+  if (!sess.caps.viewAllSales && sess.userId !== ctx.gate && owner !== sess.userId) return null;
+
+  var docType = String(base.docType || 'QT');
+  var status  = String(base.status || '');
+  var rel = String(base.releasedTo || '').split('|').filter(function (x) { return x; });
+  var inPriceState = PRICE_STATES.indexOf(status) >= 0;
+  var maySeePrice = docType !== 'SR' && inPriceState && (rel.indexOf(sess.userId) >= 0 || ctx.iAmReleaser);
+
+  base.releasedTo = rel.join('|');
+  base.canRelease = (ctx.iAmReleaser && status === 'Approved' && docType !== 'SR');
+  if (docType === 'SR') {
+    base.salesDetail = salesSafe_(cell_(r, idx, 'SalesDetail') || cell_(r, idx, 'Detail'));
+    base.priceLocked = false;
+  } else if (maySeePrice) {
+    base.salesValue  = Number(cell_(r, idx, 'Total')) || 0;
+    base.salesDetail = salesSafe_(cell_(r, idx, 'SalesDetail'));   // ห้ามใช้ Detail เด็ดขาด
+    base.priceLocked = false;
+  } else {
+    base.salesDetail = '';                                         // ยังไม่ปล่อยราคา → ไม่ส่งราคาออกไปเลย
+    base.priceLocked = true;
+  }
+  return base;
+}
+
+/** defense-in-depth: ล้างคีย์ต้นทุนออกจาก SalesDetail อีกชั้นก่อนส่งออก (เผื่อแถวเก่าที่บันทึกก่อนมี stripCost_) */
+function salesSafe_(raw) {
+  if (!raw) return '';
+  try { return JSON.stringify(stripCost_(JSON.parse(String(raw)))); }
+  catch (e) { return ''; }
 }
 
 /* ============================================================ PRODUCTS */
@@ -599,7 +761,7 @@ function getProducts_(sess) {
   if (last < 2) return [];
   var idx = headerIndex_(sh);
   var data = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
-  var internal = !!sess.caps.viewCost;
+  var internal = seesFullData_(sess);
   var out = [];
   for (var i = 0; i < data.length; i++) {
     var r = data[i];
@@ -651,7 +813,7 @@ function getSettings_(sess) {
   obj.settingsUpdatedAt = cell_(r, idx, 'SettingsUpdatedAt');
   delete obj.cloudUrl;
 
-  if (!sess.caps.viewCost) {
+  if (!seesFullData_(sess)) {
     var safe = { ok:true };
     for (var i = 0; i < SETTINGS_SALES_ALLOW.length; i++) {
       var k = SETTINGS_SALES_ALLOW[i];
@@ -696,8 +858,8 @@ function getUsers_(sess) {
   for (var i = 0; i < data.length; i++) {
     var r = data[i];
     if (!r[idx['Id'] - 1]) continue;
-    var u = { id:String(cell_(r, idx, 'Id')), name:cell_(r, idx, 'Name'), role:cell_(r, idx, 'Role') };
-    if (sess.caps.viewCost) u.scope = cell_(r, idx, 'Scope') || 'all';
+    var u = { id:String(cell_(r, idx, 'Id')), name:cell_(r, idx, 'Name'), role:normRole_(cell_(r, idx, 'Role')) };
+    if (seesFullData_(sess)) u.scope = cell_(r, idx, 'Scope') || 'all';
     if (sess.caps.manageUsers) u.passHash = cell_(r, idx, 'PassHash');   // เฉพาะ Admin เท่านั้น
     out.push(u);
   }
@@ -785,6 +947,16 @@ function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 function num_(v, d) { var n = Number(v); return isNaN(n) ? (d || 0) : n; }
+/** แปลงเวลาเป็น epoch ms แบบทนทาน — รับได้ทั้ง Date (Sheets แปลงเอง), ISO string, ตัวเลข
+ *  ห้ามเทียบเวลาแบบ string กับค่าที่อ่านจาก Sheet (ดู C3 FIX ที่ login_) */
+function toMs_(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (v instanceof Date) return v.getTime();
+  if (typeof v === 'number') return v;
+  var t = Date.parse(String(v));
+  return isNaN(t) ? 0 : t;
+}
+function toIso_(v) { var ms = toMs_(v); return ms ? new Date(ms).toISOString() : ''; }
 function nowISO_() { return new Date().toISOString(); }
 function todayStr_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'); }
 
@@ -792,8 +964,8 @@ function todayStr_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd')
 
 function setup() {
   [SH.QUOTES, SH.PRODUCTS, SH.SETTINGS, SH.USERS, SH.LOG, SH.SESSIONS].forEach(function (n) { sheet_(n); });
-  logRow_('setup', '', '', Session.getActiveUser().getEmail() || '-', 'schema v4.0 (RBAC)');
-  SpreadsheetApp.getActive().toast('ติดตั้ง/อัปเกรดแท็บเรียบร้อย (schema v4.0 · RBAC)', 'MGS Pricing', 8);
+  logRow_('setup', '', '', Session.getActiveUser().getEmail() || '-', 'schema v4.1 (RBAC + Live Sync)');
+  SpreadsheetApp.getActive().toast('ติดตั้ง/อัปเกรดแท็บเรียบร้อย (schema v4.1 · RBAC + Live Sync)', 'MGS Pricing', 8);
 }
 
 /** ตรวจว่าใบไหนยังไม่มี SalesDetail — ใบเหล่านั้น Sales จะยังไม่เห็นราคา */

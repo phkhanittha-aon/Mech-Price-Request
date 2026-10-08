@@ -108,6 +108,7 @@ main{max-width:1180px;margin:0 auto;padding:18px 16px 96px}
 .jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));gap:12px}
 .job{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 14px;display:flex;flex-direction:column;gap:8px}
 .job.alert{border-color:var(--red);box-shadow:inset 3px 0 0 var(--red)}
+.job.late{box-shadow:inset 3px 0 0 var(--amber)}
 .job.flash{animation:flash 2.4s ease-out}
 @keyframes flash{0%{box-shadow:0 0 0 3px var(--orange)}100%{box-shadow:0 0 0 0 transparent}}
 .job-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
@@ -248,7 +249,7 @@ table.pt .r{text-align:right}
        Sourcing / Manager (GM, Admin, Procurement Mgr, BD Mgr) → เห็นทุกคน + ขอราคาแทน Sales ได้
    - แอปนี้ไม่เคยได้รับต้นทุน / %GP รายบรรทัด (server ส่งเฉพาะ SalesDetail)
    ============================================================ */
-const BUILD='2026-10-08 · Sales build 4.2';
+const BUILD='2026-10-09 · Sales build 4.3';
 const CLOUD_URL='https://script.google.com/macros/s/AKfycby6ZckOc1mv5eI8PDzcgscWCBqYyOWCgXTohIaqczJuIbKIQ597C8zQ_frMHpZhLHZV/exec';
 const HASH_SALT='mgs-internal-2025';                 // ต้องตรงกับ Index.html
 const TIMEOUT_MS=15000, POLL_MS=30000, OVERLAP_MS=90000;
@@ -269,6 +270,9 @@ const $=s=>document.querySelector(s);
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=(n,d=2)=>(n==null||isNaN(n))?'—':Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmt0=n=>fmt(n,0);
+/* v4.3: ทุกยอดเงินแสดงสกุลเงินของใบ (เดิมแสดง ฿ ทุกใบ แม้ใบเสนอเป็น USD) · ยอดรวมข้ามใบใช้ valueTHB จาก server */
+const CUR_SYM={THB:'฿',USD:'US$',CNY:'CN¥'};
+const money=(n,cur,dec)=>{const v=fmt(n,dec==null?0:dec);return v==='—'?v:(CUR_SYM[cur||'THB']||((cur||'')+' '))+v};
 const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const LS={get:(k,d)=>{try{const v=localStorage.getItem('mgs_sales_'+k);return v?JSON.parse(v):d}catch(e){return d}},
@@ -314,6 +318,7 @@ async function apiGet(type,arg){
 
 /* ============================================================ LOGIN */
 const LOGIN_ERR={AUTH_FAILED:'อีเมลหรือรหัสผ่านไม่ถูกต้อง',ACCOUNT_DISABLED:'บัญชีนี้ถูกปิดใช้งาน — ติดต่อผู้ดูแลระบบ',
+  ACCOUNT_LOCKED:'กรอกรหัสผิดหลายครั้ง บัญชีถูกล็อกชั่วคราว 15 นาที — หรือให้ผู้ดูแลระบบตั้งรหัสใหม่',
   SSO_UNAVAILABLE:'ระบบมองไม่เห็นอีเมล Google ของคุณ (มักเกิดกับ Gmail ส่วนตัว) — กรุณาใช้อีเมล + รหัสผ่าน',
   timeout:'เชื่อมต่อเซิร์ฟเวอร์ไม่ทันเวลา — ลองใหม่อีกครั้ง',network:'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจอินเทอร์เน็ต'};
 async function doLogin(){
@@ -322,7 +327,8 @@ async function doLogin(){
   const b=$('#loginBtn');b.disabled=true;b.innerHTML='<span class="spin"></span> กำลังตรวจสอบ…';
   const r=await api({action:'login',user,passHash:await hashPass(pass),agent:'sales-app '+(navigator.userAgent||'').slice(0,80)});
   b.disabled=false;b.textContent='เข้าสู่ระบบ →';
-  if(!r.ok){$('#loginErr').textContent=LOGIN_ERR[r.error]||('เข้าสู่ระบบไม่สำเร็จ ('+(r.error||'-')+')');return}
+  if(!r.ok){$('#loginErr').textContent=(LOGIN_ERR[r.error]||('เข้าสู่ระบบไม่สำเร็จ ('+(r.error||'-')+')'))+
+    (r.error==='AUTH_FAILED'&&r.left!=null&&r.left<=2?' (เหลืออีก '+r.left+' ครั้งก่อนถูกล็อก)':'');return}
   LS.set('lastUser',user);$('#loginPass').value='';
   if(pass==='1234')setTimeout(()=>openChangePassword(true),900);   // BUSINESS RULE: รหัสตั้งต้นต้องเปลี่ยน
   startSession(r);
@@ -430,32 +436,40 @@ const userName=id=>{const u=S.users.find(x=>x.id===id);return u?u.name:''};
 const daysSince=iso=>{const t=Date.parse(iso||'');return isNaN(t)?null:Math.floor((Date.now()-t)/86400000)};
 const agoTH=iso=>{const d=daysSince(iso);return d===null?'—':d<=0?'วันนี้':d===1?'เมื่อวาน':d+' วันที่แล้ว'};
 function priceShown(r){return !isSR(r)&&!r.priceLocked&&r.d&&Array.isArray(r.d.lines)&&r.d.lines.some(l=>l.unitPrice!=null)}
+function curOf(r){return (r.d&&r.d.header&&r.d.header.currency)||r.currency||'THB'}
 function valueOf(r){return priceShown(r)?(+r.d.total||+r.salesValue||0):0}
-/* ขั้นตอนของงาน ในภาษาที่ Sales อ่านแล้วรู้ว่าต้องทำอะไร */
+function valueTHB(r){return priceShown(r)&&r.valueTHB!=null?+r.valueTHB:(curOf(r)==='THB'?valueOf(r):0)}
+/* ผู้รับผิดชอบ + SLA มาจาก server (row.follow) — ฟังก์ชันเดียวกับระบบทำราคา ห้ามคำนวณเองซ้ำ
+   ใช้ fallbackFollow เฉพาะกรณีต่อกับ Code.gs รุ่นเก่าที่ยังไม่ส่ง follow มา */
+function fallbackFollow(r){
+  const st=String(r.status||'');let owner;
+  if(isSR(r))owner=st==='Draft'?'SALES':(st==='Submitted'||st==='Accepted')?'SOURCING':'DONE';
+  else if(st==='Requested'||st==='In Progress')owner='SOURCING';
+  else if(st==='Submitted'||st==='Partial Approved')owner='MANAGEMENT';
+  else if(st==='Approved')owner='RELEASER';
+  else if(st==='Pending')owner=priceShown(r)?'SALES':'RELEASER';
+  else owner='DONE';
+  return {owner,label:{SOURCING:'รอ Sourcing จัดทำราคา',MANAGEMENT:'รอผู้จัดการอนุมัติ',RELEASER:'รอปล่อยราคา',SALES:'พร้อมเสนอลูกค้า',DONE:'ปิดงานแล้ว'}[owner],actionable:false,waitingDays:null,level:'ok'};
+}
+const fol=r=>r.follow||fallbackFollow(r);
+const OWNER_SHORT={SOURCING:'Sourcing',MANAGEMENT:'ผู้จัดการ',RELEASER:'ผู้ปล่อยราคา',REPAIR:'Sourcing',SALES:'คุณ',DONE:''};
+/* กลุ่มงานในมุมมองของ Sales
+   wait  = กำลังรอราคา (อยู่ที่ Sourcing / ผู้จัดการ / ผู้ปล่อยราคา) — อ่านอย่างเดียว ไม่ใช่งานค้างของ Sales
+   draft = ร่างคำขอที่ยังไม่ส่ง · ready = ได้ราคาแล้ว · done = ปิดแล้ว */
 function stageOf(r){
-  const st=String(r.status||'');
-  if(isSR(r)){
-    if(st==='Draft')return {key:'req',label:'ร่าง — ยังไม่ได้ส่ง',color:'grey'};
-    if(st==='Accepted')return {key:'req',label:'Sourcing รับงานแล้ว กำลังทำราคา',color:'blue'};
-    if(st==='Quoted')return {key:'done',label:'ทำใบเสนอราคาแล้ว',color:'green'};
-    if(st==='Cancelled')return {key:'done',label:'ยกเลิกคำขอ',color:'grey'};
-    return {key:'req',label:'รอ Sourcing รับงาน',color:'orange'};
+  const f=fol(r),st=String(r.status||'');
+  if(f.owner==='DONE'){
+    if(!isSR(r)&&st==='Won')return {key:'done',label:'ปิดการขายได้ 🎉',color:'green',f};
+    return {key:'done',label:f.label||'ปิดงาน',color:'grey',f};
   }
-  if(st==='Requested'||st==='In Progress')return {key:'wip',label:'Sourcing กำลังทำราคา',color:'orange'};
-  if(st==='Submitted'||st==='Partial Approved')return {key:'wip',label:'รอผู้บริหารอนุมัติราคา',color:'amber'};
-  if(st==='Approved')return {key:'wip',label:'อนุมัติแล้ว · รอปล่อยราคา',color:'blue'};
-  if(st==='Pending')return {key:'ready',label:'ราคาพร้อม · ติดตามลูกค้า',color:'green'};
-  if(st==='Won')return {key:'done',label:'ปิดการขายได้ 🎉',color:'green'};
-  if(st==='Closed')return {key:'done',label:'ปิดงาน',color:'grey'};
-  return {key:'wip',label:st||'—',color:'grey'};
+  if(f.owner==='SALES')return isSR(r)?{key:'draft',label:'ร่าง — ยังไม่ได้ส่ง',color:'grey',f}
+    :{key:'ready',label:f.actionable?f.label:'พร้อมเสนอลูกค้า',color:f.level==='over'?'red':'green',f};
+  return {key:'wait',label:f.label,color:f.owner==='MANAGEMENT'?'amber':f.owner==='RELEASER'?'blue':'orange',f};
 }
 function lastUpd(r){return (r.d&&r.d.salesUpdate&&r.d.salesUpdate.at)?r.d.salesUpdate:null}
 function followDate(r){return (r.d&&r.d.followUpDate)||''}
-function needsUpdate(r){
-  if(isSR(r)||String(r.status)!=='Pending')return false;
-  const u=lastUpd(r);const d=u?daysSince(u.at):null;
-  return !u||d===null||d>=SALES_UPDATE_DAYS||(followDate(r)&&followDate(r)<todayISO());
-}
+/* งานค้างของ Sales = ได้ราคาแล้ว และถึงเวลาต้องอัปเดต (server ตัดสิน) — งานที่ยังรอราคาไม่นับ */
+function needsUpdate(r){const f=fol(r);return !isSR(r)&&f.owner==='SALES'&&!!f.actionable}
 function srEditable(r){
   if(!isSR(r)||r.deleted||r.assignedTo)return false;
   if(['Draft','Submitted'].indexOf(String(r.status||'Submitted'))<0)return false;
@@ -517,16 +531,19 @@ function render(){
 }
 
 /* ---------- หน้าของ Sales แต่ละคน ---------- */
-const FILTERS=[{k:'all',t:'ทั้งหมด'},{k:'req',t:'คำขอราคา'},{k:'wip',t:'รอราคา'},{k:'ready',t:'พร้อมเสนอ'},{k:'update',t:'ต้องอัปเดต'},{k:'done',t:'ปิดแล้ว'}];
+const FILTERS=[{k:'all',t:'ทั้งหมด'},{k:'wait',t:'กำลังรอราคา'},{k:'ready',t:'พร้อมเสนอ'},{k:'update',t:'ต้องอัปเดต'},{k:'draft',t:'ร่างคำขอ'},{k:'done',t:'ปิดแล้ว'}];
 function viewPerson(pid){
   const u=S.users.find(x=>x.id===pid)||(pid===S.user.id?S.user:{id:pid,name:pid,role:'Sales'});
   const mine=pid===S.user.id;
   const all=rowsOf(pid);
   const by=k=>all.filter(r=>k==='update'?needsUpdate(r):stageOf(r).key===k);
-  const ready=by('ready'),won=all.filter(r=>r.status==='Won');
+  const ready=by('ready'),won=all.filter(r=>r.status==='Won'),wait=by('wait');
+  const waitOver=wait.filter(r=>fol(r).level==='over').length;
   let list=S.filter==='all'?all.filter(r=>stageOf(r).key!=='done'||daysSince(r.updatedAt)<=30):by(S.filter);
+  const lv=list.filter(r=>fol(r).level!=='ok'&&fol(r).owner!=='DONE');
   if(S.search){const s=S.search.toLowerCase();list=list.filter(r=>(titleOf(r)+' '+custOf(r)+' '+(r.docNo||'')).toLowerCase().indexOf(s)>=0)}
-  list.sort((a,b)=>(needsUpdate(b)-needsUpdate(a))||String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+  const rank=r=>needsUpdate(r)?3:(fol(r).level==='over'?2:fol(r).level==='watch'?1:0);   // แย่สุดขึ้นก่อน
+  list.sort((a,b)=>(rank(b)-rank(a))||String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
   const link=CLOUD_URL+'?app=sales&u='+encodeURIComponent(u.email||u.id);
   return `
   ${isInternal()&&mine?`<div class="banner blue">👀 คุณเป็น <b>${esc(ROLE_TH[S.user.role]||S.user.role)}</b> — แอปนี้แสดงมุมมองของทีมขาย (ไม่มีต้นทุน) · ดูหน้าของ Sales แต่ละคนได้ที่แท็บ <a href="javascript:go('/team')">ทีมขาย</a>
@@ -540,15 +557,15 @@ function viewPerson(pid){
   </div>
   <div class="kpis">
     ${kpiBox('all','งานที่เปิดอยู่',all.filter(r=>stageOf(r).key!=='done').length,'คำขอ + ใบเสนอราคา')}
-    ${kpiBox('req','คำขอราคา',by('req').length,'รอ Sourcing')}
-    ${kpiBox('ready','พร้อมเสนอลูกค้า',ready.length,'฿'+fmt0(ready.reduce((s,r)=>s+valueOf(r),0)))}
-    ${kpiBox('update','ต้องอัปเดต',by('update').length,'เกิน '+SALES_UPDATE_DAYS+' วัน / เลยนัด',by('update').length?'red':'')}
-    ${kpiBox('done','ปิดการขายได้',won.length,'฿'+fmt0(won.reduce((s,r)=>s+valueOf(r),0)))}
+    ${kpiBox('wait','กำลังรอราคา',wait.length,waitOver?('⛔ เกินกำหนด '+waitOver+' (ทีมภายในกำลังเร่ง)'):'อยู่ที่ Sourcing / ผู้จัดการ')}
+    ${kpiBox('ready','พร้อมเสนอลูกค้า',ready.length,money(ready.reduce((s,r)=>s+valueTHB(r),0),'THB')+' (รวมเป็นบาท)')}
+    ${kpiBox('update','ต้องอัปเดต',by('update').length,'ไม่ได้อัปเดตเกิน '+SALES_UPDATE_DAYS+' วัน / เลยนัด',by('update').length?'red':'')}
+    ${kpiBox('done','ปิดการขายได้',won.length,money(won.reduce((s,r)=>s+valueTHB(r),0),'THB'))}
   </div>
   <div class="toolbar">
     <input class="inp search" placeholder="🔍 ค้นหา ลูกค้า / โครงการ / เลขเอกสาร" value="${esc(S.search)}" oninput="S.search=this.value;rerenderList('${esc(pid)}')">
     <select class="inp" style="width:auto" onchange="S.filter=this.value;render()">${FILTERS.map(f=>`<option value="${f.k}" ${S.filter===f.k?'selected':''}>${f.t}</option>`).join('')}</select>
-    <span class="hint">${list.length} รายการ</span>
+    <span class="hint">${list.length} รายการ${lv.length?` · <b style="color:var(--red)">⛔ เกินกำหนด ${lv.filter(r=>fol(r).level==='over').length}</b> · <b style="color:var(--amber)">⚠ ครบกำหนด ${lv.filter(r=>fol(r).level==='watch').length}</b>`:''}</span>
   </div>
   <div class="jobs" id="jobList">${jobsHTML(list)}</div>`;
 }
@@ -565,14 +582,16 @@ function jobsHTML(list){
   return list.map(jobCard).join('');
 }
 function jobCard(r){
-  const sg=stageOf(r),upd=lastUpd(r),need=needsUpdate(r),fl=followDate(r);
+  const sg=stageOf(r),f=sg.f,upd=lastUpd(r),need=needsUpdate(r),fl=followDate(r);
   const flash=S.flash[r.id]&&Date.now()-S.flash[r.id]<6000;
   const shown=priceShown(r);
   const unapproved=shown&&['Approved','Pending','Won','Closed'].indexOf(String(r.status))<0;
   let val;
   if(isSR(r))val=`<span class="hint">${(r.d&&r.d.lines||[]).length} รายการที่ขอ${hdr(r).needBy?' · ต้องการภายใน '+esc(hdr(r).needBy):''}</span>`;
-  else if(shown)val=`<span class="job-val">฿${fmt0(valueOf(r))}</span>${r.gp!=null&&isInternal()?` <span class="tag ${r.gp>=20?'green':r.gp>=12?'amber':'red'}">GP ${fmt(r.gp,1)}%</span>`:''}`;
-  else val=`<span class="hint">🔒 ${String(r.status)==='Approved'?'อนุมัติแล้ว รอปล่อยราคาให้คุณ':'ยังไม่ถึงขั้นตอนเห็นราคา'}</span>`;
+  else if(shown)val=`<span class="job-val">${money(valueOf(r),curOf(r))}</span>${curOf(r)!=='THB'&&r.valueTHB!=null?` <span class="hint">≈ ${money(r.valueTHB,'THB')}</span>`:''}${r.gp!=null&&isInternal()?` <span class="tag ${r.gp>=20?'green':r.gp>=12?'amber':'red'}">GP ${fmt(r.gp,1)}%</span>`:''}`;
+  else val=`<span class="hint">🔒 ${f.owner==='REPAIR'?'ทีม Sourcing กำลังเตรียมราคาฉบับสำหรับ Sales':f.owner==='RELEASER'?'รอปล่อยราคาให้คุณ':'ยังไม่ถึงขั้นตอนเห็นราคา'}</span>`;
+  const waitLine=(sg.key==='wait'&&f.waitingDays!=null)?`<span>⏳ รออยู่ที่ ${esc(OWNER_SHORT[f.owner]||'')} ${f.waitingDays} วันทำการ${f.slaDays?' (กำหนด '+f.slaDays+')':''}</span>`:'';
+  const lvl=(f.level&&f.level!=='ok'&&sg.key!=='done')?`<span class="tag ${f.level==='over'?'red':'amber'}">${f.level==='over'?'⛔ เกินกำหนด':'⚠ ครบกำหนดวันนี้'}</span>`:'';
   const acts=[];
   if(isSR(r)){
     acts.push(`<button class="btn sm ghost" onclick="openDetail('${r.id}')">ดูรายละเอียด</button>`);
@@ -581,15 +600,15 @@ function jobCard(r){
   }else{
     if(shown)acts.push(`<button class="btn sm" onclick="openDetail('${r.id}')">💰 ดูราคา</button>`);
     else acts.push(`<button class="btn sm ghost" onclick="openDetail('${r.id}')">ดูรายละเอียด</button>`);
-    if(String(r.status)==='Pending'&&(ownerOf(r)===S.user.id||canTeam()))acts.push(`<button class="btn sm ${need?'red':'ghost'}" onclick="openUpdate('${r.id}')">📝 อัปเดตความคืบหน้า</button>`);
-    if(r.canRelease)acts.push(`<button class="btn sm blue" onclick="releasePrice('${r.id}')">🔓 ปล่อยราคาให้ ${esc(userName(ownerOf(r))||r.sales||'Sales')}</button>`);
+    if(f.owner==='SALES'&&(ownerOf(r)===S.user.id||canTeam()))acts.push(`<button class="btn sm ${need?'red':'ghost'}" onclick="openUpdate('${r.id}')">📝 อัปเดตความคืบหน้า</button>`);
+    if(r.canRelease)acts.push(`<button class="btn sm blue" onclick="releasePrice('${r.id}')">🔓 ${String(r.status)==='Pending'?'ยืนยันปล่อยราคาให้':'ปล่อยราคาให้'} ${esc(userName(ownerOf(r))||r.sales||'Sales')}</button>`);
   }
-  return `<div class="job ${need?'alert':''} ${flash?'flash':''}">
+  return `<div class="job ${need?'alert':(sg.key==='wait'&&f.level==='over'?'late':'')} ${flash?'flash':''}">
     <div class="job-top"><div style="min-width:0"><div class="job-t">${esc(titleOf(r))}</div><div class="job-c">${esc(custOf(r))}</div></div>
       <div class="job-no">${esc(r.docNo||'—')}${isSR(r)?'':''}</div></div>
-    <div class="job-mid"><span class="tag ${sg.color}">${esc(sg.label)}</span>${unapproved?'<span class="tag red" title="ราคานี้ยังไม่ผ่านการอนุมัติ ห้ามส่งให้ลูกค้า">⚠ ราคายังไม่อนุมัติ</span>':''}</div>
+    <div class="job-mid"><span class="tag ${sg.color}">${esc(sg.label)}</span>${lvl}${unapproved?'<span class="tag red" title="ราคานี้ยังไม่ผ่านการอนุมัติ ห้ามส่งให้ลูกค้า">⚠ ราคายังไม่อนุมัติ</span>':''}</div>
     <div class="job-mid">${val}</div>
-    <div class="job-meta"><span>${isSR(r)?'📨 คำขอราคา':'📄 ใบเสนอราคา'}</span>
+    <div class="job-meta">${waitLine}<span>${isSR(r)?'📨 คำขอราคา':'📄 ใบเสนอราคา'}</span>
       ${S.route.page==='sales'&&S.route.id!==S.user.id||canTeam()?`<span>👤 ${esc(userName(ownerOf(r))||r.sales||'ไม่ระบุ')}</span>`:''}
       <span>อัปเดต ${esc(agoTH(r.updatedAt))}</span>
       ${upd?`<span>📝 ${esc(upd.stage||'')} · ${esc(agoTH(upd.at))}</span>`:''}
@@ -605,8 +624,8 @@ function viewTeam(){
   const people=[...ids].map(id=>{
     const rs=rowsOf(id),u=S.users.find(x=>x.id===id);
     const open=rs.filter(r=>stageOf(r).key!=='done'),ready=rs.filter(r=>stageOf(r).key==='ready');
-    return {id,u,name:u?u.name:(id?id:'ไม่ระบุเจ้าของ'),open:open.length,req:rs.filter(r=>stageOf(r).key==='req').length,
-      ready:ready.length,readyVal:ready.reduce((s,r)=>s+valueOf(r),0),upd:rs.filter(needsUpdate).length,
+    return {id,u,name:u?u.name:(id?id:'ไม่ระบุเจ้าของ'),open:open.length,req:rs.filter(r=>stageOf(r).key==='wait').length,
+      ready:ready.length,readyVal:ready.reduce((s,r)=>s+valueTHB(r),0),upd:rs.filter(needsUpdate).length,
       won:rs.filter(r=>r.status==='Won').length};
   }).sort((a,b)=>b.upd-a.upd||b.open-a.open);
   return `<div class="person"><div style="flex:1"><h1>ทีมขาย</h1><div class="hint">เลือก Sales เพื่อเปิดหน้าของคนนั้น · ข้อมูลอัปเดตอัตโนมัติ</div></div></div>
@@ -614,9 +633,9 @@ function viewTeam(){
     <div class="row"><div class="avatar">${esc((p.name||'?')[0].toUpperCase())}</div>
       <div style="flex:1;min-width:0"><b>${esc(p.name)}</b><div class="hint">${esc((p.u&&p.u.email)||(p.id?p.id:'งานที่ยังไม่ผูก Sales'))}</div></div>
       ${p.upd?`<span class="tag red">ค้างอัปเดต ${p.upd}</span>`:''}</div>
-    <div class="tstats"><div><b>${p.open}</b><span>งานเปิด</span></div><div><b>${p.req}</b><span>คำขอ</span></div>
+    <div class="tstats"><div><b>${p.open}</b><span>งานเปิด</span></div><div><b>${p.req}</b><span>รอราคา</span></div>
       <div><b>${p.ready}</b><span>พร้อมเสนอ</span></div><div><b>${p.won}</b><span>Won</span></div></div>
-    <div class="hint">มูลค่าพร้อมเสนอ <b class="mono" style="color:var(--ink)">฿${fmt0(p.readyVal)}</b></div></div>`).join('')
+    <div class="hint">มูลค่าพร้อมเสนอ <b class="mono" style="color:var(--ink)">${money(p.readyVal,'THB')}</b> (รวมเป็นบาท)</div></div>`).join('')
     ||'<div class="empty"><div class="big">👥</div>ยังไม่มี Sales ในระบบ</div>'}</div>`;
 }
 
@@ -652,7 +671,7 @@ function openDetail(id){
         <div class="hint" style="font-size:12.5px;color:var(--ink-2)">${esc(upd.stage||'')} — ${esc(upd.note||'')}${upd.next?' · ถัดไป: '+esc(upd.next):''} <span class="hint">(${esc(upd.byName||'')} · ${esc(agoTH(upd.at))})</span></div></div>`:''}</div>
     <div class="modal-f">
       ${shown&&['Approved','Pending','Won','Closed'].indexOf(String(r.status))>=0?`<button class="btn ghost" onclick="copyQuote('${r.id}')">📋 คัดลอกเป็นข้อความ</button>`:''}
-      ${!isSR(r)&&String(r.status)==='Pending'?`<button class="btn ghost" onclick="closeModal();openUpdate('${r.id}')">📝 อัปเดตความคืบหน้า</button>`:''}
+      ${!isSR(r)&&fol(r).owner==='SALES'?`<button class="btn ghost" onclick="closeModal();openUpdate('${r.id}')">📝 อัปเดตความคืบหน้า</button>`:''}
       <button class="btn" onclick="closeModal()">ปิด</button></div>`,true);
 }
 function copyQuote(id){
@@ -690,6 +709,7 @@ async function saveUpdate(id){
   const res=await api({action:'salesPatch',id,patch:JSON.stringify(patch),note:'Sales update: '+stage+(next?' · ถัดไป '+next:'')+(date?' · นัด '+date:'')});
   if(!res.ok){$('#upBtn').disabled=false;toast('บันทึกไม่สำเร็จ: '+(res.error||'-'),'bad');return}
   if(r.d)Object.assign(r.d,patch);r.updatedAt=res.updatedAt||at;S.flash[id]=Date.now();
+  if(res.follow)r.follow=res.follow;
   closeModal();toast('บันทึกความคืบหน้าแล้ว','good');render();
 }
 
@@ -698,14 +718,15 @@ function releasePrice(id){
   const r=S.rows[id];if(!r)return;const owner=userName(ownerOf(r))||r.sales||'Sales';
   modal(`<div class="modal-h"><h3>ยืนยันการปล่อยราคา</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-b" style="line-height:1.9">ปล่อยราคาใบ <b>${esc(r.docNo||'')}</b> ให้ <b style="color:var(--blue)">${esc(owner)}</b><br>
-      มูลค่ารวม <b>฿${fmt0(valueOf(r)||r.salesValue)}</b> · สถานะจะเปลี่ยนเป็น “ราคาพร้อม · ติดตามลูกค้า”</div>
+      มูลค่ารวม <b>${money(valueOf(r)||r.salesValue,curOf(r))}</b> · ${String(r.status)==='Pending'?'ใบรุ่นเก่า — เป็นการยืนยันสิทธิ์เห็นราคาให้เจ้าของงาน':'สถานะจะเปลี่ยนเป็น “พร้อมเสนอลูกค้า”'}</div>
     <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn blue" id="relBtn" onclick="doRelease('${r.id}')">🔓 ยืนยันปล่อยราคา</button></div>`);
 }
 async function doRelease(id){
   $('#relBtn').disabled=true;
   const res=await api({action:'release',id});
   closeModal();
-  if(!res.ok){toast(res.error==='NOT_APPROVED'?'ใบนี้ไม่ได้อยู่ในสถานะอนุมัติแล้ว (มีคนเปลี่ยนสถานะไปก่อน)':('ปล่อยราคาไม่สำเร็จ: '+(res.error||'-')),'bad');await poll(true);return}
+  if(!res.ok){toast(res.error==='NOT_APPROVED'?'ใบนี้ไม่ได้อยู่ในสถานะอนุมัติแล้ว (มีคนเปลี่ยนสถานะไปก่อน)'
+    :res.error==='NO_SALES_COPY'?'ใบนี้ยังไม่มีราคาฉบับ Sales — ให้ Sourcing กด “สร้างข้อมูลสำหรับ Sales” ก่อน':('ปล่อยราคาไม่สำเร็จ: '+(res.error||'-')),'bad');await poll(true);return}
   toast('ปล่อยราคาแล้ว','good');await poll(true);render();
 }
 

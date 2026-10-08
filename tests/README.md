@@ -1,0 +1,14 @@
+# tests/ — ทดสอบบนเครื่องเท่านั้น ⚠️ ห้ามคัดลอกขึ้น Apps Script
+
+| ไฟล์ | ทดสอบอะไร | คำสั่ง |
+|---|---|---|
+| `gasmock.js` | Google Sheets / Apps Script จำลอง (ใช้รัน Code.gs ตัวจริงบนเครื่อง) | — |
+| `test_backend.js` | RBAC, visibility ทุกสถานะ, อนุมัติ 2 ฝ่ายพร้อมกัน, conflict 409 | `node tests/test_backend.js Code.gs` |
+| `test_v42.js` | ล็อกอินอีเมล, Google SSO, Sales Manager, เลข SR, salesview | `node tests/test_v42.js Code.gs` |
+| `test_v43.js` | ผู้รับผิดชอบ + SLA (Phase 1), รหัสผ่าน v2 / ล็อก, valueTHB | `node tests/test_v43.js Code.gs` |
+| `fx_test.js` | ตาราง FX ก่อน/หลัง + เคส CNY | `NODE_PATH=$(npm root -g) node tests/fx_test.js` |
+| `e2e.js` | ระบบทำราคาในเบราว์เซอร์ หลายผู้ใช้พร้อมกัน | `NODE_PATH=$(npm root -g) node tests/e2e.js $PWD/Index.html $PWD/Code.gs /tmp` |
+| `e2e_sales.js` | แอป Sales + Sourcing รับงาน + จัดการผู้ใช้ | `NODE_PATH=$(npm root -g) node tests/e2e_sales.js $PWD /tmp` |
+| `audit_roles.js` | เดินทุกเมนูทุก role + วัด layout | `NODE_PATH=$(npm root -g) node tests/audit_roles.js $PWD /tmp` |
+
+ต้องมี Node 18+ และ Playwright (Chromium) สำหรับไฟล์ที่ใช้เบราว์เซอร์

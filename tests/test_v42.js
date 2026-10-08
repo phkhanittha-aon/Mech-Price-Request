@@ -1,0 +1,82 @@
+const { makeRuntime } = require('./gasmock');
+const crypto = require('crypto');
+const { ctx, sheets } = makeRuntime(process.argv[2]);
+const H = s => crypto.createHash('sha256').update(s + 'mgs-internal-2025').digest('hex');
+let fails = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (!c && x !== undefined ? '  -> ' + JSON.stringify(x).slice(0, 300) : '')); if (!c) fails++; };
+const post = p => JSON.parse(ctx.apiPost(JSON.stringify(p)));
+const get = (t, tok, a) => JSON.parse(ctx.apiGet(t, tok, a));
+const U = sheets['Users'], h = U.rows[0];
+ok('Users sheet has Email + Active columns', h.includes('Email') && h.includes('Active'), h);
+const add = (id, name, role, email, active) => { const r = []; r[h.indexOf('Id')] = id; r[h.indexOf('Name')] = name; r[h.indexOf('Role')] = role; r[h.indexOf('Scope')] = 'all'; r[h.indexOf('PassHash')] = H('1234'); r[h.indexOf('Email')] = email; r[h.indexOf('Active')] = active || ''; U.rows.push(r); };
+add('admin', 'Admin', 'Admin', 'admin@mgs.co'); add('sourcing1', 'Chatraporn', 'Sourcing', 'chat@mgs.co');
+add('sales_boss', 'BOSS', 'Sales', 'Boss@MGS.co'); add('sales_pair', 'PAIR', 'Sales', 'pair@mgs.co');
+add('salesmgr', 'Tom', 'sales manager', 'tom@mgs.co'); add('olduser', 'Old', 'Sales', 'old@mgs.co', 'FALSE');
+
+let r = post({ action: 'login', user: 'boss@mgs.co', passHash: H('1234') });
+ok('login by email (case-insensitive)', r.ok && r.user.id === 'sales_boss' && r.user.email === 'Boss@MGS.co', r);
+const tBoss = r.token;
+ok('login by username still works', post({ action: 'login', user: 'sales_pair', passHash: H('1234') }).ok);
+ok('wrong password by email → AUTH_FAILED', post({ action: 'login', user: 'pair@mgs.co', passHash: H('x') }).error === 'AUTH_FAILED');
+ok('inactive user → ACCOUNT_DISABLED', post({ action: 'login', user: 'old@mgs.co', passHash: H('1234') }).error === 'ACCOUNT_DISABLED');
+r = post({ action: 'login', user: 'tom@mgs.co', passHash: H('1234') });
+ok('"sales manager" alias → Sales Manager, tier SALES, viewAllSales', r.ok && r.user.role === 'Sales Manager' && r.user.tier === 'SALES' && r.user.caps.viewAllSales && !r.user.caps.viewCost, r.user);
+const tMgr = r.token;
+// SSO
+globalThis.__SSO_EMAIL = ''; ok('SSO without Google email → SSO_UNAVAILABLE', post({ action: 'ssoLogin' }).error === 'SSO_UNAVAILABLE');
+globalThis.__SSO_EMAIL = 'nobody@mgs.co'; r = post({ action: 'ssoLogin' }); ok('SSO unknown email → SSO_NO_USER + echoes email', r.error === 'SSO_NO_USER' && r.email === 'nobody@mgs.co', r);
+globalThis.__SSO_EMAIL = 'pair@mgs.co'; r = post({ action: 'ssoLogin' }); ok('SSO registered email → session as PAIR (no password)', r.ok && r.user.id === 'sales_pair', r);
+const tPair = r.token;
+globalThis.__SSO_EMAIL = 'old@mgs.co'; ok('SSO inactive → ACCOUNT_DISABLED', post({ action: 'ssoLogin' }).error === 'ACCOUNT_DISABLED');
+// SR creation by Sales — server assigns docNo, forces owner
+const sr = (id, extra) => JSON.stringify(Object.assign({ id, docType: 'SR', status: 'Submitted', header: { customer: 'Thaibev', title: 'Rooftop', salesUserId: 'sales_pair', groupType: 'Inverter', needBy: '2026-11-01', exrate: 36 }, lines: [{ code: 'A', desc: 'Inv', qty: 2, uom: 'pcs', targetUp: 900, up: 5 }], salesNote: 'spec' }, extra || {}));
+r = post({ token: tBoss, action: 'saveSR', id: 'SR1', detail: sr('SR1') });
+const ym = new Date().toISOString().slice(2, 4) + new Date().toISOString().slice(5, 7);
+ok('SR #1 gets server docNo SR-' + ym + '-001', r.ok && r.docNo === 'SR-' + ym + '-001', r);
+r = post({ token: tPair, action: 'saveSR', id: 'SR2', detail: sr('SR2', { docNo: 'SR-9999-999' }) });
+ok('SR #2 → -002 (client-supplied docNo ignored)', r.ok && r.docNo === 'SR-' + ym + '-002', r);
+const Q = sheets['Quotations'], qh = Q.rows[0], row1 = Q.rows.find(x => x[qh.indexOf('Id')] === 'SR1');
+const d1 = JSON.parse(row1[qh.indexOf('Detail')]);
+ok('owner forced to the logged-in Sales (cannot spoof)', d1.header.salesUserId === 'sales_boss' && d1.header.sales === 'BOSS' && d1.createdBy === 'sales_boss', d1.header);
+ok('cost keys stripped from SR (exrate/up)', d1.header.exrate === undefined && d1.lines[0].up === 0 && d1.lines[0].targetUp === 900);
+ok('SalesDetail has no auditLogs', row1[qh.indexOf('SalesDetail')].indexOf('auditLogs') < 0);
+r = post({ token: tBoss, action: 'saveSR', id: 'SR1', detail: sr('SR1', { status: 'Draft', header: { customer: 'Thaibev2', title: 'X' } }) });
+const d1b = JSON.parse(Q.rows.find(x => x[qh.indexOf('Id')] === 'SR1')[qh.indexOf('Detail')]);
+ok('edit keeps docNo + creator, appends audit', r.ok && d1b.docNo === 'SR-' + ym + '-001' && d1b.createdBy === 'sales_boss' && d1b.auditLogs.length === 2 && d1b.header.customer === 'Thaibev2', d1b);
+ok('PAIR cannot edit BOSS SR', post({ token: tPair, action: 'saveSR', id: 'SR1', detail: sr('SR1') }).error === 'ACCESS_DENIED');
+// visibility: sales sees own, sales mgr sees team, internal salesview
+const tSrc = post({ action: 'login', user: 'chat@mgs.co', passHash: H('1234') }).token;
+const q = { id: 'Q1', docType: 'QT', status: 'Pending', header: { customer: 'Thaibev', salesUserId: 'sales_boss' }, lines: [{ up: 100, opPct: 20 }] };
+post({ token: tSrc, action: 'save', id: 'Q1', status: 'Pending', salesUserId: 'sales_boss', releasedTo: 'sales_boss', total: 5000, gp: 21, cost: 3950, detail: JSON.stringify(q), salesDetail: JSON.stringify({ id: 'Q1', status: 'Pending', lines: [{ code: 'A', unitPrice: 2500, amount: 5000 }], total: 5000 }) });
+post({ token: tSrc, action: 'save', id: 'Q2', status: 'Submitted', salesUserId: 'sales_pair', total: 9000, gp: 10, detail: JSON.stringify(Object.assign({}, q, { id: 'Q2', status: 'Submitted' })), salesDetail: JSON.stringify({ id: 'Q2', lines: [{ unitPrice: 1 }] }) });
+let v = get('salesview', tBoss).quotations;
+ok('Sales BOSS sees only own rows', v.every(x => x.salesUserId === 'sales_boss') && v.some(x => x.id === 'Q1') && v.some(x => x.id === 'SR1'), v.map(x => x.id));
+ok('BOSS sees released price on Q1, no cost/detail', (() => { const x = v.find(y => y.id === 'Q1'); return x.salesDetail && !x.detail && x.cost === undefined && x.gp === undefined; })());
+v = get('salesview', tPair).quotations;
+ok('PAIR: Q2 (Submitted) price locked', v.find(y => y.id === 'Q2').priceLocked && !v.find(y => y.id === 'Q2').salesDetail);
+v = get('salesview', tMgr).quotations;
+ok('Sales Manager sees whole team', ['Q1', 'Q2', 'SR1', 'SR2'].every(id => v.some(x => x.id === id)), v.map(x => x.id));
+ok('Sales Manager: team price visible when released (Pending), locked before', !!v.find(x => x.id === 'Q1').salesDetail && v.find(x => x.id === 'Q2').priceLocked);
+ok('Sales Manager never gets cost', v.every(x => x.detail === undefined && x.cost === undefined));
+const tAdm = post({ action: 'login', user: 'admin@mgs.co', passHash: H('1234') }).token;
+v = get('salesview', tAdm).quotations;
+ok('Admin salesview: all rows, SalesDetail + total/gp summary, NO Detail', v.length === 4 && v.every(x => x.detail === undefined) && v.find(x => x.id === 'Q2').gp === 10 && v.find(x => x.id === 'Q2').salesDetail, v.map(x => [x.id, x.gp]));
+ok('Admin normal quotations view still full Detail', get('quotations', tAdm).quotations.find(x => x.id === 'Q2').detail.length > 10);
+const since = new Date(Date.now() - 1000).toISOString();
+ok('salesview since → delta', get('salesview', tMgr, since).quotations.length >= 1 && get('salesview', tMgr, new Date(Date.now() + 5000).toISOString()).quotations.length === 0);
+// users
+let us = get('users', tBoss).users;
+ok('Sales sees own email only', us.find(u => u.id === 'sales_boss').email && us.find(u => u.id === 'sales_pair').email === undefined);
+ok('Sales Manager sees team emails', get('users', tMgr).users.find(u => u.id === 'sales_pair').email === 'pair@mgs.co');
+ok('users list exposes active flag', get('users', tAdm).users.find(u => u.id === 'olduser').active === false);
+r = post({ token: tAdm, action: 'saveUsers', users: JSON.stringify([{ id: 'sales_pair', name: 'PAIR', role: 'Sales', email: 'BOSS@mgs.co' }]) });
+ok('saveUsers rejects duplicate email', r.error === 'DUPLICATE_EMAIL', r);
+ok('saveUsers rejects bad email', post({ token: tAdm, action: 'saveUsers', users: JSON.stringify([{ id: 'x1', name: 'X', role: 'Sales', email: 'nope' }]) }).error === 'BAD_EMAIL');
+r = post({ token: tAdm, action: 'saveUsers', users: JSON.stringify([{ id: 'new1', name: 'New', role: 'Sales Manager', email: ' New@MGS.co ', active: true, passHash: H('1234') }]) });
+ok('saveUsers adds user with normalized email + role', r.ok && get('users', tAdm).users.find(u => u.id === 'new1').email === 'new@mgs.co' && get('users', tAdm).users.find(u => u.id === 'new1').role === 'Sales Manager');
+ok('Sales cannot saveUsers', post({ token: tBoss, action: 'saveUsers', users: '[{"id":"sales_boss","role":"GM"}]' }).error === 'ACCESS_DENIED');
+// change password
+ok('changePassword wrong old → BAD_OLD_PASSWORD', post({ token: tSrc, action: 'changePassword', oldHash: H('x'), newHash: H('newpass1') }).error === 'BAD_OLD_PASSWORD');
+ok('Sourcing can change own password', post({ token: tSrc, action: 'changePassword', oldHash: H('1234'), newHash: H('newpass1') }).ok);
+ok('new password works / old fails', post({ action: 'login', user: 'chat@mgs.co', passHash: H('newpass1') }).ok && !post({ action: 'login', user: 'chat@mgs.co', passHash: H('1234') }).ok);
+// release by sales mgr not allowed (not gatekeeper)
+console.log(fails ? '\n' + fails + ' FAILED' : '\nALL v4.2 BACKEND TESTS PASSED'); process.exit(fails ? 1 : 0);

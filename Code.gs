@@ -14,6 +14,11 @@
  *  E) v4.2 Sales App: ล็อกอินด้วยอีเมล (คอลัมน์ Email ในแท็บ Users) + Google Sign-in (ssoLogin)
  *     role ใหม่ 'Sales Manager' (เห็นงานทั้งทีมขาย แต่ไม่เห็นต้นทุน) · คอลัมน์ Active ปิดบัญชีได้
  *     เลข SR ออกโดย server (ไม่ชนกันข้ามเครื่อง) · type=salesview · action changePassword
+ *  F) v4.3: ผู้รับผิดชอบงาน + SLA คำนวณที่ server ที่เดียว (followState_) · ส่งติดไปกับทุกแถวเป็น row.follow
+ *     งานที่ยังไม่ปล่อยราคา "ไม่ใช่งานค้างของ Sales" อีกต่อไป · ใบ Pending รุ่นเก่าที่ยังไม่ปล่อยจริง → งานของผู้ปล่อยราคา
+ *     รหัสผ่าน: เก็บแบบ v2$salt$hash (salt ต่อผู้ใช้ + วนซ้ำ) ค่าใน Sheet ใช้ล็อกอินแทนรหัสไม่ได้แล้ว · ผิด 5 ครั้งล็อก 15 นาที
+ *     valueTHB: มูลค่าใบแปลงเป็นบาทด้วยอัตราที่ล็อกไว้ในใบ (ใช้รวมยอดข้ามสกุลเงิน)
+ *     → หลังวางไฟล์ รัน setup() หนึ่งครั้ง (แปลง hash รหัสผ่านเดิมเป็น v2 ให้อัตโนมัติ ผู้ใช้ไม่ต้องตั้งรหัสใหม่)
  *  * v4.2: รัน setup() หนึ่งครั้ง เพื่อเพิ่มคอลัมน์ Email / Active ในแท็บ Users แล้ว Deploy → New version
  *
  * สิ่งที่เปลี่ยนจาก v2.1 (สำคัญ — ต้องอัปเดต HTML ทั้ง 2 ไฟล์พร้อมกัน)
@@ -110,6 +115,16 @@ var REQUIRED_APPROVAL_ROLES = ['Procurement Mgr', 'BD Mgr'];
 var APPROVAL_OVERRIDE_ROLES = ['GM'];      // GM อนุมัติแทนได้ทั้ง 2 ขาในครั้งเดียว
 var PRICE_STATES = ['Approved', 'Pending', 'Won', 'Closed'];
 
+/* ============================================================ CONFIG — ค่าตั้งต้นรวมไว้ที่เดียว
+ * SLA (วันทำการ จ.–ศ., ยังไม่รวมวันหยุดนักขัตฤกษ์) ต่อผู้รับผิดชอบ — แก้ได้ที่นี่ หรือใส่ Settings.sla = {...} ทับ
+ *   เฝ้าระวัง = ถึงกำหนดวันนี้ · เกินกำหนด = เลยกำหนดแล้ว
+ * salesUpdateDays (วันปฏิทิน) = Sales ต้องอัปเดตความคืบหน้าอย่างน้อยทุก N วัน หลังได้ราคา */
+var FOLLOW_CFG = {
+  sla: { SOURCING:3, MANAGEMENT:2, RELEASER:1, REPAIR:1 },
+  salesUpdateDays: 7
+};
+var LOGIN_CFG = { maxFails:5, lockMinutes:15, hashRounds:1000 };
+
 /** คีย์ที่ห้ามหลุดไปหา role ที่ไม่มี viewCost — ตัดแบบ recursive ทั้งก่อนส่งออกและก่อนบันทึก */
 var COST_KEYS = ['up','costcur','dutypct','clearancepct','freep','oppct','extras','exrate','rates',
   'cost','linecost','basecost','pricepc','duty','clearance','profit','lineprofit','op',
@@ -174,8 +189,8 @@ function diagHtml_() {
   var add = function (name, ok, detail) {
     rows.push('<tr><td>' + (ok ? '✅' : '❌') + '</td><td><b>' + name + '</b></td><td>' + detail + '</td></tr>');
   };
-  add('Code.gs', true, 'version 4.2 · ' + nowISO_());
-  [['Index', 'build 4.2'], ['Sales', 'Sales build 4.2']].forEach(function (f) {
+  add('Code.gs', true, 'version 4.3 · ' + nowISO_());
+  [['Index', 'build 4.3'], ['Sales', 'Sales build 4.3']].forEach(function (f) {
     try {
       var c = HtmlService.createHtmlOutputFromFile(f[0]).getContent();
       var tail = c.replace(/\s+$/, '').slice(-7).toLowerCase();
@@ -222,17 +237,90 @@ function findUserRow_(key) {
 }
 function isActiveUser_(r, idx) { return String(cell_(r, idx, 'Active')).trim().toUpperCase() !== 'FALSE'; }
 
+/* ============================================================ PASSWORD STORAGE (v4.3)
+ * client ส่ง clientHash = SHA-256(รหัส + salt กลาง) มาเหมือนเดิม (รหัสจริงไม่ออกจากเครื่อง)
+ * server เก็บ  v2$<salt ต่อผู้ใช้>$<SHA-256 วนซ้ำ LOGIN_CFG.hashRounds รอบ ของ salt:clientHash>
+ * → ค่าในคอลัมน์ PassHash เอาไปล็อกอินแทนรหัสไม่ได้ (เดิมได้ = pass-the-hash)
+ * ค่าเก่า (64 hex) ยังล็อกอินได้ และถูกแปลงเป็น v2 ทันทีที่ล็อกอินสำเร็จ / หรือรัน migratePasswordHashes() */
+function hex_(bytes) {
+  var out = '';
+  for (var i = 0; i < bytes.length; i++) { var b = (bytes[i] + 256) % 256; out += (b < 16 ? '0' : '') + b.toString(16); }
+  return out;
+}
+function pwDigest_(salt, clientHash) {
+  var h = salt + ':' + clientHash;
+  for (var i = 0; i < LOGIN_CFG.hashRounds; i++)
+    h = hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, h + ':' + salt, Utilities.Charset.UTF_8));
+  return h;
+}
+function pwWrap_(clientHash) {
+  var salt = Utilities.getUuid().replace(/-/g, '').slice(0, 16);
+  return 'v2$' + salt + '$' + pwDigest_(salt, clientHash);
+}
+/** คืน {ok, upgrade} — upgrade=true เมื่อเป็นค่าแบบเก่าที่ควรแปลงเป็น v2 */
+function pwVerify_(stored, clientHash) {
+  stored = String(stored || ''); clientHash = String(clientHash || '');
+  if (!stored || !clientHash) return { ok:false };
+  if (stored.indexOf('v2$') === 0) {
+    var parts = stored.split('$');
+    return { ok: parts.length === 3 && pwDigest_(parts[1], clientHash) === parts[2], upgrade:false };
+  }
+  return { ok: stored === clientHash, upgrade:true };   // legacy: เก็บ clientHash ตรง ๆ
+}
+/** แปลง hash รหัสผ่านแบบเก่าทั้งชีทเป็น v2 — ไม่ต้องรู้รหัสจริง (v2 ห่อ clientHash เดิมอีกชั้น) · รันซ้ำได้ปลอดภัย */
+function migratePasswordHashes() {
+  var sh = sheet_(SH.USERS), idx = headerIndex_(sh), last = sh.getLastRow(), n = 0;
+  if (last < 2 || !idx.PassHash) return 0;
+  var rng = sh.getRange(2, idx.PassHash, last - 1, 1), vals = rng.getValues();
+  for (var i = 0; i < vals.length; i++) {
+    var v = String(vals[i][0] || '');
+    if (/^[0-9a-f]{64}$/.test(v)) { vals[i][0] = pwWrap_(v); n++; }
+  }
+  if (n) rng.setValues(vals);
+  logRow_('migratePasswordHashes', '', '', '-', n + ' users');
+  return n;
+}
+
+/* ---- จำกัดการกรอกรหัสผิด: ผิด maxFails ครั้งภายใน lockMinutes → ล็อกชั่วคราว (เก็บใน CacheService ไม่แตะชีท) ---- */
+function loginLockKey_(key) { return 'loginfail:' + String(key || '').trim().toLowerCase().slice(0, 120); }
+function loginLocked_(key) {
+  try { var v = CacheService.getScriptCache().get(loginLockKey_(key)); return v ? JSON.parse(v) : { n:0 }; }
+  catch (e) { return { n:0 }; }
+}
+function loginFail_(key) {
+  var st = loginLocked_(key); st.n = (st.n || 0) + 1;
+  if (st.n >= LOGIN_CFG.maxFails) st.until = Date.now() + LOGIN_CFG.lockMinutes * 60000;
+  try { CacheService.getScriptCache().put(loginLockKey_(key), JSON.stringify(st), LOGIN_CFG.lockMinutes * 60); } catch (e) {}
+  return st;
+}
+function loginClear_(key) { try { CacheService.getScriptCache().remove(loginLockKey_(key)); } catch (e) {} }
+
 /** ล็อกอินด้วย Username / ชื่อ / อีเมล + รหัสผ่าน */
 function login_(p) {
   var name = String(p.user || '').trim().toLowerCase();
   var hash = String(p.passHash || '');
   if (!name || !hash) return { ok:false, error:'AUTH_FAILED' };
   var f = findUserRow_(name);
+  var lockKey = f ? 'id:' + String(cell_(f.r, f.idx, 'Id')).toLowerCase() : 'key:' + name;
+  var lk = loginLocked_(lockKey);
+  if (lk.until && lk.until > Date.now()) {
+    logRow_('login-locked', '', name, '', 'locked');
+    return { ok:false, error:'ACCOUNT_LOCKED', minutes:Math.ceil((lk.until - Date.now()) / 60000) };
+  }
   // ข้อความเดียวกันทั้งกรณีไม่มีบัญชีและรหัสผิด — ไม่บอกใบ้ว่ามีบัญชีนี้อยู่จริงไหม
-  if (!f) { logRow_('login-fail', '', name, '', 'no such user'); return { ok:false, error:'AUTH_FAILED' }; }
-  var stored = String(cell_(f.r, f.idx, 'PassHash') || '');
-  if (!stored || stored !== hash) { logRow_('login-fail', '', name, '', 'bad password'); return { ok:false, error:'AUTH_FAILED' }; }
+  var v = f ? pwVerify_(cell_(f.r, f.idx, 'PassHash'), hash) : { ok:false };
+  if (!v.ok) {
+    var st = loginFail_(lockKey);
+    logRow_('login-fail', '', name, '', (f ? 'bad password' : 'no such user') + ' #' + st.n);
+    return st.until ? { ok:false, error:'ACCOUNT_LOCKED', minutes:LOGIN_CFG.lockMinutes }
+                    : { ok:false, error:'AUTH_FAILED', left:Math.max(LOGIN_CFG.maxFails - st.n, 0) };
+  }
   if (!isActiveUser_(f.r, f.idx)) { logRow_('login-fail', '', name, '', 'inactive'); return { ok:false, error:'ACCOUNT_DISABLED' }; }
+  loginClear_(lockKey);
+  if (v.upgrade) {   // แปลง hash เดิมเป็น v2 ทันที
+    var ush = sheet_(SH.USERS), uidx = headerIndex_(ush), urow = findRow_(ush, uidx, 'Id', String(cell_(f.r, f.idx, 'Id')));
+    if (urow && uidx.PassHash) ush.getRange(urow, uidx.PassHash).setValue(pwWrap_(hash));
+  }
   return issueSession_(f.r, f.idx, p.agent, 'password');
 }
 
@@ -282,8 +370,8 @@ function changePassword_(p, sess) {
   if (!row) return { ok:false, error:'not found' };
   var cur = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
   var stored = String(cell_(cur, idx, 'PassHash') || '');
-  if (stored && stored !== oldH) { logRow_('changePassword-fail', '', sess.userId, sess.name, 'bad old password'); return { ok:false, error:'BAD_OLD_PASSWORD' }; }
-  writeRow_(sh, idx, row, { PassHash:newH, Updated:nowISO_() });
+  if (stored && !pwVerify_(stored, oldH).ok) { logRow_('changePassword-fail', '', sess.userId, sess.name, 'bad old password'); return { ok:false, error:'BAD_OLD_PASSWORD' }; }
+  writeRow_(sh, idx, row, { PassHash:pwWrap_(newH), Updated:nowISO_() });
   logRow_('changePassword', '', sess.userId, sess.name, '');
   return { ok:true };
 }
@@ -339,7 +427,7 @@ function handle_(p) {
   try {
     if (action === 'login') return login_(p);
     if (action === 'ssoLogin') return ssoLogin_(p);
-    if (action === 'ping')  return { ok:true, pong:true, time:nowISO_(), version:'4.2.1' };
+    if (action === 'ping')  return { ok:true, pong:true, time:nowISO_(), version:'4.3' };
 
     var sess = auth_(p.token);
     if (!sess) return { ok:false, error:'AUTH_REQUIRED', code:401 };
@@ -460,7 +548,7 @@ function saveQuote_(p, sess) {
   if (salesText) vals.SalesDetail = salesText;
   writeRow_(sh, idx, row, vals);
   logRow_('save', p.docNo || p.ref || '', p.id, sess.name, detail.note + (p.force ? ' (force)' : ''));
-  return { ok:true, id:p.id, trimmed:detail.trimmed, updatedAt:stamp };
+  return { ok:true, id:p.id, trimmed:detail.trimmed, updatedAt:stamp, follow:followForRow_(sh, idx, findRow_(sh, idx, 'Id', p.id)) };
 }
 
 /** Sales สร้าง/แก้คำขอราคา (SR) ได้ — server บังคับเจ้าของงานและตัดฟิลด์ต้นทุนทิ้งเสมอ */
@@ -507,6 +595,10 @@ function saveSR_(p, sess) {
     doc.auditLogs = (prev.auditLogs || []).concat([{ timestamp:nowISO_(), user:sess.name, role:sess.role, action:'Edited request (' + (doc.status || '') + ')' }]).slice(-100);
   }
   doc.id = p.id; doc.docType = 'SR'; doc.updated = todayStr_();
+  if (prev && Object.prototype.toString.call(prev.statusLog) === '[object Array]') doc.statusLog = prev.statusLog;
+  else delete doc.statusLog;
+  if (!prev || prev.status !== doc.status) stampStatus_(doc, doc.status || 'Submitted', nowISO_());
+  else if (prev.statusChangedAt) doc.statusChangedAt = prev.statusChangedAt;
   // เติมโครงสร้างต้นทุนเริ่มต้นให้ครบฝั่งเซิร์ฟเวอร์ ฝั่ง Sales จึงไม่ต้องรู้จักฟิลด์เหล่านี้เลย
   doc.lines = (doc.lines || []).map(function (L) {
     return {
@@ -536,7 +628,7 @@ function saveSR_(p, sess) {
     Detail:d.text, SalesDetail:sd.text
   });
   logRow_('saveSR', doc.docNo || '', p.id, sess.name, '');
-  return { ok:true, id:p.id, docNo:doc.docNo, updatedAt:stamp };
+  return { ok:true, id:p.id, docNo:doc.docNo, updatedAt:stamp, follow:followForRow_(sh, idx, findRow_(sh, idx, 'Id', p.id)) };
 }
 
 /** เลขเอกสารถัดไป เช่น SR-2610-007 (อ่านจากคอลัมน์ DocNo ทั้งชีท — เรียกใต้ ScriptLock เท่านั้น) */
@@ -582,7 +674,7 @@ function salesPatch_(p, sess) {
   if (applied.salesNote !== undefined) vals.SalesNote = applied.salesNote;
   writeRow_(sh, idx, row, vals);
   logRow_('salesPatch', String(cell_(cur, idx, 'DocNo') || ''), p.id, sess.name, Object.keys(applied).join(','));
-  return { ok:true, id:p.id, updatedAt:stamp };
+  return { ok:true, id:p.id, updatedAt:stamp, follow:followForRow_(sh, idx, row) };
 }
 
 /** ปล่อยราคา — server ตัดสินเองว่าให้สิทธิ์ใคร โดยอ่านเจ้าของงานจากเอกสาร */
@@ -594,7 +686,14 @@ function release_(p, sess) {
   var cur = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
 
   if (!(sess.caps.approve || isReleaser_(sess.userId))) return { ok:false, error:'ACCESS_DENIED', code:403 };
-  if (String(cell_(cur, idx, 'Status')) !== 'Approved') return { ok:false, error:'NOT_APPROVED', code:409, serverStatus:String(cell_(cur, idx, 'Status') || '') };
+  var stNow = String(cell_(cur, idx, 'Status'));
+  // v4.3: ใบ Pending รุ่นเก่าที่ยังไม่ได้ปล่อยให้เจ้าของงานจริง → ผู้ปล่อยราคากด "ยืนยันปล่อยราคา" ได้ (สถานะคง Pending)
+  var fNow = followState_(followInfo_(cur, idx), followCfg_(), Date.now());
+  var legacy = stNow === 'Pending' && fNow.owner === 'RELEASER';
+  if (stNow !== 'Approved' && !legacy) {
+    if (stNow === 'Pending' && fNow.owner === 'REPAIR') return { ok:false, error:'NO_SALES_COPY', code:409, serverStatus:stNow };
+    return { ok:false, error:'NOT_APPROVED', code:409, serverStatus:stNow };
+  }
 
   var owner = String(cell_(cur, idx, 'SalesUserId') || '');
   if (!owner) return { ok:false, error:'NO_OWNER', code:409 };
@@ -603,14 +702,14 @@ function release_(p, sess) {
   if (rel.indexOf(owner) < 0) rel.push(owner);
 
   var audit = { timestamp:nowISO_(), user:sess.name, role:sess.role,
-                action:'Released price — Approved → Pending · ให้สิทธิ์ ' + owner };
+                action:(legacy ? 'Confirmed release (legacy Pending)' : 'Released price — Approved → Pending') + ' · ให้สิทธิ์ ' + owner };
   var stamp = nowISO_();
   var detailText = patchDetailCells_(sh, idx, row, { status:'Pending', followStatus:'Sent', releasedTo:rel,
                                     releasedAt:stamp, releasedBy:sess.userId }, audit, stamp);
   writeRow_(sh, idx, row, { Status:'Pending', FollowStatus:'Sent', ReleasedTo:rel.join('|'),
                             Updated:todayStr_(), UpdatedAt:stamp, By:sess.name });
   logRow_('release', String(cell_(cur, idx, 'DocNo') || ''), p.id, sess.name, owner);
-  var out = { ok:true, id:p.id, releasedTo:rel, updatedAt:stamp };
+  var out = { ok:true, id:p.id, releasedTo:rel, updatedAt:stamp, follow:followForRow_(sh, idx, row) };
   if (seesFullData_(sess)) out.detail = detailText;      // Sales (NON) ไม่ได้รับ Detail ตัวเต็มเด็ดขาด
   return out;
 }
@@ -627,8 +726,10 @@ function patchDetailCells_(sh, idx, row, patch, audit, stamp) {
     var raw = String(cellRange.getValue() || '');
     if (!raw) return;
     var d; try { d = JSON.parse(raw); } catch (e) { return; }
+    var prevStatus = d.status;
     for (var k in patch) if (patch.hasOwnProperty(k)) d[k] = patch[k];
     d.updatedAt = stamp;
+    if (patch.status && patch.status !== prevStatus) stampStatus_(d, patch.status, stamp);
     if (col === 'Detail') { if (audit) { if (!d.auditLogs) d.auditLogs = []; d.auditLogs.push(audit); } }
     else { delete d.auditLogs; d = stripCost_(d); }
     var text = safeDetail_(JSON.stringify(d)).text;
@@ -636,6 +737,14 @@ function patchDetailCells_(sh, idx, row, patch, audit, stamp) {
     if (col === 'Detail') detailOut = text;
   });
   return detailOut;
+}
+
+/** บันทึกเวลาเปลี่ยนสถานะ (ใช้นับวัน SLA แยกช่วง) — คีย์ใหม่แบบ optional ข้อมูลเก่าที่ไม่มีก็ยังอ่านได้ */
+function stampStatus_(d, status, at) {
+  d.statusChangedAt = at;
+  if (Object.prototype.toString.call(d.statusLog) !== '[object Array]') d.statusLog = [];
+  d.statusLog.push({ s:status, at:at });
+  if (d.statusLog.length > 40) d.statusLog = d.statusLog.slice(-40);
 }
 
 /** อนุมัติ 2 ฝ่ายแบบ atomic (อยู่ใต้ ScriptLock ของ handle_)
@@ -682,7 +791,7 @@ function approve_(p, sess) {
   writeRow_(sh, idx, row, vals);
   logRow_('approve', String(cell_(cur, idx, 'DocNo') || ''), p.id, sess.name, role + ' → ' + newStatus);
   return { ok:true, id:p.id, status:newStatus, approvalRoles:roles, missing:missing,
-           complete:complete, updatedAt:stamp, detail:detailText };
+           complete:complete, updatedAt:stamp, detail:detailText, follow:followForRow_(sh, idx, row) };
 }
 
 function deleteQuote_(p, sess) {
@@ -786,7 +895,8 @@ function projectionCtx_(sess, opts) {
   var gate = full ? '' : gatekeeperId_();
   var delegate = full ? '' : releaseDelegateId_();
   return { full:full, gate:gate, salesView:!!(opts && opts.salesView),
-           iAmReleaser:!full && (sess.userId === gate || (!!delegate && sess.userId === delegate)) };
+           iAmReleaser:!full && (sess.userId === gate || (!!delegate && sess.userId === delegate)),
+           followCfg:followCfg_(), nowMs:Date.now() };       // อ่าน Settings ครั้งเดียวต่อ request (ห้าม I/O ในลูป)
 }
 
 /**
@@ -812,6 +922,10 @@ function projectRow_(r, idx, sess, ctx) {
     by:String(cell_(r, idx, 'By') || ''),
     deleted:String(cell_(r, idx, 'Deleted')).toUpperCase() === 'TRUE'
   };
+  var fi = followInfo_(r, idx);
+  base.follow = followState_(fi, ctx.followCfg, ctx.nowMs);
+  // ใบ Pending รุ่นเก่าที่มีราคาฉบับ Sales แล้วแต่ยังไม่ได้ปล่อยให้เจ้าของงาน → ผู้ปล่อยราคากดยืนยันได้
+  var legacyRelease = base.follow.owner === 'RELEASER' && String(base.status) === 'Pending';
 
   if (ctx.full && ctx.salesView) {
     // แอป Sales เปิดโดย role ภายใน (ผู้จัดการดูหน้าของ Sales แต่ละคน): ใช้ SalesDetail เหมือน Sales เห็น
@@ -821,7 +935,8 @@ function projectRow_(r, idx, sess, ctx) {
     base.salesValue = Number(cell_(r, idx, 'Total')) || 0;
     base.gp = Number(cell_(r, idx, 'GP')) || 0;
     base.priceLocked = false;
-    base.canRelease = !!sess.caps.approve && st0 === 'Approved' && dt0 !== 'SR';
+    base.canRelease = !!sess.caps.approve && (st0 === 'Approved' || legacyRelease) && dt0 !== 'SR';
+    base.valueTHB = salesValueTHB_(r, idx);
     return base;
   }
   if (ctx.full) {
@@ -847,19 +962,160 @@ function projectRow_(r, idx, sess, ctx) {
   var maySeePrice = docType !== 'SR' && inPriceState && (rel.indexOf(sess.userId) >= 0 || ctx.iAmReleaser || teamReleased);
 
   base.releasedTo = rel.join('|');
-  base.canRelease = (ctx.iAmReleaser && status === 'Approved' && docType !== 'SR');
+  base.canRelease = (ctx.iAmReleaser && (status === 'Approved' || legacyRelease) && docType !== 'SR');
   if (docType === 'SR') {
     base.salesDetail = salesSafe_(cell_(r, idx, 'SalesDetail') || cell_(r, idx, 'Detail'));
     base.priceLocked = false;
   } else if (maySeePrice) {
     base.salesValue  = Number(cell_(r, idx, 'Total')) || 0;
     base.salesDetail = salesSafe_(cell_(r, idx, 'SalesDetail'));   // ห้ามใช้ Detail เด็ดขาด
-    base.priceLocked = false;
+    base.priceLocked = !fi.hasSalesCopy;                           // ใบรุ่นเก่ายังไม่มีราคาฉบับ Sales
+    base.valueTHB = salesValueTHB_(r, idx);                        // แค่ยอดรวมเป็นบาท ไม่ส่งอัตราแลกเปลี่ยนออกไป
   } else {
     base.salesDetail = '';                                         // ยังไม่ปล่อยราคา → ไม่ส่งราคาออกไปเลย
     base.priceLocked = true;
   }
   return base;
+}
+
+/* ============================================================ FOLLOW-UP OWNERSHIP + SLA (v4.3)
+ * ฟังก์ชันเดียวที่ตัดสินว่า "งานนี้รออยู่ที่ใคร" — ทั้งระบบทำราคาและแอป Sales ใช้ค่านี้ (row.follow) ห้ามคำนวณเองซ้ำ
+ *   owner: SOURCING | MANAGEMENT | RELEASER | REPAIR | SALES | DONE
+ *   REPAIR = ใบ Pending รุ่นเก่าที่ยังไม่มี "ราคาฉบับ Sales" (SalesDetail) → ต้องให้ทีมภายในกดสร้างข้อมูลสำหรับ Sales
+ *   งานจะเป็น "งานค้างของ Sales" ได้ต่อเมื่อปล่อยราคาให้เจ้าของงานแล้ว และมีราคาฉบับ Sales จริงเท่านั้น
+ * อ่านค่าจาก Detail ด้วย regex เฉพาะคีย์ระดับบน (ไม่ JSON.parse ทั้งก้อน) → เบาพอจะทำทุกแถวทุกครั้งที่โหลด */
+var FOLLOW_LABEL = {
+  SOURCING:'รอ Sourcing จัดทำราคา', MANAGEMENT:'รอผู้จัดการอนุมัติ', RELEASER:'รอปล่อยราคา',
+  REPAIR:'รอสร้างข้อมูลราคาสำหรับ Sales', SALES:'พร้อมเสนอลูกค้า', DONE:'ปิดงานแล้ว'
+};
+var STAGE_BUCKET = { 'Requested':'sourcing', 'In Progress':'sourcing', 'Submitted':'approval', 'Partial Approved':'approval',
+  'Approved':'release', 'Pending':'sales', 'Draft':'sales', 'Accepted':'sourcing' };   // ใช้แยกช่วงวันรอ
+
+function followCfg_() {
+  var cfg = { sla:{}, salesUpdateDays:FOLLOW_CFG.salesUpdateDays };
+  for (var k in FOLLOW_CFG.sla) cfg.sla[k] = FOLLOW_CFG.sla[k];
+  try {
+    var s = getSettingsRaw_();
+    if (s && s.sla) for (var k2 in s.sla) if (+s.sla[k2] > 0 && cfg.sla.hasOwnProperty(k2)) cfg.sla[k2] = +s.sla[k2];
+    if (s && +s.salesUpdateDays > 0) cfg.salesUpdateDays = +s.salesUpdateDays;
+  } catch (e) {}
+  return cfg;
+}
+/** จำนวนวันทำการ (จ.–ศ.) ระหว่าง fromMs ถึง toMs — นับเป็นวันเต็มตามเวลาไทย */
+function businessDays_(fromMs, toMs) {
+  if (!fromMs || !toMs || toMs <= fromMs) return 0;
+  var day = 86400000, off = 7 * 3600000;                  // Asia/Bangkok = UTC+7 (ไม่มี DST)
+  var a = Math.floor((fromMs + off) / day), b = Math.floor((toMs + off) / day), n = 0;
+  if (b - a > 800) a = b - 800;                           // กันลูปยาวผิดปกติ
+  for (var d = a + 1; d <= b; d++) { var wd = (d + 4) % 7; if (wd !== 0 && wd !== 6) n++; }   // 1970-01-01 = พฤหัส
+  return n;
+}
+function topStr_(json, key) {
+  var m = new RegExp('"' + key + '":"([^"]*)"').exec(json || '');
+  return m ? m[1] : '';
+}
+function topArr_(json, key) {
+  var m = new RegExp('"' + key + '":(\\[[^\\]]*\\])').exec(json || '');
+  if (!m) return null;
+  try { return JSON.parse(m[1]); } catch (e) { return null; }
+}
+/** ข้อมูลที่ใช้คำนวณ follow — จากคอลัมน์ + Detail (ไม่ส่ง Detail ออกไปไหน) */
+function followInfo_(r, idx) {
+  var det = String(cell_(r, idx, 'Detail') || ''), sd = String(cell_(r, idx, 'SalesDetail') || '');
+  return {
+    docType:String(cell_(r, idx, 'DocType') || 'QT'), status:String(cell_(r, idx, 'Status') || ''),
+    owner:String(cell_(r, idx, 'SalesUserId') || ''),
+    releasedTo:String(cell_(r, idx, 'ReleasedTo') || '').split('|').filter(function (x) { return x; }),
+    hasSalesCopy:sd.indexOf('"unitPrice"') >= 0,
+    updatedMs:toMs_(cell_(r, idx, 'UpdatedAt')) || toMs_(cell_(r, idx, 'Updated')),
+    statusLog:topArr_(det, 'statusLog') || [],
+    statusChangedAt:topStr_(det, 'statusChangedAt'),
+    salesUpdatedAt:topStr_(det, 'salesUpdatedAt'),
+    followUpDate:topStr_(det, 'followUpDate'),
+    approvalRoles:topArr_(det, 'approvalRoles') || [],
+    quoteIds:topArr_(det, 'quoteIds') || []
+  };
+}
+/** หัวใจของ Phase 1 — pure function (ทดสอบได้โดยไม่ต้องมีชีท) */
+function followState_(f, cfg, nowMs) {
+  var st = f.status, isSR = f.docType === 'SR', owner;
+  if (isSR) {
+    owner = (f.quoteIds && f.quoteIds.length) ? 'DONE'            // มีใบเสนอราคาผูกแล้ว = คำขอนี้จบแล้ว
+          : (st === 'Draft') ? 'SALES' : (st === 'Submitted' || st === 'Accepted') ? 'SOURCING' : 'DONE';
+  } else if (st === 'Requested' || st === 'In Progress' || !st) owner = 'SOURCING';
+  else if (st === 'Submitted' || st === 'Partial Approved') owner = 'MANAGEMENT';
+  else if (st === 'Approved') owner = 'RELEASER';
+  else if (st === 'Pending') {
+    var released = !!f.owner && f.releasedTo.indexOf(f.owner) >= 0;
+    owner = !f.hasSalesCopy ? 'REPAIR' : !released ? 'RELEASER' : 'SALES';
+  } else owner = 'DONE';
+
+  // ช่วงเวลาตามสถานะ (วันทำการ) — จาก statusLog ถ้ามี, ไม่งั้นใช้เวลาแก้ไขล่าสุดเป็นจุดเริ่ม (ข้อมูลรุ่นเก่า)
+  var log = (f.statusLog || []).filter(function (e) { return e && e.at; });
+  var sinceMs = toMs_(f.statusChangedAt) || (log.length ? toMs_(log[log.length - 1].at) : 0) || f.updatedMs || nowMs;
+  var stageDays = { sourcing:0, approval:0, release:0, sales:0 };
+  for (var i = 0; i < log.length; i++) {
+    var b = STAGE_BUCKET[log[i].s]; if (!b) continue;
+    var end = (i + 1 < log.length) ? toMs_(log[i + 1].at) : nowMs;
+    stageDays[b] += businessDays_(toMs_(log[i].at), end);
+  }
+  var out = { owner:owner, ownerLabel:FOLLOW_LABEL[owner], label:FOLLOW_LABEL[owner], actionable:false,
+              waitingDays:0, slaDays:0, level:'ok', slaBreached:false, since:new Date(sinceMs).toISOString(),
+              stageDays:stageDays, estimated:!log.length };
+  if (owner === 'DONE') {
+    out.label = isSR ? ((f.quoteIds && f.quoteIds.length) || st === 'Quoted' ? 'จัดทำใบเสนอราคาแล้ว' : st === 'Cancelled' ? 'ยกเลิกคำขอ' : 'ปิดงานแล้ว')
+                     : (st === 'Won' ? 'ปิดการขายได้' : 'ปิดงาน');
+    out.ownerLabel = out.label;
+    return out;
+  }
+  if (isSR && owner === 'SALES') { out.label = 'ร่างคำขอ — ยังไม่ได้ส่ง'; out.actionable = true; return out; }
+  if (isSR && owner === 'SOURCING') out.label = (st === 'Accepted') ? 'Sourcing รับคำขอแล้ว · กำลังจัดทำราคา' : 'รอ Sourcing รับคำขอราคา';
+  if (owner === 'MANAGEMENT' && st === 'Partial Approved') {
+    var miss = REQUIRED_APPROVAL_ROLES.filter(function (r) { return (f.approvalRoles || []).indexOf(r) < 0; });
+    out.label = 'อนุมัติแล้วบางส่วน · รอ ' + miss.join(' / ');
+  }
+  if (owner === 'RELEASER' && st === 'Pending') out.label = 'รอยืนยันปล่อยราคา (ข้อมูลรุ่นเก่า)';
+
+  if (owner === 'SALES') {
+    // Sales: นับจากการอัปเดตล่าสุด (หรือวันที่ได้ราคา) เป็นวันปฏิทิน + วันนัดที่เลยกำหนด
+    var lastMs = toMs_(f.salesUpdatedAt) || sinceMs;
+    out.waitingDays = Math.floor((nowMs - lastMs) / 86400000);
+    out.slaDays = cfg.salesUpdateDays;
+    var overdueFollow = !!f.followUpDate && f.followUpDate < Utilities.formatDate(new Date(nowMs), TZ, 'yyyy-MM-dd');
+    out.slaBreached = out.waitingDays >= cfg.salesUpdateDays || overdueFollow;
+    out.level = out.slaBreached ? 'over' : (out.waitingDays >= cfg.salesUpdateDays - 1 ? 'watch' : 'ok');
+    out.actionable = out.slaBreached;                     // งานค้างของ Sales = ถึงเวลาต้องอัปเดตแล้วเท่านั้น
+    out.label = out.slaBreached ? (overdueFollow ? 'เลยวันนัดติดตาม' : 'ถึงเวลาอัปเดตความคืบหน้า') : 'พร้อมเสนอลูกค้า';
+    return out;
+  }
+  out.waitingDays = businessDays_(sinceMs, nowMs);
+  out.slaDays = cfg.sla[owner] || 0;
+  out.slaBreached = out.slaDays > 0 && out.waitingDays > out.slaDays;
+  out.level = out.slaBreached ? 'over' : (out.slaDays > 0 && out.waitingDays >= out.slaDays ? 'watch' : 'ok');
+  out.actionable = true;                                  // อยู่ในคิวของเจ้าของงานเสมอ
+  return out;
+}
+/** อัตราแปลงสกุลเงินของใบ → บาท (อัตราที่ล็อกไว้ในใบ) — ใช้รวมมูลค่าข้ามสกุลเงิน · 0 = ไม่รู้อัตรา */
+function rowRateToTHB_(r, idx) {
+  var cur = String(cell_(r, idx, 'Currency') || 'THB').toUpperCase();
+  if (cur === 'THB' || !cur) return 1;
+  var rates = null, m = /"rates":(\{[^}]*\})/.exec(String(cell_(r, idx, 'Detail') || ''));
+  if (m) { try { rates = JSON.parse(m[1]); } catch (e) {} }
+  if (rates && +rates[cur] > 0) return +rates[cur];
+  if (cur === 'USD' && +cell_(r, idx, 'Exrate') > 0) return +cell_(r, idx, 'Exrate');
+  return 0;
+}
+/** มูลค่าเป็นบาทของ "ราคาที่ Sales เห็นจริง" (total ใน SalesDetail) — ไม่ใช้คอลัมน์ Total กันตัวเลขสองแหล่งไม่ตรงกัน */
+function salesValueTHB_(r, idx) {
+  var m = /"total":(-?[0-9.]+)/.exec(String(cell_(r, idx, 'SalesDetail') || ''));
+  var v = m ? Number(m[1]) : (Number(cell_(r, idx, 'Total')) || 0);
+  var rate = rowRateToTHB_(r, idx);
+  return rate ? v * rate : null;
+}
+/** follow ของแถวเดียว (ใช้คืนค่าหลังบันทึก) */
+function followForRow_(sh, idx, row) {
+  var r = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
+  return followState_(followInfo_(r, idx), followCfg_(), Date.now());
 }
 
 /** defense-in-depth: ล้างคีย์ต้นทุนออกจาก SalesDetail อีกชั้นก่อนส่งออก (เผื่อแถวเก่าที่บันทึกก่อนมี stripCost_) */
@@ -986,7 +1242,11 @@ function saveUsers_(p, sess) {
       Scope:(typeof u.scope === 'string') ? u.scope : JSON.stringify(u.scope || 'all'), Updated:stamp };
     if (u.email !== undefined) vals.Email = String(u.email || '').trim().toLowerCase();
     if (u.active !== undefined) vals.Active = (u.active === false || String(u.active).toUpperCase() === 'FALSE') ? 'FALSE' : '';
-    if (u.passHash) vals.PassHash = u.passHash;   // ไม่ส่ง hash มา = ไม่แตะรหัสเดิม
+    if (u.passHash) {                              // ไม่ส่ง hash มา = ไม่แตะรหัสเดิม
+      if (!/^[0-9a-f]{64}$/.test(String(u.passHash))) return { ok:false, error:'BAD_HASH', id:u.id };
+      vals.PassHash = pwWrap_(String(u.passHash));
+      loginClear_('id:' + String(u.id).toLowerCase());   // Admin ตั้งรหัสใหม่ = ปลดล็อกด้วย
+    }
     writeRow_(sh, idx, row, vals);
     wrote++;
   }
@@ -1008,7 +1268,8 @@ function getUsers_(sess) {
     // อีเมลเห็นได้เฉพาะ role ภายใน / ผู้จัดการทีมขาย / เจ้าของบัญชีเอง
     if (seesFullData_(sess) || sess.caps.viewAllSales || u.id === sess.userId) u.email = String(cell_(r, idx, 'Email') || '');
     if (seesFullData_(sess)) u.scope = cell_(r, idx, 'Scope') || 'all';
-    if (sess.caps.manageUsers) u.passHash = cell_(r, idx, 'PassHash');   // เฉพาะ Admin เท่านั้น
+    // v4.3: ไม่ส่งค่า hash ออกจาก server อีกเลย (แม้แต่ Admin) — บอกแค่ว่าตั้งรหัสแล้วหรือยัง
+    if (sess.caps.manageUsers) u.hasPassword = !!String(cell_(r, idx, 'PassHash') || '');
     out.push(u);
   }
   return out;
@@ -1112,6 +1373,7 @@ function todayStr_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd')
 
 function setup() {
   [SH.QUOTES, SH.PRODUCTS, SH.SETTINGS, SH.USERS, SH.LOG, SH.SESSIONS].forEach(function (n) { sheet_(n); });
+  migratePasswordHashes();   // v4.3: แปลง hash รหัสผ่านเดิมเป็น v2 (รันซ้ำได้ ไม่กระทบค่าที่แปลงแล้ว)
   logRow_('setup', '', '', Session.getActiveUser().getEmail() || '-', 'schema v4.2 (RBAC + Live Sync + Email login)');
   SpreadsheetApp.getActive().toast('ติดตั้ง/อัปเกรดแท็บเรียบร้อย (schema v4.2 · เพิ่มคอลัมน์ Email / Active ในแท็บ Users)', 'MGS Pricing', 8);
 }

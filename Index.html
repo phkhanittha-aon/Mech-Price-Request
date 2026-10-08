@@ -130,7 +130,10 @@ td.r,th.r{text-align:right}
 .cell-inp:hover{border-color:var(--line-2)}
 .cell-inp:focus{outline:none;border-color:var(--orange);background:var(--surface);box-shadow:0 0 0 2px var(--orange-soft)}
 .cell-inp.txt{text-align:left;font-family:'Inter'}
-.cost-table{table-layout:fixed;width:1046px;max-width:none}
+.cost-table{table-layout:fixed;width:100%;min-width:960px;max-width:none}
+.cost-table td.ic .stack{display:flex;flex-direction:column;gap:1px;width:100%}
+.cost-table td.ic .stack .cell-inp{padding:5px 6px}
+.cost-table .cell-sub{font-size:10.5px;padding:0 6px 3px;text-align:right;font-family:'JetBrains Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cost-table th,.cost-table td{padding:8px 6px;overflow:hidden;text-overflow:ellipsis}
 .cost-table thead th{font-size:11px;position:static}
 .cost-table td.ic{padding:0;vertical-align:middle}
@@ -384,6 +387,17 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
 /* มือถือ: grid หลายคอลัมน์แบบ inline ยุบเป็นคอลัมน์เดียว + ให้ตารางเลื่อนในกล่องตัวเอง (เดิมทั้งหน้าล้นแนวนอน) */
 .grid>*{min-width:0}
 @media(max-width:760px){#content .grid[style*="fr"]{grid-template-columns:1fr!important}}
+
+/* v4.3 workload card */
+.wl-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.wl-tile{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:9px 12px;display:flex;flex-direction:column;gap:2px}
+.wl-tile span{font-size:11.5px;color:var(--muted);font-weight:600}.wl-tile b{font-size:22px;line-height:1.15}
+.wl-tile i{font-style:normal;font-size:11px}
+.wl-tile.mine{border-color:var(--orange);box-shadow:inset 0 -3px 0 var(--orange)}
+.wl-row.over td{background:var(--red-soft)}.wl-row.over td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+.wl-row.watch td{background:var(--amber-soft)}.wl-row.watch td:first-child{box-shadow:inset 3px 0 0 var(--amber)}
+.wl-repair{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--blue-soft);border:1px solid rgba(47,107,176,.3);border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:13px}
+@media(max-width:760px){.wl-tiles{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -436,7 +450,7 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
       <button class="btn full" onclick="doLogin()">เข้าสู่ระบบ →</button>
       <div class="login-err" id="loginErr"></div>
       <div class="login-hint">ลืมรหัสผ่าน? ติดต่อผู้ดูแลระบบเพื่อตั้งรหัสใหม่
-        <div style="margin-top:6px;opacity:.65;font-size:10.5px" class="mono" id="buildStamp">2026-10-08 · build 4.2</div></div>
+        <div style="margin-top:6px;opacity:.65;font-size:10.5px" class="mono" id="buildStamp">2026-10-09 · build 4.3</div></div>
     </div>
   </div>
 </div>
@@ -486,7 +500,7 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const BUILD='2026-10-08 · build 4.2 · Email login + Sales App';
+const BUILD='2026-10-09 · build 4.3 · Follow-up + Security';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
@@ -572,6 +586,23 @@ function safeDateAdd(dateStr,days){
 }
 const fmt=(n,d=2)=>(n==null||isNaN(n))?'—':Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmt0=n=>fmt(n,0);
+/* ============================================================ MONEY (v4.3)
+   แสดงสกุลเงินกำกับทุกยอดเงิน · การรวมยอดข้ามใบต้องแปลงเป็นบาทด้วยอัตราที่ล็อกไว้ในแต่ละใบก่อนเสมอ
+   (เดิมแสดง ฿ ทุกใบ และรวม USD กับ THB เป็นตัวเลขเดียวกัน → ยอดสรุปผิด) */
+const CUR_SYM={THB:'฿',USD:'US$',CNY:'CN¥'};
+function money(n,cur,dec){const v=fmt(n,dec==null?0:dec);return v==='—'?v:(CUR_SYM[cur||'THB']||((cur||'')+' '))+v}
+function curOf(q){return (q&&q.header&&q.header.currency)||'THB'}
+/* อัตรา สกุลเงินของใบ → บาท ใช้อัตราที่ล็อกไว้ในใบก่อน (เหมือน getRate) · 0 = ไม่รู้อัตรา (ห้ามเดา) */
+function rateToTHB(H){
+  const cur=(H&&H.currency)||'THB';
+  if(cur==='THB')return 1;
+  if(H.rates&&+H.rates[cur]>0)return +H.rates[cur];
+  if(cur==='USD'&&+H.exrate>0)return +H.exrate;
+  const s=(typeof settingsRate==='function')?settingsRate(cur):0;
+  return s>0?s:0;
+}
+function toTHB(q,amount){const r=rateToTHB(q.header||{});return r?(+amount||0)*r:0}
+function quoteTHB(q){return toTHB(q,quoteTotals(q).total)}
 const pp=n=>(n==null||isNaN(n))?'—':(Math.round(n*100)/100)+'%';   // percent points -> "10%"
 const todayISO=()=>new Date().toISOString().slice(0,10);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -770,6 +801,12 @@ let USERS=LS.get('users',null);
   }
   LS.set('users',USERS);
 })();
+/* v4.3 (C2): ไม่เก็บ hash รหัสผ่านของคนอื่นไว้ในเครื่อง — เก็บเฉพาะของผู้ใช้ที่ล็อกอินล่าสุดบนเครื่องนี้ (ไว้ใช้ตอนออฟไลน์) */
+(function purgeOtherHashes(){
+  const me=LS.get('session','');let changed=false;
+  USERS.forEach(u=>{if(u.id!==me&&(u.passHash||u.pass!==undefined)){delete u.passHash;delete u.pass;changed=true;}});
+  if(changed)LS.set('users',USERS);
+})();
 // 2.8: hash any plaintext passwords at boot
 (async function migratePasswords(){
   for(const u of USERS){
@@ -957,46 +994,63 @@ function agoTH(iso){
   return d+' วันที่แล้ว';
 }
 function lastUpdate(q){return (q&&q.salesUpdate&&q.salesUpdate.at)?q.salesUpdate:null}
+/* ============================================================ FOLLOW-UP OWNERSHIP (v4.3)
+   "งานนี้รออยู่ที่ใคร / รอมากี่วัน" มาจาก server ที่เดียว (followState_ ใน Code.gs → row.follow → q._follow)
+   localFollow() ใช้เฉพาะตอนยังไม่มีค่าจาก server (ใบใหม่ที่ยังไม่ซิงค์ / ออฟไลน์) และไม่นับวัน SLA
+   กติกาหลัก: งานที่ยังไม่ปล่อยราคาให้เจ้าของงาน "ไม่ใช่งานค้างของ Sales" — เป็นของ Sourcing / ผู้จัดการ / ผู้ปล่อยราคา
+   ============================================================ */
+const OWNER_WHO={SOURCING:'sourcing',MANAGEMENT:'mgr',RELEASER:'gate',REPAIR:'repair',SALES:'sales',DONE:'done'};
+const OWNER_SHORT={SOURCING:'Sourcing',MANAGEMENT:'ผู้จัดการ',RELEASER:'ผู้ปล่อยราคา',REPAIR:'Sourcing (เตรียมข้อมูล)',SALES:'Sales',DONE:'—'};
+const OWNER_COLOR={SOURCING:'orange',MANAGEMENT:'amber',RELEASER:'blue',REPAIR:'orange',SALES:'green',DONE:'grey'};
+const LEVEL_TH={over:'เกินกำหนด',watch:'ครบกำหนดวันนี้',ok:''};
+function localFollow(q){
+  const st=statusOf(q),isSR=q.docType==='SR';let owner;
+  if(isSR)owner=st==='Draft'?'SALES':(st==='Submitted'||st==='Accepted')?'SOURCING':'DONE';
+  else if(['Requested','In Progress'].indexOf(st)>=0)owner='SOURCING';
+  else if(['Submitted','Partial Approved'].indexOf(st)>=0)owner='MANAGEMENT';
+  else if(st==='Approved')owner='RELEASER';
+  else if(st==='Pending'){const o=q.header&&q.header.salesUserId;owner=(o&&(q.releasedTo||[]).indexOf(o)>=0)?'SALES':'RELEASER';}
+  else owner='DONE';
+  return {owner,ownerLabel:owner,label:{SOURCING:'รอ Sourcing จัดทำราคา',MANAGEMENT:'รอผู้จัดการอนุมัติ',RELEASER:'รอปล่อยราคา',SALES:'พร้อมเสนอลูกค้า',DONE:'ปิดงานแล้ว'}[owner],
+    actionable:owner!=='SALES'&&owner!=='DONE',waitingDays:null,slaDays:0,level:'ok',slaBreached:false,local:true};
+}
+function followOf(q){
+  if(!q)return localFollow({});
+  if(q.docType==='SR'&&linkedQTsOf(q).length)return {owner:'DONE',label:'จัดทำใบเสนอราคาแล้ว',actionable:false,level:'ok',waitingDays:0};
+  return q._follow||localFollow(q);
+}
+/* งานค้างของ Sales = ได้ราคาแล้ว และถึงเวลาต้องอัปเดต (server ตัดสิน) */
 function needsSalesUpdate(q){
   if(!q||q.docType==='SR'||q.deleted)return false;
-  if(statusOf(q)!=='Pending')return false;
-  const u=lastUpdate(q);
-  if(!u)return true;
-  const d=daysSince(u.at);
-  return d===null||d>=SALES_UPDATE_DAYS;
+  const f=followOf(q);
+  return f.owner==='SALES'&&!!f.actionable;
 }
 function isOverdueFollow(q){
-  return !!(q.followUpDate&&q.followUpDate<todayISO()&&['Won','Closed'].indexOf(statusOf(q))<0);
+  return !!(q.followUpDate&&q.followUpDate<todayISO()&&followOf(q).owner==='SALES');
 }
-/* ลูกบอลอยู่ที่ใคร — ทำให้หน้าติดตามอ่านออกในแวบเดียว */
+function waitTxt(f){return (f&&f.waitingDays!=null&&f.owner!=='SALES'&&f.owner!=='DONE')?(f.waitingDays+' วันทำการ'):''}
+function levelBadge(f){
+  if(!f||!f.level||f.level==='ok')return '';
+  return `<span class="tag ${f.level==='over'?'red':'amber'}" style="font-size:10px">${f.level==='over'?'⛔':'⚠'} ${LEVEL_TH[f.level]}</span>`;
+}
+/* รออยู่ที่ใคร — สรุปจาก followOf() */
 /* ให้สถานะ SR สอดคล้องกับใบเสนอราคาที่ผูกอยู่จริง — กันกรณี "ปิดการขายแล้ว แต่ SR ยังรอรับงาน" */
 function linkedQTsOf(sr){return (QUOTES||[]).filter(x=>x.srId===sr.id&&!x.deleted&&x.docType!=='SR');}
 function srAwaitingIntake(q){return q.docType==='SR'&&q.status==='Submitted'&&!q.deleted&&!linkedQTsOf(q).length;}   // SR ที่ยังไม่มีใบเสนอราคาผูกเท่านั้น = ยังรอรับงานจริง
 function ballOf(q){
-  const st=statusOf(q);
-  if(q.docType==='SR'){
-    const qts=linkedQTsOf(q);
-    if(qts.length){
-      if(qts.some(x=>statusOf(x)==='Won'))return {who:'done',label:'ปิดการขายสำเร็จ',color:'green'};
-      if(qts.every(x=>['Won','Closed'].indexOf(statusOf(x))>=0))return {who:'done',label:'ปิดงาน',color:'grey'};
-      return {who:'done',label:'จัดทำใบเสนอราคาแล้ว',color:'green'};
-    }
-    if(st==='Accepted')return {who:'sourcing',label:'อยู่ระหว่างจัดทำราคา (ฝ่ายจัดหา)',color:'orange'};
-    if(st==='Cancelled')return {who:'done',label:'ยกเลิกคำขอราคา',color:'grey'};
-    if(st==='Quoted')return {who:'done',label:'จัดทำใบเสนอราคาแล้ว',color:'green'};
-    return {who:'sourcing',label:'รอฝ่ายจัดหารับคำขอราคา',color:'orange'};
+  const f=followOf(q),st=statusOf(q);
+  if(f.owner==='DONE'){
+    if(q.docType!=='SR'&&st==='Won')return {who:'done',label:'ปิดการขายสำเร็จ',color:'green',f};
+    return {who:'done',label:f.label||'ปิดงาน',color:'grey',f};
   }
-  if(['Requested','In Progress'].indexOf(st)>=0)return {who:'sourcing',label:'รอฝ่ายจัดหาจัดทำราคา',color:'orange'};
-  if(['Submitted','Partial Approved'].indexOf(st)>=0)return {who:'mgr',label:'รอผู้บริหารพิจารณาอนุมัติ',color:'amber'};
-  if(st==='Approved')return {who:'gate',label:'รอ'+gatekeeperName()+'อนุมัติเผยแพร่ราคา',color:'blue'};
-  if(st==='Pending')return {who:'sales',label:'อยู่ระหว่างการติดตามลูกค้า (ฝ่ายขาย)',color:'green'};
-  if(st==='Won')return {who:'done',label:'ปิดการขายสำเร็จ',color:'green'};
-  return {who:'done',label:'ปิดงาน',color:'grey'};
+  const w=waitTxt(f);
+  return {who:OWNER_WHO[f.owner]||'done',label:f.label+(w?' · '+w:''),
+    color:f.level==='over'?'red':f.level==='watch'?'amber':(OWNER_COLOR[f.owner]||'grey'),f};
 }
 function ballChip(q){
   const b=ballOf(q);
   const mine=CURRENT&&(q.header&&q.header.salesUserId)===CURRENT.id;
-  return `<span class="tag ${b.color}">${esc((b.who==='sales'&&mine)?'อยู่ในความรับผิดชอบของท่าน — ติดตามลูกค้า':b.label)}</span>`;
+  return `<span class="tag ${b.color}">${esc((b.who==='sales'&&mine)?'งานของคุณ — ติดตามลูกค้า':b.label)}</span>`;
 }
 function updateChip(q){
   if(ballOf(q).who!=='sales')return '<span class="hint">—</span>';
@@ -1114,8 +1168,8 @@ function approvalCard(q){
       <div class="ac-top"><span class="ac-title">${esc(q.header.title||q.header.customer||'(ไม่มีชื่อ)')}</span>
         <span class="kc-doc">${esc(q.docNo||q.header.ref||'—')}${q.round>1?' · R'+q.round:''}</span></div>
       <div class="hint">${esc(q.header.customer||'—')} · ${esc(salesNameOf(q)||'ไม่ระบุ Sales')} · ${esc(creatorName(q))}</div>
-      <div class="ac-nums"><span>ยอดขาย <b class="mono">฿${fmt0(t.total)}</b></span><span>ต้นทุน <b class="mono">฿${fmt0(t.cost)}</b></span>
-        <span>กำไร <b class="mono" style="color:var(--green)">฿${fmt0(t.profit)}</b></span></div>
+      <div class="ac-nums"><span>ยอดขาย <b class="mono">${money(t.total,curOf(q))}</b></span><span>ต้นทุน <b class="mono">${money(t.cost,curOf(q))}</b></span>
+        <span>กำไร <b class="mono" style="color:var(--green)">${money(t.profit,curOf(q))}</b></span></div>
       <div class="ac-badges">${approvalBadges(q)}${q.needsApproval?'<span class="abadge warn">⚠ ต่ำกว่าเกณฑ์</span>':''}</div>
     </div>
     ${mine?`<button class="btn sm ac-btn" onclick="event.stopPropagation();approve('${q.id}')">✓ อนุมัติ</button>`:''}
@@ -1269,8 +1323,11 @@ async function verifyPass(u,plain){
 }
 async function setUserPassword(userId,plain){
   const u=USERS.find(x=>x.id===userId);if(!u)return false;
-  u.passHash=await hashPass(plain); delete u.pass;
-  LS.set('users',USERS); pushUsers(); return true;
+  const h=await hashPass(plain); delete u.pass;
+  if(CURRENT&&userId===CURRENT.id)u.passHash=h; else delete u.passHash;   // ไม่เก็บ hash ของคนอื่นในเครื่อง
+  u.hasPassword=true;LS.set('users',USERS);
+  const r=await pushUsers(false,userId,h);
+  return !!(r&&r.ok);
 }
 /* v4.2: เปลี่ยนรหัสของตัวเองผ่าน action changePassword
    (เดิมใช้ saveUsers ซึ่งต้องมีสิทธิ์ manageUsers → Sourcing / Procurement / BD เปลี่ยนรหัสบน server ไม่ได้จริง) */
@@ -1294,7 +1351,8 @@ async function serverLogin(userId,passHash){
     LS.set('token',SESSION_TOKEN);LS.set('caps',SERVER_CAPS);
     return {ok:true,user:d.user};
   }
-  return {ok:false,error:(d&&d.error)||r.error||'AUTH_FAILED'};
+  // network=true เมื่อไม่ได้คำตอบจาก server เลย (ออฟไลน์ / timeout) — ใช้ตัดสินว่าจะยอมตรวจรหัสในเครื่องหรือไม่
+  return {ok:false,error:(d&&d.error)||r.error||'AUTH_FAILED',info:d||{},network:!d,offline:!!r.offline};
 }
 function clearSession(){
   SESSION_TOKEN='';SERVER_CAPS=null;LS.set('token','');LS.set('caps',null);
@@ -1308,41 +1366,44 @@ function salesAppNotice(name){
   <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ปิด</button>
     <a class="btn" href="${esc(url)}" target="_blank" rel="noopener">เปิดแอปติดตามงานขาย →</a></div>`);
 }
+/* v4.3 LOGIN — server ตัดสินก่อนเสมอ (H2: เดิมตรวจรหัสในเครื่องก่อน ทำให้คนที่เพิ่งถูกเปลี่ยนรหัสจากเครื่องอื่นเข้าไม่ได้)
+   ตรวจรหัสในเครื่องเฉพาะตอน "ติดต่อ server ไม่ได้เลย" และเฉพาะบัญชีที่เคยล็อกอินสำเร็จบนเครื่องนี้ */
+const LOGIN_ERR_TH={AUTH_FAILED:'ชื่อผู้ใช้ / อีเมล หรือรหัสผ่านไม่ถูกต้อง',ACCOUNT_DISABLED:'บัญชีนี้ถูกปิดใช้งาน — ติดต่อผู้ดูแลระบบ',
+  ACCOUNT_LOCKED:'กรอกรหัสผิดหลายครั้ง บัญชีถูกล็อกชั่วคราว'};
 async function doLogin(){
   const input=($('#loginUser').value||'').trim(),plain=$('#loginPass').value;
-  let u=findUser(input);
-  // v4.2: ถ้าเครื่องนี้ยังไม่รู้จักบัญชี (เช่น ล็อกอินด้วยอีเมลครั้งแรก) → ให้ server ตรวจ แล้วจำผู้ใช้ไว้ในเครื่อง
-  if(!u&&cloudReady()){
-    SERVER_CAPS=null;LS.set('caps',null);
-    const sv0=await serverLogin(input,await hashPass(plain));
-    if(sv0.ok&&sv0.user){
-      u=USERS.find(x=>x.id===sv0.user.id);
-      if(!u){u={id:sv0.user.id,name:sv0.user.name,role:normRole(sv0.user.role),scope:'all'};USERS.push(u);}
-      u.email=sv0.user.email||u.email||'';u.passHash=await hashPass(plain);delete u.pass;LS.set('users',USERS);
-    }else if(sv0.error==='ACCOUNT_DISABLED'){$('#loginErr').textContent='บัญชีนี้ถูกปิดใช้งาน — ติดต่อผู้ดูแลระบบ';return}
+  if(!input||!plain){$('#loginErr').textContent='กรุณากรอกชื่อผู้ใช้ / อีเมล และรหัสผ่าน';return}
+  const clientHash=await hashPass(plain);
+  SERVER_CAPS=null;LS.set('caps',null);   // ไม่ใช้สิทธิ์ค้างของผู้ใช้คนก่อนบนเครื่องเดียวกัน
+  let u=null;
+  if(cloudReady()){
+    $('#loginErr').textContent='กำลังตรวจสอบ…';
+    const sv=await serverLogin(input,clientHash);
+    if(sv.ok&&sv.user){
+      u=USERS.find(x=>x.id===sv.user.id);
+      if(!u){u={id:sv.user.id,name:sv.user.name,role:normRole(sv.user.role),scope:'all'};USERS.push(u);}
+      u.name=sv.user.name||u.name;u.role=normRole(sv.user.role);   // role ที่เชื่อถือได้คือของ server
+      if(sv.user.email!==undefined)u.email=sv.user.email;
+      u.passHash=clientHash;delete u.pass;                          // เก็บไว้เฉพาะบัญชีของตัวเอง (ใช้ตอนออฟไลน์)
+      LS.set('users',USERS);
+    }else if(!sv.network){
+      const e=sv.error,info=sv.info||{};
+      $('#loginErr').textContent=(LOGIN_ERR_TH[e]||('เข้าสู่ระบบไม่สำเร็จ ('+e+')'))+
+        (e==='ACCOUNT_LOCKED'?' — ลองใหม่ในอีก '+(info.minutes||15)+' นาที หรือให้ Admin ตั้งรหัสใหม่':'')+
+        (e==='AUTH_FAILED'&&info.left!=null&&info.left<=2?' (เหลืออีก '+info.left+' ครั้งก่อนถูกล็อก)':'');
+      return;
+    }
   }
-  // ข้อความเดียวกันทั้งกรณีชื่อผิดและรหัสผิด — ไม่บอกใบ้ว่ามีบัญชีนี้อยู่จริงไหม
-  const ok=u?await verifyPass(u,plain):false;
-  if(!ok){$('#loginErr').textContent='ชื่อผู้ใช้ / อีเมล หรือรหัสผ่านไม่ถูกต้อง';return}
-  // ด่านที่ 1: role SALES ไม่มีสิทธิ์เข้าแอปนี้เลย (ไม่ใช่แค่ซ่อน UI — ไม่มี session ให้ตั้งแต่ต้น)
-  if(!isInternalUser(u)){
-    $('#loginErr').textContent='';$('#loginPass').value='';
-    salesAppNotice(u.name);return;
+  if(!u){   // ออฟไลน์จริง ๆ
+    u=findUser(input);
+    if(!(u&&u.passHash&&u.passHash===clientHash)){
+      $('#loginErr').textContent=cloudReady()?'ติดต่อเซิร์ฟเวอร์ไม่ได้ และเครื่องนี้ไม่มีข้อมูลบัญชีนี้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่':'ชื่อผู้ใช้ / อีเมล หรือรหัสผ่านไม่ถูกต้อง';
+      return;
+    }
   }
+  // role SALES ไม่มีสิทธิ์เข้าแอปนี้ (ไม่มี session ให้ตั้งแต่ต้น) → พาไปแอป Sales
+  if(!isInternalUser(u)){$('#loginErr').textContent='';$('#loginPass').value='';salesAppNotice(u.name);return}
   LS.set('lastUser',input||u.name||u.id);
-  SERVER_CAPS=null;LS.set('caps',null);   // v4.1: ไม่ใช้สิทธิ์ค้างของผู้ใช้คนก่อนบนเครื่องเดียวกัน
-  // ด่านที่ 2: ขอ token จาก server — สิทธิ์จริงมาจากตรงนี้
-  const sv=await serverLogin(u.id,await hashPass(plain));
-  if(!sv.ok&&!sv.offline){
-    $('#loginErr').textContent=sv.error==='ACCOUNT_DISABLED'?'บัญชีนี้ถูกปิดใช้งาน — ติดต่อผู้ดูแลระบบ'
-      :sv.error==='AUTH_FAILED'?'รหัสผ่านบนเซิร์ฟเวอร์ไม่ตรง (อาจถูกเปลี่ยนจากเครื่องอื่น) — ลองรหัสล่าสุด'
-      :'เข้าสู่ระบบที่เซิร์ฟเวอร์ไม่สำเร็จ ('+esc(sv.error||'-')+')';return;
-  }
-  if(sv.ok&&sv.user&&sv.user.email!==undefined){u.email=sv.user.email;LS.set('users',USERS);}
-  if(sv.ok&&sv.user&&sv.user.role&&normRole(sv.user.role)!==u.role){
-    u.role=normRole(sv.user.role);LS.set('users',USERS);   // role ที่เชื่อถือได้คือของ server
-  }
-  if(!isInternalUser(u)){$('#loginErr').textContent='';salesAppNotice(u.name);return}
   const wasFactory=await isFactoryPass(u);
   CURRENT=u; LS.set('session',u.id); $('#loginErr').textContent='';$('#loginPass').value='';
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden'); mountApp();
@@ -1426,6 +1487,7 @@ function renderNav(){
   }
   NAV.forEach(n=>{
     if(n.perm&&!perms()[n.perm])return;
+    if(n.id&&!routeAllowed(n.id))return;      // v4.3: ไม่โชว์เมนูที่ server ไม่ให้เข้า (เดิม Procurement/BD เห็น "จัดการผู้ใช้" แต่กดแล้วถูกปฏิเสธ)
     if(n.group){const d=document.createElement('div');d.className='nav-group';d.textContent=n.group;nav.appendChild(d);return}
     const el=document.createElement('div');el.className='nav-item'+(route===n.id?' active':'');
     el.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">${ICONS[n.icon]}</svg><span>${n.label}</span>`;
@@ -1691,6 +1753,7 @@ function viewDashboard(){
         <td style="font-size:12px">${esc(q.header.needBy||'—')}</td>
         <td>${perms().create?`<button class="btn tiny" onclick="takeSRAndCost('${q.id}')">รับงาน &amp; ทำราคา</button>`:''}</td></tr>`).join('')}
     </tbody></table></div></div></div>`:''}
+  ${workloadCard()}
   ${showAppr?`<div class="card" style="border-left:4px solid var(--amber);margin-bottom:14px">
     <div class="card-h" style="padding:12px 18px"><span style="font-size:20px">🗳</span>
       <h2 style="margin-left:6px">รออนุมัติราคา (${inAppr.length})</h2>
@@ -1724,6 +1787,49 @@ function viewDashboard(){
     </div></div>
   </div>`;
 }
+/* v4.3: งานค้างตามผู้รับผิดชอบ — งานที่แย่สุดขึ้นก่อน · สีมาคู่กับไอคอน/ข้อความเสมอ */
+const LEVEL_RANK={over:2,watch:1,ok:0};
+function myOwnerKeys(){
+  const r=CURRENT&&CURRENT.role;const k=[];
+  if(r==='Sourcing'||perms().create)k.push('SOURCING','REPAIR');
+  if(REQUIRED_APPROVAL_ROLES.indexOf(r)>=0||APPROVAL_OVERRIDE_ROLES.indexOf(r)>=0)k.push('MANAGEMENT');
+  if(isReleaser(CURRENT)||perms().approve)k.push('RELEASER');
+  return k;
+}
+function workloadCard(){
+  const open=latestQuotes(QUOTES).filter(q=>!q.deleted).map(q=>({q,f:followOf(q)}))
+    .filter(x=>x.f.owner!=='DONE'&&(x.f.owner!=='SALES'||x.f.actionable));
+  if(!open.length)return '';
+  const over=open.filter(x=>x.f.level==='over').length,watch=open.filter(x=>x.f.level==='watch').length;
+  const mine=myOwnerKeys();
+  const tiles=[['SOURCING','Sourcing จัดทำราคา'],['MANAGEMENT','รอผู้จัดการอนุมัติ'],['RELEASER','รอปล่อยราคา'],['SALES','Sales ค้างอัปเดต']].map(([k,l])=>{
+    const xs=open.filter(x=>x.f.owner===k||(k==='SOURCING'&&x.f.owner==='REPAIR'));
+    const o=xs.filter(x=>x.f.level==='over').length;
+    return `<div class="wl-tile ${mine.indexOf(k)>=0?'mine':''}"><span>${l}</span><b>${xs.length}</b>${o?`<i class="tag red" style="font-size:10px">⛔ เกิน ${o}</i>`:'<i class="hint">ตามกำหนด</i>'}</div>`;
+  }).join('');
+  const worst=open.slice().sort((a,b)=>(LEVEL_RANK[b.f.level]||0)-(LEVEL_RANK[a.f.level]||0)||(b.f.waitingDays||0)-(a.f.waitingDays||0)).slice(0,8);
+  const repair=open.filter(x=>x.f.owner==='REPAIR').map(x=>x.q.id);
+  return `<div class="card" style="margin-bottom:14px">
+    <div class="card-h" style="padding:12px 18px"><h2>งานค้างตามผู้รับผิดชอบ</h2>
+      <span class="hint" style="margin-left:8px">${over?`<b style="color:var(--red)">⛔ เกินกำหนด ${over}</b> · `:''}${watch?`<b style="color:var(--amber)">⚠ ครบกำหนดวันนี้ ${watch}</b> · `:''}ทั้งหมด ${open.length} งาน</span>
+      <div class="spacer"></div><span class="hint">SLA: Sourcing ${SLA_TXT('SOURCING')} · อนุมัติ ${SLA_TXT('MANAGEMENT')} · ปล่อยราคา ${SLA_TXT('RELEASER')} วันทำการ</span></div>
+    <div class="card-b">
+      ${(repair.length&&perms().create)?`<div class="wl-repair">🛠 มี <b>${repair.length} ใบ</b> (สถานะพร้อมเสนอ ข้อมูลรุ่นเก่า) ที่ Sales ยังไม่เห็นราคา เพราะยังไม่มีราคาฉบับ Sales
+        <button class="btn sm" onclick='backfillSalesDetail(${JSON.stringify(repair)})'>สร้างข้อมูลสำหรับ Sales ${repair.length} ใบ</button></div>`:''}
+      <div class="wl-tiles">${tiles}</div>
+      <div class="tw" style="border:none;margin-top:10px"><table><thead><tr><th></th><th>เอกสาร</th><th>โครงการ / ลูกค้า</th><th>รออยู่ที่</th><th class="r">รอมาแล้ว</th><th></th></tr></thead><tbody>
+      ${worst.map(({q,f})=>`<tr class="wl-row ${f.level}" style="cursor:pointer" onclick="openQuote('${q.id}')">
+        <td style="width:28px;text-align:center">${f.level==='over'?'⛔':f.level==='watch'?'⚠':'·'}</td>
+        <td class="mono" style="font-size:11px">${esc(q.docNo||q.header.ref||'—')}</td>
+        <td><b>${esc(q.header.title||q.header.customer||'(ไม่มีชื่อ)')}</b><div class="hint">${esc(q.header.customer||'')} · ${esc(salesNameOf(q)||'—')}</div></td>
+        <td>${esc(f.label)}</td>
+        <td class="r mono">${f.owner==='SALES'?((f.waitingDays||0)+' วัน'):(f.waitingDays==null?'—':f.waitingDays+' วันทำการ')}${f.estimated?'<span class="hint" title="ข้อมูลรุ่นเก่าไม่มีประวัติสถานะ นับจากวันที่แก้ไขล่าสุด"> *</span>':''}</td>
+        <td>${levelBadge(f)}</td></tr>`).join('')}
+      </tbody></table></div>
+      ${worst.some(x=>x.f.estimated)?'<div class="hint" style="margin-top:6px">* ใบรุ่นเก่าไม่มีประวัติเวลาเปลี่ยนสถานะ — นับจากวันที่แก้ไขล่าสุดแทน</div>':''}
+    </div></div>`;
+}
+function SLA_TXT(k){const f=(QUOTES.map(q=>q._follow).find(x=>x&&x.owner===k));return f&&f.slaDays?f.slaDays:({SOURCING:3,MANAGEMENT:2,RELEASER:1})[k]}
 function kpi(l,v,s,color){const dot=color&&color!=='grid'?`<span class="dot" style="background:var(--${color})"></span>`:'';
   return `<div class="kpi"><div class="k-l">${dot}${l}</div><div class="k-v">${v}</div><div class="k-s">${s}</div></div>`}
 // 2.10: colour thresholds come from the commission table, not hard-coded 20/12
@@ -1749,29 +1855,33 @@ function summaryFiltered(){
   if(sSearch)list=list.filter(q=>quoteMatch(q,sSearch));
   return list;
 }
+// ผลรวมทั้งหมดเป็น "บาท" — แต่ละใบแปลงด้วยอัตราที่ล็อกไว้ในใบนั้น · ใบที่ไม่รู้อัตรา ไม่ถูกนับ และถูกรายงานใน noFx
 function aggregateQuotes(list){
-  const byCat={};let total=0,cost=0,profit=0,globalExtras=0;
+  const byCat={};let total=0,cost=0,profit=0,globalExtras=0;const noFx=[];
   list.forEach(q=>{
+    const x=rateToTHB(q.header||{});
+    if(!x){noFx.push(q.docNo||q.header.ref||q.id);return}
     const t=computeQuote(q);
-    globalExtras+=t.globalExtras;
+    globalExtras+=t.globalExtras*x;
     t.lines.forEach(o=>{
       const cat=o.L.comGroup||comCategory(o.L.group);
       if(!byCat[cat])byCat[cat]={total:0,cost:0,profit:0};
-      byCat[cat].total+=o.lineTotal;byCat[cat].cost+=o.lineCost;byCat[cat].profit+=o.lineProfit;
-      total+=o.lineTotal;cost+=o.landedCost;profit+=o.lineProfit;
+      byCat[cat].total+=o.lineTotal*x;byCat[cat].cost+=o.lineCost*x;byCat[cat].profit+=o.lineProfit*x;
+      total+=o.lineTotal*x;cost+=o.landedCost*x;profit+=o.lineProfit*x;
     });
   });
   const gp=total>0?profit/total*100:0;
-  return {byCat,total,cost,profit,gp,globalExtras};
+  return {byCat,total,cost,profit,gp,globalExtras,noFx};
 }
 function viewSummary(){
   const list=summaryFiltered();
-  const {byCat,total,cost,profit,gp}=aggregateQuotes(list);
+  const {byCat,total,cost,profit,gp,noFx}=aggregateQuotes(list);
+  const multiCur=new Set(list.map(curOf)).size>1;
   const cats=Object.entries(byCat).sort((a,b)=>b[1].total-a[1].total);
   const maxT=Math.max(1,...cats.map(([,v])=>v.total));
   const customers=[...new Set(QUOTES.map(q=>q.header.customer||'—').filter(Boolean))].sort();
   const salesList=[...new Set(QUOTES.map(q=>q.header.sales||'—').filter(Boolean))].sort();
-  const wonTotal=list.filter(q=>q.status==='Won').reduce((s,q)=>s+quoteTotals(q).total,0);
+  const wonTotal=list.filter(q=>q.status==='Won').reduce((s,q)=>s+quoteTHB(q),0);
   return `
   <div class="row-flex no-print" style="gap:12px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
     <div class="pill-input" style="max-width:300px;flex:1;min-width:220px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -1785,6 +1895,7 @@ function viewSummary(){
     <div class="spacer" style="flex:1"></div>
     <button class="btn sm ghost" onclick="exportSummaryCSV()" title="ส่งออกตามตัวกรองปัจจุบันเป็น CSV">⤓ ส่งออก Excel/CSV</button>
   </div>
+  ${(multiCur||noFx.length)?`<div class="hint no-print" style="margin:-4px 0 10px">💱 ยอดรวมทุกช่องเป็น <b>บาท</b> — ใบ USD/CNY แปลงด้วยอัตราที่ล็อกไว้ในแต่ละใบ${noFx.length?` · <span style="color:var(--red)">ไม่นับ ${noFx.length} ใบที่ไม่มีอัตราแลกเปลี่ยน (${esc(noFx.slice(0,5).join(', '))})</span>`:''}</div>`:''}
   <div class="kpis">
     ${kpi('ยอดเสนอรวม',`฿${fmt0(total)}`,list.length+' ใบ','grid')}
     ${kpi('ยอด GP รวม',`฿${fmt0(profit)}`,'กำไรขั้นต้น','green')}
@@ -1807,7 +1918,7 @@ function viewSummary(){
         </tbody></table></div>`:emptyState('ไม่มีข้อมูลตามตัวกรอง','ลองล้างตัวกรอง')}
       </div></div>
     <div class="card"><div class="card-h"><h2>ลูกค้าสูงสุด (ตามตัวกรอง)</h2></div><div class="card-b">
-      ${(()=>{const byC={};list.forEach(q=>{const c=q.header.customer||'—';const t=quoteTotals(q);if(!byC[c])byC[c]={total:0,profit:0};byC[c].total+=t.total;byC[c].profit+=t.profit});
+      ${(()=>{const byC={};list.forEach(q=>{const c=q.header.customer||'—';const t=quoteTotals(q);if(!byC[c])byC[c]={total:0,profit:0};byC[c].total+=toTHB(q,t.total);byC[c].profit+=toTHB(q,t.profit)});
         const arr=Object.entries(byC).sort((a,b)=>b[1].total-a[1].total).slice(0,8);const mx=Math.max(1,...arr.map(([,v])=>v.total));
         return arr.length?arr.map(([c,v])=>`<div style="margin-bottom:11px"><div class="row-flex" style="justify-content:space-between;margin-bottom:4px">
           <span style="font-weight:600;font-size:13px">${esc(c)}</span><span class="mono" style="font-size:12px">฿${fmt0(v.total)} · GP ${pp(v.total>0?v.profit/v.total*100:0)}</span></div>
@@ -2008,49 +2119,52 @@ function refreshLines(){
   const ddp=(H.incoterm||'')==='DDP at MGS';
   const cif=(H.incoterm||'').slice(0,3).toUpperCase()==='CIF';
   // 2.6: show the target unit price the Sales asked for (read-only reference) when the QT came from an SR
-  const hasTarget=editing.lines.some(L=>(+L.targetUp||0)>0);
-  const nCols=15+(hasTarget?1:0);
+  const nCols=10;
   const dutyTip=lockNote('duty',H), clrTip=lockNote('clr',H);
 
-  /* ---------- desktop table ----------
-     v4.1: แบ่ง 4 โซนชัดเจน (สีหัวตาราง + เส้นแบ่งแนวตั้ง .zs)
-       [ข้อมูลสินค้า] สินค้า · หมวด · Qty · หน่วย
-       [ต้นทุน]       ทุน U/P · สกุล · ทุน/ชิ้น (฿) · Duty% · Clr% · ต้นทุนรวม/ชิ้น (Landed)
-       [มาร์จิ้น]      %GP · กำไร/ชิ้น
-       [ราคาขาย]     (Target ของ Sales) · ราคาขาย/หน่วย · รวม                                   */
+  /* ---------- desktop table (v4.3: พอดีจอ 1280px โดยไม่ต้องเลื่อนซ้ายขวา) ----------
+     4 โซนเหมือนเดิม แต่รวมช่องที่เป็นคู่กันไว้ในเซลล์เดียว และย้ายช่องที่แก้ไม่บ่อยไปไว้ในแถวรายละเอียด (⋯)
+       [① สินค้า]   สินค้า (รหัส/ชื่อ) · จำนวน/หน่วย
+       [② ต้นทุน]   ทุน/หน่วย + สกุล · Duty% · Clr% · ต้นทุนรวม/ชิ้น (Landed)
+       [③ มาร์จิ้น]  %GP (+ กำไร/ชิ้น ใต้ช่อง)
+       [④ ราคาขาย]  ราคาขาย/หน่วย (+ ราคาเป้าหมายของ Sales ใต้ช่อง) · รวม
+       แถวรายละเอียด: หมวดสินค้า · ค่าขนส่ง/ชิ้น · ทุน/ชิ้น (แปลงแล้ว) · Warranty · Lead time                     */
   let rows=editing.lines.map((L,i)=>{
     const r=computeLine(L,H);
     const cat=L.comGroup||comCategory(L.group);
+    const tgt=(+L.targetUp||0)>0;
     return `<tr id="row_${i}">
-      <td class="ic z-prod-c"><div style="display:flex;flex-direction:column;gap:3px;width:100%">
-          <input class="cell-inp txt" style="width:100%;font-weight:600" value="${esc(L.code)}" oninput="lset(${i},'code',this.value)" placeholder="รหัสสินค้า">
-          <input class="cell-inp txt" style="width:100%;font-size:11px;color:var(--muted)" value="${esc(L.desc)}" oninput="lset(${i},'desc',this.value)" placeholder="รายละเอียด" title="${esc(L.desc)}"></div></td>
-      <td class="ic"><select class="cell-inp txt" style="font-size:11px" onchange="lset(${i},'group',this.value)">
-          ${[...new Set([L.group,...visibleGroupList()])].filter(Boolean).map(g=>`<option ${L.group===g?'selected':''}>${esc(g)}</option>`).join('')}</select></td>
-      <td class="ic"><input class="cell-inp" type="number" value="${L.qty}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Qty',this)" oninput="lset(${i},'qty',this.value)"></td>
-      <td class="ic"><input class="cell-inp txt" style="font-size:12px" value="${esc(L.uom)}" oninput="lset(${i},'uom',this.value)" placeholder="หน่วย"></td>
-      <td class="ic zs z-cost-c"><input class="cell-inp" type="number" step="any" value="${L.up}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Unit Price',this)" oninput="lset(${i},'up',this.value)"></td>
-      <td class="ic z-cost-c"><select class="cell-inp txt" style="text-align:left" onchange="lset(${i},'costCur',this.value)">
-          ${['USD','CNY','THB'].map(c=>`<option ${L.costCur===c?'selected':''}>${c}</option>`).join('')}</select></td>
-      <td class="r mono z-cost-c" id="pc_${i}" style="color:var(--ink-2)">${fmt(r.pricePC)}</td>
+      <td class="ic z-prod-c"><div class="stack">
+          <input class="cell-inp txt" style="font-weight:600" value="${esc(L.code)}" oninput="lset(${i},'code',this.value)" placeholder="รหัสสินค้า">
+          <input class="cell-inp txt" style="font-size:11px;color:var(--muted)" value="${esc(L.desc)}" oninput="lset(${i},'desc',this.value)" placeholder="รายละเอียด" title="${esc(L.desc)}"></div></td>
+      <td class="ic"><div class="stack">
+          <input class="cell-inp" type="number" value="${L.qty}" title="จำนวน" onfocus="auditFocus(this)" onchange="auditLine(${i},'Qty',this)" oninput="lset(${i},'qty',this.value)">
+          <input class="cell-inp txt" style="font-size:11px;text-align:right;color:var(--muted)" value="${esc(L.uom)}" oninput="lset(${i},'uom',this.value)" placeholder="หน่วย" title="หน่วย"></div></td>
+      <td class="ic zs z-cost-c"><div class="stack">
+          <input class="cell-inp" type="number" step="any" value="${L.up}" title="ทุนต่อหน่วย" onfocus="auditFocus(this)" onchange="auditLine(${i},'Unit Price',this)" oninput="lset(${i},'up',this.value)">
+          <select class="cell-inp txt" style="font-size:11px;text-align:right" title="สกุลเงินของทุน" onchange="lset(${i},'costCur',this.value)">
+          ${['USD','CNY','THB'].map(c=>`<option ${L.costCur===c?'selected':''}>${c}</option>`).join('')}</select></div></td>
       <td class="ic z-cost-c"><div class="pct-wrap lockwrap"><input class="cell-inp" style="${ddp?'opacity:.45;cursor:not-allowed':''}" type="number" step="any" value="${L.dutyPct}" ${ddp?`disabled title="${esc(dutyTip)}"`:''} onfocus="auditFocus(this)" onchange="auditLine(${i},'Duty%',this)" oninput="lset(${i},'dutyPct',this.value)">${ddp?`<span class="lock-ico" title="${esc(dutyTip)}">🔒</span>`:''}</div></td>
       <td class="ic z-cost-c"><div class="pct-wrap lockwrap"><input class="cell-inp" style="${!cif?'opacity:.45;cursor:not-allowed':''}" type="number" step="any" value="${L.clearancePct}" ${!cif?`disabled title="${esc(clrTip)}"`:''} onfocus="auditFocus(this)" onchange="auditLine(${i},'Clearance%',this)" oninput="lset(${i},'clearancePct',this.value)">${!cif?`<span class="lock-ico" title="${esc(clrTip)}">🔒</span>`:''}</div></td>
-      <td class="r mono z-cost-c" id="lc_${i}" style="font-weight:700;color:var(--blue)" title="ทุน + Duty + Clearance + ค่าขนส่ง/ชิ้น">${fmt(r.baseCost)}</td>
-      <td class="ic zs z-gp-c"><div class="pct-wrap"><input class="cell-inp" id="op_${i}" type="number" step="any" value="${L.opPct}" style="font-weight:700;color:${gpColor(r.gp,cat)}" onfocus="auditFocus(this)" onchange="auditLine(${i},'%GP',this)" oninput="lset(${i},'opPct',this.value)" title="%GP = กำไรขั้นต้นบนราคาขาย (Price = Cost / (1 - %GP))"></div></td>
-      <td class="r mono z-gp-c" id="opu_${i}" style="color:var(--green);font-weight:600">${fmt(r.op)}</td>
-      ${hasTarget?`<td class="r mono zs" style="color:var(--blue);background:var(--blue-soft);font-size:12px" title="ราคาเป้าหมายที่ Sales ระบุมาใน SR (อ่านอย่างเดียว)">${(+L.targetUp||0)>0?fmt(+L.targetUp):'—'}</td>`:''}
-      <td class="ic z-sell-c${hasTarget?'':' zs'}"><input class="cell-inp" id="tu_${i}" style="font-weight:700;color:var(--orange-deep)" type="number" step="any" value="${r.totalUP}" onfocus="auditFocus(this)" onchange="auditTotal(${i},this);totalEdit(${i},this.value,this)" title="แก้ราคาขายนี้เพื่อคำนวณ %GP ย้อนกลับ"></td>
+      <td class="r mono z-cost-c" id="lc_${i}" style="font-weight:700;color:var(--blue)" title="ทุน + Duty + Clearance + ค่าขนส่ง/ชิ้น (${esc(H.currency)})">${fmt(r.baseCost)}</td>
+      <td class="ic zs z-gp-c"><div class="pct-wrap"><input class="cell-inp" id="op_${i}" type="number" step="any" value="${L.opPct}" style="font-weight:700;color:${gpColor(r.gp,cat)}" onfocus="auditFocus(this)" onchange="auditLine(${i},'%GP',this)" oninput="lset(${i},'opPct',this.value)" title="%GP = กำไรขั้นต้นบนราคาขาย (Price = Cost / (1 - %GP))"></div>
+          <div class="cell-sub" style="color:var(--green)" title="กำไรต่อหน่วย">+<span id="opu_${i}">${fmt(r.op)}</span></div></td>
+      <td class="ic zs z-sell-c"><input class="cell-inp" id="tu_${i}" style="font-weight:700;color:var(--orange-deep)" type="number" step="any" value="${r.totalUP}" onfocus="auditFocus(this)" onchange="auditTotal(${i},this);totalEdit(${i},this.value,this)" title="แก้ราคาขายนี้เพื่อคำนวณ %GP ย้อนกลับ">
+          ${tgt?`<div class="cell-sub" style="color:var(--blue)" title="ราคาเป้าหมายที่ Sales ระบุมาใน SR (อ่านอย่างเดียว)">เป้า ${fmt(+L.targetUp)}</div>`:''}</td>
       <td class="r mono z-sell-c" id="lt_${i}" style="font-weight:700;color:var(--orange-deep)">${fmt0(r.lineTotal)}</td>
       <td class="zs" style="text-align:center;white-space:nowrap">
-        <button class="x" style="width:24px;height:24px" onclick="toggleDet(${i})" title="Warranty / Lead time / ค่าขนส่งต่อชิ้น">⋯</button>
+        <button class="x" style="width:24px;height:24px" onclick="toggleDet(${i})" title="หมวด / ค่าขนส่ง / Warranty / Lead time">⋯</button>
         <button class="x" style="width:24px;height:24px" onclick="delLine(${i})" title="ลบรายการนี้">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></td></tr>
       <tr class="det-row" id="det_${i}" style="display:none"><td colspan="${nCols}">
         <div class="det-grid">
+          <div class="f"><label>หมวดสินค้า</label><select onchange="lset(${i},'group',this.value)">
+            ${[...new Set([L.group,...visibleGroupList()])].filter(Boolean).map(g=>`<option ${L.group===g?'selected':''}>${esc(g)}</option>`).join('')}</select></div>
+          <div class="f"><label>ค่าขนส่ง/ชิ้น (${esc(H.currency)})</label><input class="mono" type="number" step="any" value="${+L.freep||0}" oninput="lset(${i},'freep',this.value)"></div>
+          <div class="f"><label>ทุน/ชิ้น แปลงแล้ว (${esc(H.currency)})</label><input class="mono" id="dpc_${i}" value="${fmt(r.pricePC)}" disabled></div>
+          <div class="f"><label>ต้นทุนรวม/ชิ้น (Landed)</label><input class="mono" id="dlc_${i}" value="${fmt(r.baseCost)}" disabled title="ทุน + Duty + Clearance + ค่าขนส่ง/ชิ้น"></div>
           <div class="f"><label>Warranty</label><input value="${esc(L.warranty||'')}" placeholder="เช่น 10 YEAR" oninput="lset(${i},'warranty',this.value)"></div>
           <div class="f"><label>Lead time</label><input value="${esc(L.lead||'')}" placeholder="เช่น 90 days after PO" oninput="lset(${i},'lead',this.value)"></div>
-          <div class="f"><label>ค่าขนส่ง/ชิ้น (${esc(H.currency)})</label><input class="mono" type="number" step="any" value="${+L.freep||0}" oninput="lset(${i},'freep',this.value)"></div>
-          <div class="f"><label>ต้นทุนรวม/ชิ้น (Landed)</label><input class="mono" id="dlc_${i}" value="${fmt(r.baseCost)}" disabled title="ทุน + Duty + Clearance + ค่าขนส่ง/ชิ้น"></div>
         </div>
         ${(ddp||!cif)?`<div class="lock-note">🔒 ${ddp?esc(dutyTip):''}${(ddp&&!cif)?'<br>':''}${!cif?esc(clrTip):''}</div>`:''}
       </td></tr>`;
@@ -2101,21 +2215,21 @@ function refreshLines(){
     </div>`;
   }).join('');
 
-  tw.innerHTML=`<div class="lines-desktop"><table class="cost-table" style="width:${hasTarget?1382:1292}px"><colgroup>
-    <col style="width:188px"><col style="width:96px"><col style="width:60px"><col style="width:54px">
-    <col style="width:82px"><col style="width:62px"><col style="width:100px"><col style="width:62px"><col style="width:62px"><col style="width:104px">
-    <col style="width:72px"><col style="width:96px">
-    ${hasTarget?'<col style="width:90px">':''}<col style="width:100px"><col style="width:96px"><col style="width:56px"></colgroup>
+  tw.innerHTML=`<div class="lines-desktop"><table class="cost-table"><colgroup>
+    <col><col style="width:76px">
+    <col style="width:112px"><col style="width:56px"><col style="width:56px"><col style="width:104px">
+    <col style="width:96px">
+    <col style="width:118px"><col style="width:110px"><col style="width:58px"></colgroup>
     <thead><tr class="zone-row">
-      <th colspan="4" class="z-prod">① ข้อมูลสินค้า</th>
-      <th colspan="6" class="z-cost zs">② ต้นทุน (Cost &amp; Duty) · ${esc(H.currency)}</th>
-      <th colspan="2" class="z-gp zs">③ มาร์จิ้น / กำไร</th>
-      <th colspan="${hasTarget?3:2}" class="z-sell zs">④ ราคาขาย (Selling Price)</th><th class="zs"></th></tr>
+      <th colspan="2" class="z-prod">① ข้อมูลสินค้า</th>
+      <th colspan="4" class="z-cost zs">② ต้นทุน (Cost &amp; Duty) · ${esc(H.currency)}</th>
+      <th class="z-gp zs">③ มาร์จิ้น</th>
+      <th colspan="2" class="z-sell zs">④ ราคาขาย · ${esc(H.currency)}</th><th class="zs"></th></tr>
     <tr>
-    <th>สินค้า</th><th>หมวด</th><th class="r">Qty</th><th>หน่วย</th>
-    <th class="r zs z-cost-h">ทุน U/P</th><th class="z-cost-h">สกุล</th><th class="r z-cost-h">ทุน/ชิ้น</th><th class="r z-cost-h">Duty%${ddp?' 🔒':''}</th><th class="r z-cost-h">Clr%${!cif?' 🔒':''}</th><th class="r z-cost-h" title="ทุน + Duty + Clearance + ค่าขนส่ง/ชิ้น">Landed/ชิ้น</th>
-    <th class="r zs z-gp-h">%GP</th><th class="r z-gp-h">กำไร/ชิ้น</th>
-    ${hasTarget?'<th class="r zs z-sell-h" style="color:var(--blue)">Target U/P</th>':''}<th class="r z-sell-h${hasTarget?'':' zs'}">ราคาขาย/หน่วย</th><th class="r z-sell-h">รวม</th>
+    <th>สินค้า</th><th class="r" title="จำนวน / หน่วย">จำนวน</th>
+    <th class="r zs z-cost-h">ทุน/หน่วย</th><th class="r z-cost-h">Duty%${ddp?' 🔒':''}</th><th class="r z-cost-h">Clr%${!cif?' 🔒':''}</th><th class="r z-cost-h" title="ทุน + Duty + Clearance + ค่าขนส่ง/ชิ้น">Landed/ชิ้น</th>
+    <th class="r zs z-gp-h">%GP · กำไร/ชิ้น</th>
+    <th class="r zs z-sell-h">ราคาขาย/หน่วย</th><th class="r z-sell-h">รวม</th>
     <th class="zs"></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="lines-mobile">${cards}
       <div class="hint" style="text-align:center;padding:2px 0 6px">แตะ “รายละเอียดต้นทุน” เพื่อแก้ Duty / Clearance / สกุลเงิน / Warranty / Lead time</div></div>`;
@@ -2131,7 +2245,7 @@ function recalcRow(i){
   const cat=L.comGroup||comCategory(L.group);
   const setHTML=(id,html)=>{const el=document.getElementById(id);if(el)el.innerHTML=html};
   const setVal=(id,v)=>{const el=document.getElementById(id);if(el&&document.activeElement!==el)el.value=v};
-  setHTML('pc_'+i,fmt(r.pricePC));
+  setVal('dpc_'+i,fmt(r.pricePC));
   setHTML('lc_'+i,fmt(r.baseCost));setHTML('opu_'+i,fmt(r.op));
   setHTML('mlc_'+i,fmt(r.baseCost));setHTML('mopu_'+i,fmt(r.op));setVal('dlc_'+i,fmt(r.baseCost));
   setHTML('lt_'+i,fmt0(r.lineTotal));
@@ -2267,7 +2381,7 @@ function renderSummary(){
     <div class="row-flex" style="justify-content:space-between;margin-bottom:9px"><span class="hint">% GP รวม${t.globalExtras>0?' (หลังหักค่าใช้จ่าย)':''}</span>${gpTag(t.gp)}</div><div class="divider"></div>
     <div class="row-flex" style="justify-content:space-between;align-items:flex-end">
       <span class="hint">มูลค่าเสนอรวม</span>
-      <span class="disp" style="font-size:24px;font-weight:700;color:var(--orange-deep)">฿${fmt0(t.total)}</span></div>
+      <span class="disp" style="font-size:24px;font-weight:700;color:var(--orange-deep)">${money(t.total,curOf(editing))}</span></div>
     ${comHTML}`;
   renderLiveBar(t);
 }
@@ -2443,19 +2557,20 @@ function exportCostCSV(){
 function exportSummaryCSV(){
   const list=summaryFiltered();
   if(!list.length){toast('ไม่มีข้อมูลตามตัวกรอง','bad');return}
-  const rows=[['Doc No','โครงการ','ลูกค้า','Sales','กลุ่ม','สถานะ','รอบ','วันที่','ยอดเสนอ','ต้นทุน','กำไร','%GP']];
+  const rows=[['Doc No','โครงการ','ลูกค้า','Sales','กลุ่ม','สถานะ','รอบ','วันที่','สกุลเงิน','ยอดเสนอ','ต้นทุน','กำไร','%GP','ยอดเสนอ (บาท)']];
   list.forEach(q=>{const t=computeQuote(q);
     rows.push([q.docNo||q.header.ref||'',q.header.title||'',q.header.customer||'',salesNameOf(q)||'',
-      q.header.groupType||'',q.status||'',q.round||1,q.updated||'',
-      round2_(t.total),round2_(t.cost),round2_(t.profit),round2_(t.gp)]);
+      q.header.groupType||'',q.status||'',q.round||1,q.updated||'',curOf(q),
+      round2_(t.total),round2_(t.cost),round2_(t.profit),round2_(t.gp),round2_(toTHB(q,t.total))]);
   });
   const agg=aggregateQuotes(list);
   rows.push([]);
-  rows.push(['สรุปตามกลุ่มสินค้า','','','','','','','','ยอดเสนอ','ต้นทุน','กำไร','%GP']);
+  rows.push(['สรุปตามกลุ่มสินค้า (บาท — แปลงด้วยอัตราที่ล็อกในแต่ละใบ)','','','','','','','','THB','ยอดเสนอ','ต้นทุน','กำไร','%GP']);
   Object.entries(agg.byCat).forEach(([cat,v])=>{
-    rows.push([cat,'','','','','','','',round2_(v.total),round2_(v.cost),round2_(v.profit),round2_(v.total>0?v.profit/v.total*100:0)]);
+    rows.push([cat,'','','','','','','','THB',round2_(v.total),round2_(v.cost),round2_(v.profit),round2_(v.total>0?v.profit/v.total*100:0)]);
   });
-  rows.push(['รวมทั้งหมด','','','','','','','',round2_(agg.total),round2_(agg.cost),round2_(agg.profit),round2_(agg.gp)]);
+  rows.push(['รวมทั้งหมด','','','','','','','','THB',round2_(agg.total),round2_(agg.cost),round2_(agg.profit),round2_(agg.gp)]);
+  if(agg.noFx.length)rows.push(['ไม่นับ (ไม่มีอัตราแลกเปลี่ยน)',agg.noFx.join(' ')]);
   downloadCSV('summary_'+todayISO()+'.csv',rows);
 }
 function round2_(n){return Math.round((+n||0)*100)/100}
@@ -2586,6 +2701,7 @@ function duplicateQuote(id){
   copy.updatedAt=new Date().toISOString();copy.rev=1;copy.isSynced=false;
   copy.releasedTo=[];copy.needsApproval=false;copy.auditLogs=[];copy.deleteRequest=undefined;
   copy.releasedAt=undefined;copy.releasedBy=undefined;
+  copy.statusLog=[{s:QT_DEFAULT_STATUS,at:copy.updatedAt}];copy.statusChangedAt=copy.updatedAt;delete copy._follow;
   // ref: same base ref with round suffix
   const baseRef=(src.header.ref||'').replace(/ R\d+$/,'');
   copy.header.ref=baseRef+' R'+nextRound;
@@ -2658,7 +2774,7 @@ function quotesRows(){
       <td>${esc(q.header.customer||'—')}</td><td>${ownerTag(q)}</td>
       <td style="font-size:12px">${esc(creatorName(q))}</td>
       <td>${q.round>1?`<span class="tag blue">R${q.round}</span>`:`<span class="hint">R1</span>`}</td>
-      <td class="r mono" style="font-weight:600">${fmt0(t.total)}</td><td>${gpTag(t.gp,q.header.groupType)}</td>
+      <td class="r mono" style="font-weight:600">${money(t.total,curOf(q))}</td><td>${gpTag(t.gp,q.header.groupType)}</td>
       <td><span class="tag ${STATUS_TAG[st]||'grey'}" title="เปลี่ยนสถานะได้ในหน้ารายละเอียดใบ / หน้าติดตามงาน">${esc(STATUS_TH[st]||st)}</span>${inApprovalStage(q)?`<div class="row-flex" style="gap:3px;margin-top:3px">${approvalBadges(q)}</div>`:''}${(q._conflict||q._cloudNewer)?'<div><span class="abadge warn" title="ข้อมูลบน Cloud ถูกแก้โดยคนอื่น — เปิดแก้เพื่อเลือกเวอร์ชัน">⚠ Cloud ใหม่กว่า</span></div>':''}</td>
       <td style="font-size:12px;color:var(--muted)">${q.updated||'—'}</td>
       <td><div class="row-flex" style="flex-wrap:nowrap;gap:4px">
@@ -2689,6 +2805,10 @@ function statusSelect(q){
   return `<select class="inp" style="padding:4px 8px;font-size:12px;width:auto" onchange="setStatus('${q.id}',this.value)">
   <option selected>${esc(cur)}</option>${next.map(x=>`<option>${x}</option>`).join('')}</select>`;}
 function updateStatus(q,newStatus){
+  if(q.status!==newStatus){            // v4.3: เก็บเวลาเปลี่ยนสถานะ ใช้นับวัน SLA แยกช่วง (คีย์ใหม่แบบ optional)
+    const at=new Date().toISOString();q.statusChangedAt=at;
+    q.statusLog=(Array.isArray(q.statusLog)?q.statusLog:[]).concat([{s:newStatus,at}]).slice(-40);
+  }
   q.status=newStatus;q._sv=3;
   // ส่งกลับไปแก้ราคา = ต้องขออนุมัติใหม่ทั้ง 2 ขา
   if(q.docType!=='SR'&&newStatus==='In Progress')q.approvalRoles=[];
@@ -2957,7 +3077,7 @@ async function approve(id){
     const r=await postCloud({action:'approve',id});
     if(r.ok&&r.data){
       const d=r.data;
-      const m=mergeRemoteRow({id,detail:d.detail,updatedAt:d.updatedAt,by:CURRENT.name},{force:true});
+      const m=mergeRemoteRow({id,detail:d.detail,updatedAt:d.updatedAt,by:CURRENT.name,follow:d.follow},{force:true});
       if(!m)await refreshQuote(id,{force:true});
       LS.set('quotes',QUOTES);_flashIds[id]=Date.now();
       toast(d.complete
@@ -2995,7 +3115,10 @@ function approveLocal(id){
 /* 2 & 3. Gatekeeper (NON) ปล่อยราคา — auto-grant ให้ Sales ต้นทางจาก header.salesUserId */
 function canRelease(q){
   if(!q||q.docType==='SR'||!CURRENT)return false;
-  if((q.status||QT_DEFAULT_STATUS)!=='Approved')return false;
+  const st=statusOf(q);
+  // v4.3: ใบ Pending รุ่นเก่าที่ยังไม่ได้ปล่อยให้เจ้าของงานจริง (server ระบุ owner=RELEASER) → ยืนยันปล่อยราคาได้
+  const legacy=st==='Pending'&&followOf(q).owner==='RELEASER';
+  if(st!=='Approved'&&!legacy)return false;
   // ผู้ปล่อยราคา: gatekeeper หลัก / ผู้รับมอบหมายชั่วคราว / ผู้ที่ถูกทำเครื่องหมาย / ผู้จัดการ (สำรองกรณี NON ลา)
   return isReleaser(CURRENT)||perms().approve;
 }
@@ -3026,8 +3149,8 @@ function releasePrice(id){
   <div class="modal-b">
     <p style="line-height:1.9;font-size:14px">กำลังจะปล่อยราคาใบ <b>${esc(q.docNo||q.header.ref||'')}</b><br>
       ให้กับ Sales เจ้าของงาน: <b style="color:var(--blue)">${esc(ownerName)}</b><br>
-      มูลค่ารวม: <b>฿${fmt0(t.total)}</b> · %GP <b>${(t.gp||0).toFixed(1)}%</b></p>
-    <div class="hint" style="margin-top:10px;line-height:1.7">เมื่อปล่อยแล้ว ${esc(ownerName)} จะเห็นราคานี้และนำไปเสนอลูกค้าได้ · สถานะจะเปลี่ยนเป็น <b>Pending</b></div>
+      มูลค่ารวม: <b>${money(t.total,curOf(q))}</b> · %GP <b>${(t.gp||0).toFixed(1)}%</b></p>
+    <div class="hint" style="margin-top:10px;line-height:1.7">เมื่อปล่อยแล้ว ${esc(ownerName)} จะเห็นราคานี้และนำไปเสนอลูกค้าได้ · ${statusOf(q)==='Pending'?'ใบนี้เป็นข้อมูลรุ่นเก่า — เป็นการ<b>ยืนยัน</b>สิทธิ์เห็นราคาให้เจ้าของงาน':'สถานะจะเปลี่ยนเป็น <b>พร้อมเสนอลูกค้า</b>'}</div>
   </div>
   <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button>
     <button class="btn" style="background:var(--blue)" onclick="closeModal();doRelease('${q.id}')">🔓 ยืนยันปล่อยราคาให้ ${esc(ownerName)}</button></div>`);
@@ -3076,6 +3199,7 @@ function kanbanScope(){
 function kanbanCard(q){
   const see=canSeePrice(q,CURRENT);
   const stale=needsSalesUpdate(q)||isOverdueFollow(q);
+  const fo=followOf(q);
   const upd=lastUpdate(q);
   const appr=inApprovalStage(q);
   // v4.1: ผู้บริหารเห็น %GP ตัวใหญ่ + ป้ายรออนุมัติฝั่งไหน บนหน้าการ์ดเลย
@@ -3090,10 +3214,11 @@ function kanbanCard(q){
     </div>
     ${gpBox}
     <div class="kc-mid">
-      <span class="kc-val">${see?('฿'+fmt0(quoteTotals(q).total)):'🔒'}</span>
+      <span class="kc-val">${see?money(quoteTotals(q).total,curOf(q)):'🔒'}</span>
       <span class="kc-sales">${esc(salesNameOf(q)||'ไม่ระบุ')}</span>
     </div>
     ${appr?`<div class="kc-badges">${approvalBadges(q)}</div>`:''}
+    ${(fo.owner!=='SALES'&&fo.owner!=='DONE'&&fo.waitingDays!=null)?`<div class="kc-badges"><span class="hint">รอ ${esc(OWNER_SHORT[fo.owner]||'')} ${fo.waitingDays} วันทำการ</span>${levelBadge(fo)}</div>`:''}
     <div class="kc-foot">
       <span>${q.updated?('อัปเดต '+esc(agoTH(q.updated))):'—'}</span>
       ${stale?'<span class="tag red" style="font-size:9px">ค้าง</span>':(upd&&statusOf(q)==='Pending'?'<span class="tag green" style="font-size:9px">อัปเดตแล้ว</span>':'')}
@@ -3104,7 +3229,7 @@ function viewKanban(){
   const list=kanbanScope();
   return `<div class="kanban">${KANBAN_COLS.map(col=>{
     const items=list.filter(col.match).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
-    const val=items.reduce((sm,q)=>sm+(canSeePrice(q,CURRENT)?quoteTotals(q).total:0),0);
+    const val=items.reduce((sm,q)=>sm+(canSeePrice(q,CURRENT)?quoteTHB(q):0),0);   // บาท
     return `<div class="kcol">
       <div class="kcol-h"><span class="dot" style="background:${col.color}"></span>
         <b>${esc(col.label)}</b><span class="kn">${items.length}</span>
@@ -3126,11 +3251,11 @@ function teamStats(){
     const b=ballOf(q),st=statusOf(q);
     if(b.who!=='done')r.open++;
     if(b.who==='sales'){
-      r.inHand++;r.value+=quoteTotals(q).total;
+      r.inHand++;r.value+=quoteTHB(q);
       if(needsSalesUpdate(q))r.needUpd++;
       if(isOverdueFollow(q))r.overdue++;
     }
-    if(st==='Won'){r.won++;r.wonValue+=quoteTotals(q).total}
+    if(st==='Won'){r.won++;r.wonValue+=quoteTHB(q)}
     const u=lastUpdate(q);
     if(u&&u.at>(r.lastUpd||''))r.lastUpd=u.at;
   });
@@ -3148,7 +3273,7 @@ function stageBreakdown(){
     const u=lastUpdate(q);
     const k=(u&&u.stage)?u.stage:'ยังไม่ได้อัปเดต';
     if(!m[k])m[k]={n:0,value:0};
-    m[k].n++;m[k].value+=quoteTotals(q).total;
+    m[k].n++;m[k].value+=quoteTHB(q);
   });
   return Object.entries(m).sort((a,b)=>b[1].value-a[1].value);
 }
@@ -3225,7 +3350,7 @@ function viewTeamSummary(){
         <td class="mono" style="font-size:11px;cursor:pointer" onclick="openQuote('${q.id}')">${esc(q.docNo||q.header.ref||'—')}</td>
         <td><b>${esc(q.header.title||'(ไม่มีชื่อ)')}</b><div class="hint">${esc(q.header.customer||'')}</div></td>
         <td>${ownerTag(q)}</td>
-        <td class="r mono">${fmt0(quoteTotals(q).total)}</td>
+        <td class="r mono">${money(quoteTotals(q).total,curOf(q))}</td>
         <td><span class="tag red">${u?esc(agoTH(u.at)):'ยังไม่เคย'}</span></td>
         <td class="no-print"><button class="btn tiny ghost" onclick="openSalesUpdate('${q.id}')">📝 อัปเดตแทน</button></td></tr>`}).join('')}
       </tbody></table></div></div></div>`:''}
@@ -3233,14 +3358,14 @@ function viewTeamSummary(){
   ${detail?`<div class="card"><div class="card-h"><h2>งานที่เปิดอยู่ของ ${esc(detail.name)}</h2>
       <div class="spacer"></div><button class="btn tiny ghost no-print" onclick="setSumFilter('all')">✕ ล้างตัวกรอง</button></div>
     <div class="card-b" style="padding:0"><div class="tw" style="border:none"><table><thead><tr>
-      <th>เอกสาร</th><th>โครงการ / ลูกค้า</th><th>ลูกบอลอยู่ที่</th><th class="r">มูลค่า</th>
+      <th>เอกสาร</th><th>โครงการ / ลูกค้า</th><th>รออยู่ที่</th><th class="r">มูลค่า</th>
       <th>สถานะกับลูกค้า</th><th>นัดถัดไป</th><th>อัปเดต</th></tr></thead>
       <tbody>${QUOTES.filter(q=>!q.deleted&&((q.header&&q.header.salesUserId)||'')===detail.id&&ballOf(q).who!=='done')
         .map(q=>{const u=lastUpdate(q);return `<tr>
           <td class="mono" style="font-size:11px;cursor:pointer" onclick="openQuote('${q.id}')">${esc(q.docNo||q.header.ref||'—')}</td>
           <td><b>${esc(q.header.title||'(ไม่มีชื่อ)')}</b><div class="hint">${esc(q.header.customer||'')}</div></td>
           <td>${ballChip(q)}</td>
-          <td class="r mono">${fmt0(quoteTotals(q).total)}</td>
+          <td class="r mono">${money(quoteTotals(q).total,curOf(q))}</td>
           <td style="font-size:12px">${u&&u.stage?esc(u.stage):'<span class="hint">—</span>'}${u&&u.note?`<div class="hint">${esc(u.note)}</div>`:''}</td>
           <td style="font-size:12px">${q.followUpDate?esc(q.followUpDate)+(isOverdueFollow(q)?' <span class="tag amber" style="font-size:9px">เลยกำหนด</span>':''):'<span class="hint">—</span>'}</td>
           <td>${updateChip(q)}</td></tr>`}).join('')
@@ -3253,12 +3378,12 @@ function exportTeamCSV(){
   teamStats().forEach(r=>rows.push([r.name,r.open,r.inHand,Math.round(r.value),r.needUpd,r.overdue,r.won,Math.round(r.wonValue),
     r.lastUpd?fmtTime(r.lastUpd):'ยังไม่เคย']));
   rows.push([]);rows.push(['รายงานรายโครงการ']);
-  rows.push(['เอกสาร','โครงการ','ลูกค้า','Sales','กลุ่ม','สถานะ','ลูกบอลอยู่ที่','มูลค่า (฿)',
+  rows.push(['เอกสาร','โครงการ','ลูกค้า','Sales','กลุ่ม','สถานะ','รออยู่ที่','รอมาแล้ว (วันทำการ)','สกุลเงิน','มูลค่า (สกุลใบ)','มูลค่า (บาท)',
     'สถานะกับลูกค้า','ความคืบหน้าล่าสุด','ขั้นถัดไป','วันนัด','อัปเดตเมื่อ','อัปเดตโดย']);
   QUOTES.filter(q=>!q.deleted).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||''))).forEach(q=>{
     const u=lastUpdate(q)||{};
     rows.push([q.docNo||q.header.ref||'',q.header.title||'',q.header.customer||'',salesNameOf(q)||'',
-      q.header.groupType||'',statusOf(q),ballOf(q).label,Math.round(quoteTotals(q).total),
+      q.header.groupType||'',statusOf(q),followOf(q).label,followOf(q).waitingDays==null?'':followOf(q).waitingDays,curOf(q),round2_(quoteTotals(q).total),Math.round(quoteTHB(q)),
       u.stage||'',u.note||'',u.next||'',q.followUpDate||'',u.at?fmtTime(u.at):'',u.byName||'']);
   });
   downloadCSV('sales_summary_'+todayISO()+'.csv',rows);
@@ -3292,7 +3417,7 @@ function viewFollowup(){
     </div></div>
   <div class="card"><div class="card-b" style="padding:0">
   ${list.length?`<div class="tw" style="border:none"><table><thead><tr>
-    <th>กลุ่ม</th><th>โครงการ</th><th>Ref</th><th>วันที่ขอ</th><th>ลูกค้า</th><th>Sales</th><th>ลูกบอลอยู่ที่</th><th>อัปเดต</th><th>รอบ</th>
+    <th>กลุ่ม</th><th>โครงการ</th><th>Ref</th><th>วันที่ขอ</th><th>ลูกค้า</th><th>Sales</th><th>รออยู่ที่</th><th>อัปเดต</th><th>รอบ</th>
     <th>สถานะ</th><th>หมายเหตุจาก Sales</th><th></th></tr></thead><tbody>
     ${list.map(q=>`<tr>
       <td><span class="tag ${grpColor(q.header.groupType)}">${esc(q.header.groupType||'Inverter')}</span></td>
@@ -3581,9 +3706,12 @@ function commissionEditor(){
 }
 /* สร้างสำเนาปลอดต้นทุนย้อนหลังให้ใบเก่าทุกใบ — ทำครั้งเดียวหลังอัปเกรดเป็น v4.0
    ระหว่างที่ยังไม่ทำ Sales จะยังไม่เห็นราคาของใบเก่า เพราะ server ไม่มี SalesDetail ให้ส่ง */
-async function backfillSalesDetail(){
+/* สร้าง "ราคาฉบับ Sales" (SalesDetail) ใหม่จากใบในเครื่อง — ids = ทำเฉพาะใบที่ระบุ (เช่น ใบที่ server ระบุว่า REPAIR)
+   v4.3 (H4): จำเวลาบันทึกใหม่ของ server ทุกใบ — เดิมไม่จำ ทำให้แก้ใบนั้นครั้งถัดไปขึ้นเตือน "มีคนแก้ก่อน" ทั้งที่ไม่มี */
+async function backfillSalesDetail(ids){
   if(!cloudReady()){toast('ยังไม่ได้เชื่อมต่อ Google Sheet','bad');return}
-  const list=QUOTES.filter(q=>!q.deleted);
+  const pick=Array.isArray(ids)?new Set(ids):null;
+  const list=QUOTES.filter(q=>!q.deleted&&(!pick||pick.has(q.id)));
   if(!list.length){toast('ไม่มีใบให้อัปเดต','bad');return}
   let done=0,fail=0;
   modal(`<div class="modal-h"><h3>กำลังสร้างข้อมูลสำหรับ Sales</h3></div>
@@ -3592,13 +3720,16 @@ async function backfillSalesDetail(){
         <i id="bfBar" style="display:block;height:100%;width:0%;background:var(--orange)"></i></div></div>`);
   for(let i=0;i<list.length;i++){
     const r=await postCloud(quotePayload(list[i]));
-    if(r.ok)done++;else fail++;
+    if(r.ok){done++;const q=list[i];q.isSynced=true;
+      if(r.data&&r.data.updatedAt)q._cloudAt=r.data.updatedAt;if(r.data&&r.data.follow)q._follow=r.data.follow;}
+    else fail++;
     const el=document.getElementById('bfMsg'),bar=document.getElementById('bfBar');
     if(el)el.textContent='ส่งแล้ว '+(i+1)+'/'+list.length+' ใบ (สำเร็จ '+done+(fail?(' · ไม่สำเร็จ '+fail):'')+')';
     if(bar)bar.style.width=Math.round((i+1)/list.length*100)+'%';
   }
-  closeModal();
-  toast('สร้างข้อมูลสำหรับ Sales แล้ว '+done+' ใบ'+(fail?(' · ไม่สำเร็จ '+fail):''),fail?'bad':'good');
+  LS.set('quotes',QUOTES);closeModal();
+  toast('สร้างข้อมูลสำหรับ Sales แล้ว '+done+' ใบ'+(fail?(' · ไม่สำเร็จ '+fail+' (กด 🔄 ซิงค์ แล้วลองใหม่)'):''),fail?'bad':'good');
+  renderNav();render();
 }
 function setRateCNY(v){
   const n=+v||0;
@@ -3667,7 +3798,7 @@ function viewUsers(){
       <td>${isSalesTier?'<span class="hint">—</span>':`<button class="btn tiny ghost" onclick="openScope('${esc(u.id)}')">${(u.scope==='all'||!u.scope)?'🌐 ทุกกลุ่ม':'🔒 '+scopeTxt}</button>`}</td>
       <td>${isSalesTier?`<button class="btn tiny ghost" onclick="copySalesLink(${i})" title="ลิงก์หน้าของ Sales คนนี้ในแอป Sales">🔗 หน้า Sales</button>`:'<span class="hint">ระบบทำราคา</span>'}</td>
       <td><div class="pill-input" style="padding:2px 4px 2px 8px;width:150px"><input type="password" placeholder="ตั้งรหัสใหม่…" autocomplete="new-password" style="border:none;outline:none;width:100%;background:transparent" onchange="adminSetPassword('${esc(u.id)}',this)"></div>
-        <div class="hint" style="font-size:10px">${u.passHash?'ตั้งรหัสแล้ว':'ยังไม่ตั้งรหัส'}</div></td></tr>`}).join('');
+        <div class="hint" style="font-size:10px">${(u.hasPassword||u.passHash)?'ตั้งรหัสแล้ว':'ยังไม่ตั้งรหัส'}</div></td></tr>`}).join('');
   return `<div class="card"><div class="card-h"><h2>ผู้ใช้งานในระบบ</h2><span class="hint" style="margin-left:6px">${USERS.length} บัญชี</span><div class="spacer"></div>
       <button class="btn sm ghost" onclick="copyText_(salesAppUrl(),'คัดลอกลิงก์แอป Sales แล้ว')">🔗 ลิงก์แอป Sales</button>
       <button class="btn sm" onclick="openAddUser()">+ เพิ่มผู้ใช้</button></div>
@@ -3708,9 +3839,9 @@ async function saveNewUser(){
   if(!/^[A-Za-z0-9_.-]{2,40}$/.test(id))return err('Username ใช้ได้เฉพาะ a-z 0-9 _ . - (2–40 ตัว)');
   if(USERS.some(u=>u.id.toLowerCase()===id.toLowerCase()))return err('Username นี้มีอยู่แล้ว');
   if(USERS.some(u=>String(u.email||'').toLowerCase()===email))return err('อีเมลนี้มีผู้ใช้อยู่แล้ว');
-  const u={id,name,email,role,active:true,scope:'all',passHash:await hashPass(pass)};
+  const u={id,name,email,role,active:true,scope:'all',hasPassword:true};
   USERS.push(u);LS.set('users',USERS);
-  const r=await pushUsers();
+  const r=await pushUsers(false,id,await hashPass(pass));
   if(r&&userRejected(r)){USERS.splice(USERS.indexOf(u),1);LS.set('users',USERS);return err('Sheet ปฏิเสธ: '+(r.error||'-'))}
   closeModal();render();toast('เพิ่ม '+name+' ('+role+') แล้ว','good');
 }
@@ -3776,8 +3907,9 @@ async function adminSetPassword(userId,el){
   const v=(el.value||'').trim();
   if(!v){return}
   if(v.length<4){toast('รหัสใหม่ต้องอย่างน้อย 4 ตัว','bad');el.value='';return}
-  await setUserPassword(userId,v);
+  const ok=await setUserPassword(userId,v);
   el.value='';
+  if(!ok)return;
   toast('ตั้งรหัสผ่านใหม่ให้ '+((USERS.find(u=>u.id===userId)||{}).name||userId)+' แล้ว','good');
 }
 
@@ -3884,15 +4016,18 @@ async function _cloudGet(type,arg){
 }
 /* ============================================================ 2.8 USERS SYNC (Users tab) */
 // BUSINESS RULE: only id/name/role/scope/passHash are pushed — never a plaintext password.
-async function pushUsers(showToast){
+/* v4.3: ส่ง hash รหัสผ่านเฉพาะผู้ใช้ที่กำลังตั้งรหัส (passFor) เท่านั้น
+   เดิมส่ง hash ของทุกคนจากแคชในเครื่อง → แก้ชื่อใครสักคน = รหัสที่คนอื่นเพิ่งเปลี่ยนถูกเขียนกลับเป็นของเก่า */
+async function pushUsers(showToast,passFor,passHash){
   if(!cloudReady()){if(showToast)toast('ยังไม่ได้เชื่อมต่อ Google Sheet','bad');return {ok:false,offline:true}}
   const payload={action:'saveUsers',by:CURRENT?CURRENT.name:'-',
-    users:JSON.stringify(USERS.map(u=>({id:u.id,name:u.name,role:u.role,email:u.email||'',active:u.active!==false,
-      scope:(u.scope==='all'||!u.scope)?'all':u.scope,passHash:u.passHash||''})))};
+    users:JSON.stringify(USERS.map(u=>Object.assign({id:u.id,name:u.name,role:u.role,email:u.email||'',active:u.active!==false,
+      scope:(u.scope==='all'||!u.scope)?'all':u.scope},(passFor&&u.id===passFor&&passHash)?{passHash}:{})))};
   const r=await postCloud(payload);
   const USER_ERR={DUPLICATE_EMAIL:'อีเมลนี้ถูกใช้กับผู้ใช้อื่นแล้ว',BAD_EMAIL:'รูปแบบอีเมลไม่ถูกต้อง',ACCESS_DENIED:'ต้องเป็น Admin / GM จึงแก้ผู้ใช้ได้'};
   if(showToast||(!r.ok&&USER_ERR[r.error]))toast(r.ok?'ซิงค์ผู้ใช้ขึ้น Sheet แล้ว':'ซิงค์ผู้ใช้ไม่สำเร็จ: '+(USER_ERR[r.error]||r.error||'-')+((r.data&&r.data.email)?' ('+r.data.email+')':''),r.ok?'good':'bad');
-  if(!r.ok&&!USER_ERR[r.error])enqueueSync(payload);   // ข้อมูลผิดรูปแบบไม่ต้องเข้าคิวส่งซ้ำ
+  // ข้อมูลผิดรูปแบบไม่ต้องเข้าคิวส่งซ้ำ · คำขอที่มีรหัสผ่านไม่เก็บลงคิวในเครื่อง (ให้ Admin กดใหม่เมื่อออนไลน์)
+  if(!r.ok&&!USER_ERR[r.error]){if(passFor)toast('ตั้งรหัสผ่านไม่สำเร็จ — ตรวจอินเทอร์เน็ตแล้วลองใหม่','bad');else enqueueSync(payload);}
   return r;
 }
 async function pullUsers(){
@@ -3905,12 +4040,12 @@ async function pullUsers(){
     let scope=r.scope;
     if(typeof scope==='string'&&scope!=='all'){try{scope=JSON.parse(scope)}catch(e){scope=scope?scope.split(',').map(x=>x.trim()).filter(Boolean):'all'}}
     const u=USERS.find(x=>x.id===r.id);
-    if(!u){USERS.push({id:r.id,name:r.name||r.id,role:normRole(r.role||'Sales'),email:r.email||'',active:r.active!==false,scope:scope||'all',passHash:r.passHash||''});changed++;}
+    if(!u){USERS.push({id:r.id,name:r.name||r.id,role:normRole(r.role||'Sales'),email:r.email||'',active:r.active!==false,scope:scope||'all',hasPassword:!!r.hasPassword});changed++;}
     else{
       if(r.name&&u.name!==r.name){u.name=r.name;changed++;}
       if(r.role&&u.role!==normRole(r.role)){u.role=normRole(r.role);changed++;}
       if(scope&&JSON.stringify(u.scope)!==JSON.stringify(scope)){u.scope=scope;changed++;}
-      if(r.passHash&&u.passHash!==r.passHash){u.passHash=r.passHash;delete u.pass;changed++;}
+      if(r.hasPassword!==undefined&&u.hasPassword!==r.hasPassword){u.hasPassword=r.hasPassword;changed++;}
       if(r.email!==undefined&&(u.email||'')!==r.email){u.email=r.email;changed++;}
       if(r.active!==undefined&&(u.active!==false)!==(r.active!==false)){u.active=r.active!==false;changed++;}
     }
@@ -3980,7 +4115,16 @@ function quotePayload(q){
     baseUpdatedAt:q._cloudAt||'',
     salesDetail:JSON.stringify(buildSalesProjection(q)).slice(0,45000)};
 }
-async function syncCloud(q,opts){
+/* v4.3: บันทึกใบเดียวกันต่อคิวกัน — ครั้งถัดไปเริ่มหลังครั้งก่อนได้คำตอบแล้ว จึงอ้างอิงเวลาบน Sheet ล่าสุดเสมอ
+   (เดิม "รับงาน & ทำราคา" บันทึก SR 2 ครั้งติดกัน ครั้งที่ 2 ถูก conflict guard ปฏิเสธ → SR ค้างที่ Accepted) */
+const _saveChains={};
+function syncCloud(q,opts){
+  const id=q&&q.id;
+  const run=(_saveChains[id]||Promise.resolve()).then(()=>_syncCloud(q,opts));
+  _saveChains[id]=run.catch(()=>{});
+  return run;
+}
+async function _syncCloud(q,opts){
   if(!cloudReady()){q.isSynced=false;persistQuote(q);return {ok:false,offline:true}}
   const force=!!((opts&&opts.force)||q._forceSave);delete q._forceSave;
   const payload=quotePayload(q);
@@ -3989,6 +4133,7 @@ async function syncCloud(q,opts){
   const res=await postCloud(payload);
   if(res.ok){ q.isSynced=true; delete q._conflict; delete q._cloudNewer; delete q._cloudNewerBy;
     if(res.data&&res.data.updatedAt)q._cloudAt=res.data.updatedAt;      // baseline ใหม่สำหรับการบันทึกครั้งถัดไป
+    if(res.data&&res.data.follow)q._follow=res.data.follow;
     persistQuote(q); setCloudDot('on'); }
   else if(res.error==='CONFLICT'){                                        // มีคนเขียนบน Sheet ก่อนเรา → ห้ามเข้าคิวส่งซ้ำ
     q.isSynced=false; q._conflict=res.data||{}; persistQuote(q); setCloudDot('err');
@@ -4018,7 +4163,7 @@ async function flushQueue(){
     const r=await postCloud(item.payload);
     const tid=item.payload.id;const lq=QUOTES.find(x=>x.id===tid);
     if(r.ok){done++;
-      if(lq){lq.isSynced=true;delete lq._conflict;delete lq._cloudNewer;delete lq._cloudNewerBy;if(r.data&&r.data.updatedAt)lq._cloudAt=r.data.updatedAt;}}
+      if(lq){lq.isSynced=true;delete lq._conflict;delete lq._cloudNewer;delete lq._cloudNewerBy;if(r.data&&r.data.updatedAt)lq._cloudAt=r.data.updatedAt;if(r.data&&r.data.follow)lq._follow=r.data.follow;}}
     else if(r.error==='CONFLICT'){        // ไม่ส่งซ้ำ — ให้ผู้ใช้ตัดสินใจเอง (โหลดของ Cloud / บันทึกทับ)
       if(lq){lq.isSynced=false;lq._conflict=r.data||{};}conflicts.push(tid);}
     else {item.tries=tries+1;
@@ -4063,7 +4208,7 @@ const LIVE_OVERLAP_MS=90000;      // ขอข้อมูลซ้อนย้�
 const LEGACY_FULL_PULL_MS=120000; // Code.gs รุ่นเก่า (ไม่มี type=changes) → ดึงทั้งชุดห่างขึ้นเป็น 2 นาที
 let _liveTimer=null,_lastServerTime='',_polling=false,_lastPollAt=0,_lastFullPull=0;
 let _editConflict=null,_renderPending=false,_flashIds={};
-const TRANSIENT_KEYS=['_conflict','_cloudNewer','_cloudNewerBy','_forceSave','_cloudAt','_cloudBy'];
+const TRANSIENT_KEYS=['_conflict','_cloudNewer','_cloudNewerBy','_forceSave','_cloudAt','_cloudBy','_follow'];
 
 /* แถวจาก server → ใบเสนอราคาในเครื่อง (null = ข้ามแถวนี้) */
 function remoteFromRow(row){
@@ -4076,6 +4221,7 @@ function remoteFromRow(row){
   remote.isSynced=true;
   remote._cloudAt=row.updatedAt||remote.updatedAt||'';
   if(row.by)remote._cloudBy=row.by;
+  if(row.follow)remote._follow=row.follow;      // v4.3: ผู้รับผิดชอบ + SLA จาก server
   return remote;
 }
 /* กติกาการรวม — คืน 'added' | 'merged' | 'kept-local' | 'same' | null */
@@ -4086,6 +4232,7 @@ function mergeRemoteRow(row,opts){
   if(i<0){if(remote.deleted)return null;QUOTES.push(remote);return 'added'}
   const local=QUOTES[i];
   if(opts&&opts.force){QUOTES[i]=remote;return 'merged'}
+  if(row.follow)local._follow=row.follow;       // จำนวนวันรอเปลี่ยนทุกวันแม้เนื้อหาใบไม่เปลี่ยน
   const rt=Date.parse(remote._cloudAt)||0;
   if(local.isSynced===false){
     // ในเครื่องมีงานที่ยังไม่ได้ส่ง → ไม่ทับ แต่จำไว้ว่า Cloud ใหม่กว่า (ใช้เตือน conflict)
@@ -4619,7 +4766,7 @@ function salesCard(q){
   const priceHTML=isSR
     ? '<span class="hint">คำขอราคา — ยังไม่มีราคา</span>'
     : (seePrice
-        ? (tot.total>0?`<b class="mono" style="font-size:17px;color:var(--orange-deep)">฿${fmt0(tot.total)}</b>`
+        ? (tot.total>0?`<b class="mono" style="font-size:17px;color:var(--orange-deep)">${money(tot.total,curOf(q))}</b>`
                       :'<span class="hint">กำลังทำราคา</span>')
         : `<span class="tag grey" style="font-size:11px">🔒 ${st==='Approved'?('รอ '+esc(gatekeeperName())+' ปล่อยราคา'):'ยังไม่ปล่อยราคา'}</span>`);
   return `<div class="scard${overdue?' overdue':''}">
@@ -4704,7 +4851,7 @@ function viewSalesDashboard(){
         <td class="mono" style="font-size:11px;font-weight:600">${esc(q.docNo||q.header.ref||'—')}</td>
         <td><b>${esc(q.header.title||'(ไม่มีชื่อ)')}</b><div class="hint">${esc(q.header.customer||'')}</div></td>
         <td>${ownerTag(q)}</td>
-        <td class="r mono" style="font-weight:700">${fmt0(quoteTotals(q).total)}</td>
+        <td class="r mono" style="font-weight:700">${money(quoteTotals(q).total,curOf(q))}</td>
         <td><button class="btn tiny" style="background:var(--blue)" onclick="releasePrice('${q.id}')">🔓 ปล่อยราคา</button></td></tr>`).join('')}
     </tbody></table></div></div></div>`:''}
   <div class="row-flex no-print" style="justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap">

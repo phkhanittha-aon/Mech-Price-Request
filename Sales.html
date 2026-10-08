@@ -166,6 +166,41 @@ table.pt .r{text-align:right}
 </style>
 </head>
 <body>
+<script>
+/* ============================================================ BOOT GUARD (v4.2.1)
+   ถ้าสคริปต์หลักพัง / ไฟล์ถูกวางไม่ครบ / เบราว์เซอร์บล็อก — แสดงสาเหตุบนจอแทน "หน้าว่าง"
+   สคริปต์หลักต้องตั้ง window.__booted=true เมื่อเริ่มทำงานสำเร็จ */
+(function(){
+  var shown=false;
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function show(msg){
+    if(shown)return;shown=true;
+    var d=document.createElement('div');d.id='bootErr';
+    d.setAttribute('style','position:fixed;inset:0;z-index:99999;background:#fff;color:#1c1610;font:14px/1.75 system-ui,sans-serif;padding:24px;overflow:auto');
+    d.innerHTML='<div style="max-width:640px;margin:0 auto">'+
+      '<h2 style="color:#bb3b2f;font-size:20px;margin:0 0 8px">⚠️ หน้าเว็บโหลดไม่สำเร็จ</h2>'+
+      '<div>สาเหตุที่ระบบตรวจพบ:</div><pre style="white-space:pre-wrap;background:#fae8e5;padding:10px 12px;border-radius:8px;font-size:12.5px">'+esc(msg)+'</pre>'+
+      '<ol style="padding-left:20px;margin:10px 0">'+
+      '<li>ถ้าข้อความบอกว่า <b>SyntaxError / Unexpected end</b> หรือ <b>สคริปต์ไม่ทำงานจนจบ</b> = ไฟล์ HTML ใน Apps Script ถูกวางไม่ครบ → ลบเนื้อหาไฟล์ทิ้งแล้ววางใหม่ทั้งไฟล์ กด 💾 Save → Deploy เวอร์ชันใหม่</li>'+
+      '<li>เปิดลิงก์ <code>…/exec?diag=1</code> เพื่อตรวจว่าไฟล์บน Apps Script ครบหรือไม่</li>'+
+      '<li>ลองกดปุ่มด้านล่างเพื่อล้างข้อมูลเก่าในเครื่อง แล้วกด F5</li></ol>'+
+      '<button id="bootReset" style="padding:9px 14px;border:0;border-radius:9px;background:#e8740c;color:#fff;font-weight:600;cursor:pointer">ล้างข้อมูลในเครื่อง</button> '+
+      '<span style="font-size:12px;color:#8a7d6c">('+esc(document.title)+')</span></div>';
+    (document.body||document.documentElement).appendChild(d);
+    var b=document.getElementById('bootReset');
+    if(b)b.onclick=function(){try{localStorage.clear()}catch(e){}b.textContent='ล้างแล้ว — กด F5 เพื่อโหลดใหม่';};
+  }
+  window.__bootFail=show;
+  window.addEventListener('error',function(e){
+    if(window.__booted)return;
+    show((e&&e.message||'Script error')+(e&&e.filename?'\n@ '+String(e.filename).split('/').pop()+' บรรทัด '+e.lineno:''));
+  });
+  window.addEventListener('load',function(){
+    setTimeout(function(){if(!window.__booted)show('สคริปต์หลักไม่ทำงานจนจบ (มักเกิดจากไฟล์ HTML ถูกวางไม่ครบ / ถูกตัดท้าย)');},4000);
+  });
+})();
+</script>
+
 
 <div id="login">
   <div class="login-card"><div class="login-top"></div>
@@ -840,6 +875,7 @@ function modal(html,wide){$('#modalRoot').innerHTML=`<div class="ov" onclick="if
 function closeModal(){$('#modalRoot').innerHTML=''}
 let _tt;function toast(msg,kind){const t=$('#toast');t.className='toast '+(kind||'')+' show';t.textContent=msg;clearTimeout(_tt);_tt=setTimeout(()=>t.className='toast '+(kind||''),3000)}
 
+window.__booted=true;   // boot guard: สคริปต์หลักโหลดครบแล้ว
 (async function start(){
   $('#buildStamp').textContent=BUILD;
   if(LOGO){$('#loginLogo').src=LOGO;$('#topLogo').src=LOGO}else{$('#loginLogo').remove();$('#topLogo').remove()}

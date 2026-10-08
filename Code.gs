@@ -138,6 +138,7 @@ function stripCost_(v) {
 function doGet(e) {
   var prm = (e && e.parameter) || {};
   var type = prm.type || '';
+  if (prm.diag) return HtmlService.createHtmlOutput(diagHtml_()).setTitle('MGS — ตรวจระบบ');
   if (!type) {
     var page = String((e && e.parameter && e.parameter.app) || (e && e.parameter && e.parameter.page) || DEFAULT_PAGE).toLowerCase();
     var isSales = (page === 'sales');
@@ -165,6 +166,37 @@ function apiPost(jsonStr) {
 
 /** google.script.run.apiGet(type, token, arg) — arg = id (type 'quote') หรือ since (type 'changes') */
 function apiGet(type, token, arg) { return JSON.stringify(apiGetObj_(type, token, arg)); }
+
+/** หน้าตรวจระบบ ( …/exec?diag=1 ) — ไม่ต้องล็อกอิน · ไม่แสดงข้อมูลผู้ใช้หรือราคา
+ *  ใช้ตรวจอาการ "หน้าว่าง": ไฟล์ HTML มีครบไหม · ถูกวางไม่ครบ (ไม่มี </html> ท้ายไฟล์) ไหม · Deploy เวอร์ชันใหม่แล้วหรือยัง */
+function diagHtml_() {
+  var rows = [];
+  var add = function (name, ok, detail) {
+    rows.push('<tr><td>' + (ok ? '✅' : '❌') + '</td><td><b>' + name + '</b></td><td>' + detail + '</td></tr>');
+  };
+  add('Code.gs', true, 'version 4.2 · ' + nowISO_());
+  [['Index', 'build 4.2'], ['Sales', 'Sales build 4.2']].forEach(function (f) {
+    try {
+      var c = HtmlService.createHtmlOutputFromFile(f[0]).getContent();
+      var tail = c.replace(/\s+$/, '').slice(-7).toLowerCase();
+      var complete = tail === '</html>';
+      var guard = c.indexOf('window.__booted=true') > 0;
+      add('ไฟล์ HTML "' + f[0] + '"', complete && c.indexOf(f[1]) > 0,
+        (c.length / 1024).toFixed(0) + ' KB · ' + (complete ? 'ครบถึง &lt;/html&gt;' : '<b style="color:#bb3b2f">ไม่ครบ — ไฟล์ถูกตัดท้าย ให้วางใหม่ทั้งไฟล์</b>') +
+        ' · ' + (c.indexOf(f[1]) > 0 ? 'เวอร์ชัน ' + f[1] : '<b style="color:#bb3b2f">ไม่ใช่เวอร์ชัน 4.2</b>') + (guard ? '' : ' · ไม่มี boot guard'));
+    } catch (e) {
+      add('ไฟล์ HTML "' + f[0] + '"', false, 'ไม่พบไฟล์ชื่อ <b>' + f[0] + '</b> (ต้องตั้งชื่อตรงตัวพิมพ์ ไม่ต้องใส่ .html) — ' + String(e));
+    }
+  });
+  try {
+    var uh = headerIndex_(sheet_(SH.USERS));
+    add('แท็บ Users', !!(uh.Email && uh.Active), uh.Email ? 'มีคอลัมน์ Email / Active' : 'ยังไม่มีคอลัมน์ Email → รัน setup() หนึ่งครั้ง');
+  } catch (e) { add('Google Sheet', false, String(e)); }
+  return '<meta name="viewport" content="width=device-width,initial-scale=1"><div style="font:14px/1.7 system-ui,sans-serif;max-width:760px;margin:24px auto;padding:0 16px">' +
+    '<h2>MGS Pricing — ตรวจระบบ</h2><table cellpadding="8" style="border-collapse:collapse;width:100%">' + rows.join('') + '</table>' +
+    '<p style="color:#8a7d6c;font-size:12.5px">ถ้าทุกข้อเป็น ✅ แต่หน้ายังว่าง: ลองเปิดในหน้าต่าง Incognito ที่ล็อกอิน Google บัญชีเดียว ' +
+    '(Apps Script มักแสดงหน้าว่างเมื่อเบราว์เซอร์ล็อกอินหลายบัญชีพร้อมกัน)</p></div>';
+}
 
 /* ============================================================ SESSION / AUTH */
 
@@ -307,7 +339,7 @@ function handle_(p) {
   try {
     if (action === 'login') return login_(p);
     if (action === 'ssoLogin') return ssoLogin_(p);
-    if (action === 'ping')  return { ok:true, pong:true, time:nowISO_(), version:'4.2' };
+    if (action === 'ping')  return { ok:true, pong:true, time:nowISO_(), version:'4.2.1' };
 
     var sess = auth_(p.token);
     if (!sess) return { ok:false, error:'AUTH_REQUIRED', code:401 };

@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>MGS Sales — ขอราคา &amp; ติดตามงานขาย</title>
+<style>
+:root{
+  --ink:#1c1610; --ink-2:#4a4138; --muted:#8a7d6c;
+  --paper:#faf6ef; --surface:#ffffff; --surface-2:#f5efe5;
+  --line:#ebe2d4; --line-2:#ddd1bf;
+  --orange:#e8740c; --orange-deep:#c25803; --orange-soft:#fdeede;
+  --green:#2e8a5b; --green-soft:#e4f3ea;
+  --amber:#c98a12; --amber-soft:#fbf1da;
+  --blue:#2f6bb0; --blue-soft:#e7f0fa;
+  --red:#bb3b2f; --red-soft:#fae8e5;
+  --grey:#8a7d6c; --grey-soft:#efe9df;
+  --shadow:0 1px 2px rgba(40,28,12,.05),0 8px 28px rgba(40,28,12,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{font-family:'Inter','Sarabun',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px;color:var(--ink)}
+a{color:var(--orange-deep);text-decoration:none}
+.hidden{display:none!important}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.hint{font-size:12px;color:var(--muted)}
+.spacer{flex:1}
+.row{display:flex;align-items:center;gap:8px}
+.wrap{flex-wrap:wrap}
+/* buttons / inputs */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:11px;background:var(--orange);color:#fff;font-weight:600;white-space:nowrap}
+.btn:hover{background:var(--orange-deep)}
+.btn:disabled{opacity:.55;cursor:wait}
+.btn.ghost{background:var(--surface);color:var(--ink-2);border:1px solid var(--line-2)}
+.btn.ghost:hover{background:var(--surface-2)}
+.btn.green{background:var(--green)}.btn.blue{background:var(--blue)}.btn.red{background:var(--red)}
+.btn.sm{padding:7px 12px;font-size:13px;border-radius:9px}
+.btn.full{width:100%}
+.inp{width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface)}
+.inp:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft)}
+textarea.inp{resize:vertical}
+.lbl{display:block;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:5px}
+.req::after{content:' *';color:var(--red)}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap}
+.tag.green{background:var(--green-soft);color:var(--green)}.tag.amber{background:var(--amber-soft);color:var(--amber)}
+.tag.blue{background:var(--blue-soft);color:var(--blue)}.tag.red{background:var(--red-soft);color:var(--red)}
+.tag.grey{background:var(--grey-soft);color:var(--grey)}.tag.orange{background:var(--orange-soft);color:var(--orange-deep)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+.card-h{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.card-h h2{font-size:15px}
+.card-b{padding:16px 18px}
+/* login */
+#login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(160deg,#fff7ec,#f4ece0)}
+.login-card{width:100%;max-width:400px;background:var(--surface);border-radius:20px;box-shadow:0 20px 60px rgba(40,28,12,.14);overflow:hidden}
+.login-top{height:6px;background:linear-gradient(90deg,var(--orange),#f2b33d)}
+.login-body{padding:28px 26px}
+.login-logo{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.login-logo img{height:44px}
+.login-logo b{display:block;font-size:16px}.login-logo span{font-size:12px;color:var(--muted)}
+.login-body h1{font-size:20px;margin-bottom:4px}
+.field{margin-bottom:14px}
+.login-err{color:var(--red);font-size:13px;min-height:18px;margin-top:10px;line-height:1.5}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:16px 0}
+.or::before,.or::after{content:'';flex:1;height:1px;background:var(--line)}
+.gbtn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:10px;border:1px solid var(--line-2);border-radius:11px;background:#fff;font-weight:600}
+.gbtn:hover{background:var(--surface-2)}
+/* app shell */
+.top{position:sticky;top:0;z-index:30;background:rgba(250,246,239,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1180px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px}
+.brand{display:flex;align-items:center;gap:9px}
+.brand img{height:32px}.brand b{font-size:14px;display:block;line-height:1.1}.brand span{font-size:11px;color:var(--muted)}
+.tabs{display:flex;gap:4px;margin-left:10px}
+.tab{padding:8px 13px;border-radius:10px;font-weight:600;color:var(--ink-2);font-size:13.5px;display:flex;align-items:center;gap:6px}
+.tab:hover{background:var(--surface-2)}
+.tab.on{background:var(--orange-soft);color:var(--orange-deep)}
+.me{display:flex;align-items:center;gap:9px;padding:4px 6px 4px 4px;border-radius:12px}
+.me:hover{background:var(--surface-2)}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--orange),#f2b33d);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 32px}
+.avatar.lg{width:52px;height:52px;flex:0 0 52px;font-size:21px}
+.me .nm{font-weight:600;font-size:13px;line-height:1.15}.me .rl{font-size:11px;color:var(--muted)}
+.live{font-size:11px;color:var(--green);font-weight:600;white-space:nowrap}
+.live.off{color:var(--muted);font-weight:500}
+main{max-width:1180px;margin:0 auto;padding:18px 16px 96px}
+.bottom-nav{display:none}
+@media(max-width:760px){
+  .tabs,.me .txt,.live{display:none}
+  .bottom-nav{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:40;background:var(--surface);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+  .bottom-nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;font-weight:600;color:var(--muted);padding:6px 0;border-radius:10px}
+  .bottom-nav button .ic{font-size:19px;line-height:1}
+  .bottom-nav button.on{color:var(--orange-deep);background:var(--orange-soft)}
+}
+/* person header + kpis */
+.person{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.person h1{font-size:20px;line-height:1.2}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:16px 0}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer;transition:box-shadow .12s}
+.kpi:hover{box-shadow:var(--shadow)}
+.kpi.on{border-color:var(--orange);box-shadow:inset 0 -3px 0 var(--orange)}
+.kpi .l{font-size:11.5px;color:var(--muted);font-weight:600}
+.kpi .v{font-size:24px;font-weight:700;line-height:1.2}
+.kpi .s{font-size:11px;color:var(--muted)}
+@media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}.kpis .kpi:first-child{grid-column:span 2}}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.search{flex:1;min-width:200px;max-width:380px}
+/* job cards */
+.jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));gap:12px}
+.job{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 14px;display:flex;flex-direction:column;gap:8px}
+.job.alert{border-color:var(--red);box-shadow:inset 3px 0 0 var(--red)}
+.job.flash{animation:flash 2.4s ease-out}
+@keyframes flash{0%{box-shadow:0 0 0 3px var(--orange)}100%{box-shadow:0 0 0 0 transparent}}
+.job-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.job-t{font-weight:700;font-size:14px;line-height:1.3}
+.job-c{font-size:12.5px;color:var(--ink-2)}
+.job-no{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);white-space:nowrap}
+.job-mid{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.job-val{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px}
+.job-meta{font-size:11.5px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+.job-acts{display:flex;gap:6px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:9px}
+.empty{text-align:center;padding:40px 16px;color:var(--muted)}
+.empty .big{font-size:36px;margin-bottom:6px}
+/* team */
+.team{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:12px}
+.tcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;display:flex;flex-direction:column;gap:10px}
+.tcard:hover{box-shadow:var(--shadow)}
+.tstats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+.tstats div{background:var(--surface-2);border-radius:9px;padding:6px 2px}
+.tstats b{display:block;font-size:17px}.tstats span{font-size:10.5px;color:var(--muted)}
+/* request form */
+.fgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.fgrid .s2{grid-column:span 2}.fgrid .s4{grid-column:1/-1}
+@media(max-width:760px){.fgrid{grid-template-columns:1fr 1fr}.fgrid .s2,.fgrid .s4{grid-column:1/-1}}
+.lines{display:flex;flex-direction:column;gap:10px}
+.lrow{display:grid;grid-template-columns:28px 2.2fr 3fr .8fr .9fr 1.1fr 1.6fr 34px;gap:8px;align-items:end;background:var(--surface-2);border-radius:12px;padding:10px}
+.lrow .no{font-weight:700;color:var(--muted);text-align:center;padding-bottom:10px}
+.lrow label{font-size:10.5px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px}
+.lrow .inp{padding:8px 9px;font-size:13px}
+.lrow .del{height:38px;border-radius:9px;color:var(--red);background:var(--red-soft)}
+@media(max-width:900px){.lrow{grid-template-columns:1fr 1fr}.lrow .no{grid-column:1/-1;text-align:left;padding:0}.lrow .c2{grid-column:1/-1}.lrow .del{grid-column:1/-1}}
+.formbar{position:sticky;bottom:0;z-index:20;margin-top:16px;display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap;background:rgba(250,246,239,.95);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:12px 0}
+@media(max-width:760px){.formbar{bottom:62px;gap:6px}.formbar #draftHint{display:none}.formbar .btn{padding:9px 11px;font-size:13px}}
+/* modal / toast */
+.ov{position:fixed;inset:0;background:rgba(28,22,16,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:14px}
+.modal{background:var(--surface);border-radius:18px;width:100%;max-width:520px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.25)}
+.modal.wide{max-width:820px}
+.modal-h{display:flex;align-items:center;gap:8px;padding:15px 18px;border-bottom:1px solid var(--line)}
+.modal-h h3{font-size:16px}
+.modal-b{padding:16px 18px;overflow:auto}
+.modal-f{display:flex;gap:8px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--line);flex-wrap:wrap}
+.x{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:16px}
+.x:hover{background:var(--surface-2)}
+.toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;opacity:0;transition:.2s;z-index:80;max-width:92vw;text-align:center;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.good{background:var(--green)}.toast.bad{background:var(--red)}
+table.pt{width:100%;border-collapse:collapse;font-size:13px}
+table.pt th{text-align:left;font-size:11px;color:var(--muted);font-weight:700;padding:7px 8px;background:var(--surface-2)}
+table.pt td{padding:8px;border-top:1px solid var(--line);vertical-align:top}
+table.pt .r{text-align:right}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+.banner{border-radius:12px;padding:11px 14px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.banner.blue{background:var(--blue-soft);border:1px solid rgba(47,107,176,.3)}
+.banner.amber{background:var(--amber-soft);border:1px solid rgba(201,138,18,.35)}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line-2);border-top-color:var(--orange);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="login-card"><div class="login-top"></div>
+    <div class="login-body">
+      <div class="login-logo"><img id="loginLogo" alt=""><div><b>M Global Sourcing</b><span>Sales · ขอราคา &amp; ติดตามงาน</span></div></div>
+      <h1>เข้าสู่ระบบ</h1>
+      <div class="hint" style="margin-bottom:18px">ใช้อีเมลบริษัทที่ลงทะเบียนไว้กับผู้ดูแลระบบ</div>
+      <div id="ssoBox" class="hidden">
+        <button class="gbtn" onclick="ssoLogin(false)"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>เข้าสู่ระบบด้วยบัญชี Google</button>
+        <div class="or">หรือใช้อีเมล + รหัสผ่าน</div>
+      </div>
+      <div class="field"><label class="lbl">อีเมล (หรือ Username)</label>
+        <input class="inp" id="loginUser" type="email" inputmode="email" placeholder="name@mglobalsourcing.com" autocomplete="username" autocapitalize="off"></div>
+      <div class="field"><label class="lbl">รหัสผ่าน</label>
+        <input class="inp" id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+      <button class="btn full" id="loginBtn" onclick="doLogin()">เข้าสู่ระบบ →</button>
+      <div class="login-err" id="loginErr"></div>
+      <div class="hint" style="margin-top:12px;line-height:1.7">ยังไม่มีบัญชี / ลืมรหัสผ่าน? ติดต่อผู้ดูแลระบบ
+        <div class="mono" style="font-size:10.5px;opacity:.7" id="buildStamp"></div></div>
+    </div></div>
+</div>
+
+<div id="app" class="hidden">
+  <header class="top"><div class="top-in">
+    <div class="brand"><img id="topLogo" alt=""><div><b>MGS Sales</b><span>ขอราคา &amp; ติดตามงาน</span></div></div>
+    <nav class="tabs" id="tabs"></nav>
+    <div class="spacer"></div>
+    <span class="live off" id="live"></span>
+    <button class="me" onclick="openMe()" title="บัญชีของฉัน"><div class="avatar" id="meAv">?</div>
+      <div class="txt" style="text-align:left"><div class="nm" id="meName">—</div><div class="rl" id="meRole">—</div></div></button>
+  </div></header>
+  <main id="main"></main>
+  <nav class="bottom-nav" id="bnav"></nav>
+</div>
+<div id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   MGS SALES APP (build 4.2) — ใช้คู่กับ Code.gs v4.2
+   - ล็อกอินด้วยอีเมล (คอลัมน์ Email ในแท็บ Users) หรือ Google Sign-in
+   - สิทธิ์มาจาก server เท่านั้น (role ในแท็บ Users):
+       Sales          → เห็น/ขอราคาเฉพาะงานของตัวเอง
+       Sales Manager  → เห็นหน้า Sales ทุกคน (ไม่มีต้นทุน)
+       Sourcing / Manager (GM, Admin, Procurement Mgr, BD Mgr) → เห็นทุกคน + ขอราคาแทน Sales ได้
+   - แอปนี้ไม่เคยได้รับต้นทุน / %GP รายบรรทัด (server ส่งเฉพาะ SalesDetail)
+   ============================================================ */
+const BUILD='2026-10-08 · Sales build 4.2';
+const CLOUD_URL='https://script.google.com/macros/s/AKfycby6ZckOc1mv5eI8PDzcgscWCBqYyOWCgXTohIaqczJuIbKIQ597C8zQ_frMHpZhLHZV/exec';
+const HASH_SALT='mgs-internal-2025';                 // ต้องตรงกับ Index.html
+const TIMEOUT_MS=15000, POLL_MS=30000, OVERLAP_MS=90000;
+const SALES_UPDATE_DAYS=7;                           // BUSINESS RULE: งานที่ราคาถึงมือ Sales ต้องอัปเดตอย่างน้อยทุก 7 วัน
+const GROUP_TYPES=['Inverter','Mounting','DC Cable','EV Charger','ESS','Residential'];
+const DEF_LISTS={priceTerms:['Special price','MOU price','Standard Price'],
+  incoterms:['CIF at MGS','DDP at MGS','DDU at MGS','EXWORKS','FOB','CIF at port','DAP (Air)','DPP at site'],
+  units:['pcs','set','M','Unit','kW','MW','MWH']};
+const CUST_STAGES=['เพิ่งส่งราคาให้ลูกค้า','ลูกค้ากำลังเทียบราคา','อยู่ระหว่างต่อรองราคา','รออนุมัติภายในของลูกค้า','ใกล้ปิดการขาย','ลูกค้าเลื่อนโครงการ','คู่แข่งได้งาน'];
+const NEXT_STEPS=['โทรติดตาม','นัดเข้าพบลูกค้า','ส่งข้อมูลเพิ่มเติม','ขอปรับราคาจาก Sourcing','รอ PO','ปิดการขาย','ยุติการติดตาม'];
+const ROLE_TH={'GM':'ผู้บริหาร (GM)','Admin':'ผู้ดูแลระบบ','Procurement Mgr':'ผู้จัดการ Procurement','BD Mgr':'ผู้จัดการ BD',
+  'Sourcing':'Sourcing','Sales Manager':'ผู้จัดการทีมขาย','Sales':'Sales'};
+/* สินค้าในแคตตาล็อก (รหัส · ชื่อ · กลุ่ม · หน่วย — ไม่มีราคา/ต้นทุน) — สร้างจาก Index.html ด้วย tools/sync_sales_catalog.py */
+const CATALOG_LITE=/*CATALOG*/[["MSSR-SGMeteo01","Meteo Station PC-4 Pro Wind speed, Wind direction, Global radiation,Air temperature, Relative humidi","SENSOR","PCS"],["MBTR-SG0101","SBP4K8,Battery,","BATTERY","PCS"],["MBTR-SG101CP01","ST,101 kWh Lithium-ion battery cabinet,","BATTERY","PCS"],["MBTR-SG111CP01","ST,111 kWh Li-ON battery cabinet,","BATTERY","PCS"],["MBTR-SGBP48V01","BP,48V Lithium ion Battery,","BATTERY","PCS"],["MBTR-SGSBR09610","SBR096,PV HYBRID INVERTER SERIES,SBR BATTERY SERIES,10 YEAR,9.6 kWh","BATTERY","Manual"],["MBTR-SGSBR12810","SBR128,PV HYBRID INVERTER SERIES,SBR BATTERY SERIES,10 YEAR,12.8 kWh","BATTERY","PCS"],["MBTR-SGST11101","ST111CP,Energy storage  Lithium-ion Battery CABINET:ST111CP,","BATTERY","PCS"],["MBTR-SGST500CP02","ST500CP,STOAGE SYSTEM  BATTERY  2 YEAR,537 kWh","BATTERY","PCS"],["MCNT-LDM60101","LD-MC4,Leader Fuse Connector 25A,1000V MC4 PV Cable,6mm2 Black","CONNECTOR","Manual"],["MCNT-XEM40101","EPR-MC4-02,Contact matarial Copper (30A), tin plated,MC02 DC1500V","CONNECTOR","Manual"],["MCNT-XEM40102","EPR-MC4-02,Contact matarial Copper (25A), tin plated,MC02 DC1500V","CONNECTOR","Manual"],["MCNT-XEM40201","EPR-MC4-07,105g/PC,105G/PC DC1500V","CONNECTOR","Manual"],["MCNT-XEM40301","EPR-MC4-10,Branch connerctor 30A,DC1500V,","CONNECTOR","Manual"],["MCNT-XEM40401","EPR-MC4-10,Branch connerctor 25A,DC1500V,","CONNECTOR","Manual"],["MCNT-XEM40501","EPR-MC4-10,Branch connerctor 25A,DC1000V,","CONNECTOR","Manual"],["MCNT-XEM40601","EPR-MC4-10,Branch connerctor 32A,DC1500V,","CONNECTOR","Manual"],["MDCC-EM4sq01","DC,Cable H1Z2Z2-K 1.5 KV 4 Sq.mm.,100 M","DC CABLE","M"],["MDCC-HT4sq03","DC,Cable H1Z2Z2-K 1.5 KV 4 Sq.mm.,5000 M","DC CABLE","M"],["MDCC-HT4sq07","DC,Cable H1Z2Z2-K 1.5 KV 4 Sq.mm.,1000 M","DC CABLE","M"],["MDCC-HT4sq08","DC,Cable H1Z2Z2-K 1.5 KV 4 Sq.mm.Black,4000 M","DC CABLE","M"],["MDCC-HT4sq10","DC,Cable H1Z2Z2-K 1.5 KV 4 Sq.mm. Red,4000 M","DC CABLE","M"],["MDCC-HT6sq04","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm.,5000 M","DC CABLE","M"],["MDCC-HT6sq05","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm.,1000 M","DC CABLE","M"],["MDCC-HT6sq09","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm.,1000 M","DC CABLE","M"],["MDCC-LHFD-0.601","CABLE,FD-0.6/1KV-CV,3*4 MM2,","DC CABLE","PCS"],["MDCC-LK10M01","CAT5E,CABLE 10 M,Blue ,","DC CABLE","PCS"],["MDCC-TYDCBA0101","DC BATTERY,25 SQ.MM,","DC CABLE","M"],["MDCC-VN4sq01","DC,Cable H1Z2Z2-K 1.5 KV 4 Sq.mm.,4000 M","DC CABLE","M"],["MDCC-VN4sq04","DC,Cable H1Z2Z2-K 1.5 KV 4 Sq.mm.1000 M,","DC CABLE","M"],["MDCC-VN6sq02","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm. Black,4000 M","DC CABLE","M"],["MDCC-VN6sq03","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm. Red,4000 M","DC CABLE","M"],["MDLG-SGC10001","COM100E,Smart Communication Box / 2 YEAR,","DATA LOGGER","PCS"],["MDLG-SGC10002","COM100A,Smart Communication Box / 2 YEAR,","DATA LOGGER","PCS"],["MDLG-SGC10003","COM100E,Smart Communication Box with optimizer version/ 2 YEAR,","DATA LOGGER","PCS"],["MDLG-SGEMS01","EMS3000CP,COMMERCIAL AND INDUSTRIAL ENERGY STORAGE POWER PLANTS,","DATA LOGGER","PCS"],["MDLG-SGEMU01","EMU200A,ENERGY MANAGEMENT UNIT LOGGER 4000,","DATA LOGGER","PCS"],["MDLG-SGLG101","LOGGER1000,V12,","DATA LOGGER","PCS"],["MDLG-SGWF0101","WiFi,Communication Module,","DATA LOGGER","PCS"],["MEMT-HWD66604","DTSU666,3-Phase Hybrid Inverter (Three-phase Smart Energy Meter)HW,","ENERGY METER","PCS"],["MEMT-PIMT61001","00,Weidmuller Smart Energy Meter 610/ 1Y (PISANU) 1,","ENERGY METER","PCS"],["MEMT-PIMT61002","00,Weidmuller Smart Energy Meter 610/ 2Y (PISANU),","ENERGY METER","PCS"],["MEMT-PIMT61003","Weidmuller,Smart Energy Meter 610-230/ 2YEAR,","ENERGY METER","PCS"],["MEMT-PIMT61004","Weidmuller,Smart Energy Meter 610-230/ 1YEAR,","ENERGY METER","PCS"],["MEMT-SGD66603","DTSU666,3-Phase Hybrid Inverter (Three-phase Smart Energy Meter),","ENERGY METER","PCS"],["MEMT-SGDTSD602","DTSD1352,C/1(6)A Three-phase Smart Energy Meter, Without CT","ENERGY METER","PCS"],["MEMT-SGDTSD8001","DTSD1352,C/10 (80)A (Three-phase Smart Energy Meter),","ENERGY METER","PCS"],["MEMT-SGMT61001","Weidmuller,Smart Energy Meter 610/ 1YEAR,","ENERGY METER","PCS"],["MEMT-SGS10001","S100,(Single-phase Smart Energy Meter),","ENERGY METER","PCS"],["MINV-SG10K05","SG10KTL-M,SUNGROW INVERTER 10KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG10K10","SG10KTL-M,SUNGROW INVERTER 10KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG10RT-P205-01","SG10RT-P2,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 10 KW,WITH OPTIMIZER,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG10RT-P205","SG10RT-P2,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 10 KW,WARRANTY 5 YRAR","INVERTER","PCS"],["MINV-SG10RT-P210","SG10RT-P2,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 10 KW,WITH OPTIMIZER,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG10RT05","SG10RT,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 10 KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG10RT10","SG10RT,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 10 KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG110CX(AFCI)05","SG110CX,(AFCI)SUNGROW INVERTER 110KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG110CX(AFCI)10","SG110CX,(AFCI)SUNGROW INVERTER 110KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG110CX(AFCI)B05","SG110CX,SUNGROW INVERTER 110KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG110CX05","SG110CX,SUNGROW INVERTER 110KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG110CX10","SG110CX,SUNGROW INVERTER 110KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG125CX-P205-01","SG125CX-P2,SUNGROW INVERTER 125KVA, WITH OPTIMIZER VERSION,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG125CX-P205","SG125CX-P2,SUNGROW INVERTER 125KVA,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG125CX-P210-01","SG125CX-P2,SUNGROW INVERTER 125KVA, WITH OPTIMIZER VERSION,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG125CX-P210","SG125CX-P2,SUNGROW INVERTER 125KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG125H05","SG125HV,SUNGROW INVERTER 125KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG125H10","SG125HV,SUNGROW INVERTER 125KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG12K05","SG12kW,SUNGROW INVERTER 12KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG12K10","SG12kW,SUNGROW INVERTER 12KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG12K15","SG12kW,SUNGROW INVERTER 12KW,WARRANTY 15 YEAR","INVERTER","PCS"],["MINV-SG15RT-P205-01","SG15RT-P2,(WINET INCKLUDED IN PACKAGE), SUNGROW INVERTER 15 KW WITH OPTIMIZER VERSION,WARRANTY 5 YEA","INVERTER","PCS"],["MINV-SG15RT-P205","SG15RT-P2,(WINET INCKLUDED IN PACKAGE), SUNGROW INVERTER 15 KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG15RT-P210","SG15RT-P2,(WINET INCKLUDED IN PACKAGE), SUNGROW INVERTER 15 KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG15RT05","SG15RT,(WINET INCKLUDED IN PACKAGE), SUNGROW INVERTER 15 KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG15RT10","SG15RT,(WINET INCKLUDED IN PACKAGE), SUNGROW INVERTER 15 KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG20RT-P205","SG20RT-P2,(WINET INCKLUDED IN PACKAGE), SUNGROW INVERTER 20 KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG20RT-P210-01","SG20RT-P2,(WINET INCKLUDED IN PACKAGE), SUNGROW INVERTER 20 KW WITH OPTIMIZER VERSION,WARRANTY 10 YE","INVERTER","PCS"],["MINV-SG20RT-P210","SG20RT-P2,(WINET INCKLUDED IN PACKAGE), SUNGROW INVERTER 20 KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG20RT05","SG20RT,(WINET INCKLUDED IN PACKAGE), SUNGROW INVERTER 20 KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG20RT10","SG20RT,(WINET INCKLUDED IN PACKAGE), SUNGROW INVERTER 20 KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG250HX05","SG250HX,SUNGROW INVERTER 250KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG3.0RS-S05","SG3.0RS-S,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 4.5 KWP,WARRANTY 5 YAER","INVERTER","PCS"],["MINV-SG3.0RS05","SG3.0RS,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 4.5 KWP,WARRNTY 5 YEAR","INVERTER","PCS"],["MINV-SG3.0RS10","SG3.0RS,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 4.5 KWP,WARRANTY 10 YAER","INVERTER","PCS"],["MINV-SG350HX015","SG350HX,SUNGROW INVERTER 350HX, 16 MPPT,WARRANTY 15 YEAR","INVERTER","PCS"],["MINV-SG350HX05-1","SG350HX,SUNGROW INVERTER 350HX, , 16 MPPT,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG350HX05","SG350HX,SUNGROW INVERTER 350HX,  12 MPPT,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG350HX10-1","SG350HX,SUNGROW INVERTER 350HX, 16 MPPT,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG350HX10","SG350HX,SUNGROW INVERTER 350HX, 12 MPPT,WARRANTY 10 YAER","INVERTER","PCS"],["MINV-SG350HX15","SG350HX,SUNGROW INVERTER 350HX, 12 MPPT,WARRANTY 15 YAER","INVERTER","PCS"],["MINV-SG36K05","SG36KTL-M,SUNGROW INVERTER 36KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG3K05","SG3K-S,SUNGROW INVERTER 3KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG3K10","SG3K-S,SUNGROW INVERTER 3KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG5.0RS05","SG5.0RS,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 7.5 KWP,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG5.0RS10-01","SG5.0RS,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 7.5 KWP,WITH OPTIMIZER VERSION,WARRANTY 10 YEA","INVERTER","PCS"],["MINV-SG5.0RS10","SG5.0RS,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 7.5 KWP,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG5.0RT-P205","SG5.0RT-P2,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 5 KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG5.0RT-P210","SG5.0RT-P2,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 5 KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG50CX-P205-01","SG50CX-P2,SUNGROW INVERTER 50KW, WITH OPTIMIZER VERSION WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG50CX-P205","SG50CX-P2,SUNGROW INVERTER 50KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG50CX-P210-01","SG50CX-P2,SUNGROW INVERTER 50KW, WITH OPTIMIZER VERSION,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG50CX(AFCI)05","SG50CX,(AFCI)SUNGROW INVERTER 50KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG50CX(AFCI)10","SG50CX,(AFCI)SUNGROW INVERTER 50KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG50CX05","SG50CX,SUNGROW INVERTER 50KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG50CX10","SG50CX,SUNGROW INVERTER 50KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG5H05","SH5K-30,Sungrow Hybrid 1 Phase Inverter 5 kW, Li-ion battery/Lead-acid battery 48 V, Max.PV input vo","INVERTER","PCS"],["MINV-SG5H10","SH5K-30,Sungrow Hybrid 1 Phase Inverter 5 kW, Li-ion battery/Lead-acid battery 48 V, Max.PV input vo","INVERTER","PCS"],["MINV-SG5K05","SG5K-D,SUNGROW INVERTER 5KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG5K10","SG5K-D,SUNGROW INVERTER 5KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG5RT05","SG5RT,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 5 KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG5RT10","SG5RT,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 5 KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG60K05","SG60KTL,SUNGROW INVERTER 60KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SG60K10","SG60KTL,SUNGROW INVERTER 60KW,WARRANTY 10 YEAR","INVERTER","PCS"],["MINV-SG630MX05","SG630MX,CENTRAL INVERTER 630KW,WARRANTY 5 YEAR","INVERTER","PCS"],["MINV-SGAIPM01","AIPM Plus, AI-1000 Solar PV on-grid system zero export function, Supports communications via Wi-Fi,","INVERTER","PCS"],["MINV-SGH10RT10","SH10RT,Residential Hybrid Three Phase Inverter,Sungrow inverter 15.2 KWP Max PV input 600 V, 2 MPPT,","INVERTER","PCS"],["MINV-SGSC50HV05","SC50HV  ,50 kW PCS DC/AC converter,","INVERTER","PCS"],["MINV-SGSC50HVx502","SC50HV  ,50 kW PCS DC/AC converter,","INVERTER","PCS"],["MINV-SGSH5.0RS10","SH5.0RS,(WINET INCKLUDED IN PACKAGE), SUNGROW HYBRID SINGLE PHASE INVERTER 5 KW,WARRANTY10 YEAR","INVERTER","PCS"],["MINV-SGSL0101","SOLAR PANAL,,","MOUNTING","PCS"],["MMNT-LDM60101","LD-MC4,Leader Fuse Connector 25A,1000V MC4 PV Cable,6mm2 Black","MOUNTING","PCS"],["MMNT-MWHB-GP0101","MW-RC-HB-GP,L feet  (M8*25),Hanger Bolt Group","MOUNTING","PCS"],["MMNT-MWMC0101","MW-MC-35,Mid Clamp 35 mm.,35 MM","MOUNTING","PCS"],["MMNT-MWML0101","MW-W-MC,Walkway M Clamp,M8*30 Bolt, Slider Nut","MOUNTING","PCS"],["MMNT-MWML0102","MW-W-MC,M Clamp with bolt set (Bolt M8*35),01","MOUNTING","PCS"],["MMNT-PKFR0101","PKK-FRP-A,FRP Walkway  Strengthen A 3660*450*25 MM,","MOUNTING","PCS"],["MMNT-PKML0101","PKK-MC（FRP),M Clips （FRP),","MOUNTING","PCS"],["MMNT-RSCSM601","RSIG-CS-M6,Socket Cap Screw M6*20 SUS304+Nut+Flat washer for Cable tray,","MOUNTING","PCS"],["MMNT-RSCSM802","RSIG-CS-M8,Socket Cap Screw M8*20 SUS304+Nut+Flat washer for Splice plate,","MOUNTING","PCS"],["MMNT-RSCT240001","RSIG-CT2400,Cable tray (smooth side) 200x100x2400mm.,T1.6/1.2mm. HDG","MOUNTING","PCS"],["MMNT-RSCT240002","RSIG-CT2400-CV,Cable tray Cover 200x2400mm.200x100x2400mm.,T1.6mm. HDG","MOUNTING","PCS"],["MMNT-RSCTHB20001","RSIG-CTHB200,Cable tray Horizontal Bend  (smooth side) 200*100mm.,T1.6/1.2mm. HDG","MOUNTING","PCS"],["MMNT-RSCTHB20002","RSIG-CTHB200-CV,Cable tray Horizontal Bend Cover 200mm.,T1.6mm. HDG","MOUNTING","PCS"],["MMNT-RSCTHT20001","RSIG-CTHT200,CCable tray Horizontal Tee (smooth side) 200*100mm.,T1.6/1.2mm.  HDG","MOUNTING","PCS"],["MMNT-RSCTHT20002","RSIG-CTHT200-CV,Cable tray Horizontal Tee Cover 200mm.,T1.6mm. HDG","MOUNTING","PCS"],["MMNT-RSCTSP01","RSIG-CTSP,Cable tray Splice Plate (smooth side),HDG","MOUNTING","PCS"],["MMNT-RSCTVIB20001","RSIG-CTVIB200,Cable tray Vertical Inside Bend (smooth side) 200*100mm.,T1.6/1.2mm. HDG","MOUNTING","PCS"],["MMNT-RSCTVIB20002","RSIG-CTVIB200-CV,Cable tray Vertical Inside Bend Cover 200mm.,T1.6mm. HDG","MOUNTING","PCS"],["MMNT-RSCTVOB20001","RSIG-CTVOB200,Cable tray Vertical Outside Bend (smooth side) 200*100mm.,T1.6/1.2mm. HDG","MOUNTING","PCS"],["MMNT-RSCTVOB20002","RSIG-CTVOB200-CV,Cable tray Vertical Outside Bend Cover 200mm.,T1.6mm. HDG","MOUNTING","PCS"],["MMNT-SSAL0101","SFS-ALN2-225,225mm Adjustable Support Leg Group,","MOUNTING","PCS"],["MMNT-SSAP0101","SFS-AP-2240,Angle Plate L=2240mm,L=2240mm","MOUNTING","PCS"],["MMNT-SSAP0102","SFS-AP-2296,Angle Plate L=2296mm,L=2296mm","MOUNTING","PCS"],["MMNT-SSBB0101","00,M8 Bolt 20mm,","MOUNTING","PCS"],["MMNT-SSBB0102","00,M8 Bolt 25mm,,","MOUNTING","PCS"],["MMNT-SSBN0101","SFS-BN2-35,FOR 4-7(<7)mm THIN FILM USED ON THE RAIL-5/8,<7MM","MOUNTING","PCS"],["MMNT-SSBN0102","00,M8 Nut,,","MOUNTING","PCS"],["MMNT-SSCC0101","SFS -CC-01,1#Cable Clip,","MOUNTING","PCS"],["MMNT-SSCC0201","SFS -CC-02,2#Cable Clip 4Line 90°,","MOUNTING","PCS"],["MMNT-SSCC0301","SFS -CC-03,3# Cable Clip 2 Line,","MOUNTING","PCS"],["MMNT-SSDC0105","SFS-DC 04,D-Nut combination 04,Spring Washer,Flat Washer,N2-Module Nut,Bolt M8*20 (SET)","MOUNTING","PCS"],["MMNT-SSDS0103","00,Self-drilling Screw ST6.3,125mm (Metal Roof)","MOUNTING","PCS"],["MMNT-SSEC0101","SFS-ECN2-30,End-Clamp Group 30mm,30 MM","MOUNTING","PCS"],["MMNT-SSEC0102","SFS-ECN2-35,End-Clamp Group 35mm,35MM","MOUNTING","PCS"],["MMNT-SSEC0103","SFS-ECN2-40,End-Clamp Group 40mm,40 MM","MOUNTING","PCS"],["MMNT-SSEC0104","SFS-ECN2-45,End-Clamp Group 45mm,45 MM","MOUNTING","PCS"],["MMNT-SSEC0105","SFS-ECN2-50,End-Clamp Group 50mm,50 MM","MOUNTING","PCS"],["MMNT-SSEC0206","SFS-ECG-35,End-Clamp Group 35mm,","MOUNTING","PCS"],["MMNT-SSEL0101","SFS-ELN2-01,Earth Lug Group,","MOUNTING","PCS"],["MMNT-SSES0101","SFS-ES,Expansion Screw M8x70,Self-drilling Screw TS6.3* 80mm","MOUNTING","PCS"],["MMNT-SSES0102","SFS-ES,Expansion Screw ,Self-drilling Screw TS6.3* 125mm","MOUNTING","PCS"],["MMNT-SSFP0101","SFS-FP-280,Flashing Plate,","MOUNTING","PCS"],["MMNT-SSFW0101","00,Flat Washer for M8 Bolt,","MOUNTING","PCS"],["MMNT-SSGC0101","SFS -GC-01,Grounding Clip,","MOUNTING","PCS"],["MMNT-SSJP0101","SFS-JP1-400,Junction Plate 400mm,","MOUNTING","PCS"],["MMNT-SSKL0101","SFS-TRG-5 ,5#Tin Roof Clamp Group,","MOUNTING","PCS"],["MMNT-SSKL0201","SFS-TRG-7 ,7#Tin Roof Clamp Group,","MOUNTING","PCS"],["MMNT-SSKL0301","SFS-TRG-9,9#Tin Roof Clamp Group,","MOUNTING","PCS"],["MMNT-SSKL0401","SFS-TRG-10 ,10#Tin Roof Clamp Group,","MOUNTING","PCS"],["MMNT-SSKL0501","SFS-TRG-15 ,15#Tin Roof Clamp Group,","MOUNTING","PCS"],["MMNT-SSKL0601","SFS-TRG-25 ,25#Tin Roof Clamp Group,","MOUNTING","PCS"],["MMNT-SSKL0701","SFS-TRG-22,#Tin Roof Clamp Group,","MOUNTING","PCS"],["MMNT-SSLC0101","SFS-LCN2-01,L-connector Group-2 For Rial-8,","MOUNTING","PCS"],["MMNT-SSLF0101","SFS-LFN2-01,L-Feet Group,80mm.","MOUNTING","PCS"],["MMNT-SSLF0102","SFS-LFN2-01,L-Feet Group,125mm.","MOUNTING","PCS"],["MMNT-SSLF0201","SFS-LFN2-T15,L-Feet Group for TRG-15,","MOUNTING","PCS"],["MMNT-SSLF0202","SFS-LFN2-T10,L-Feet Group for TRG-5,7,10,","MOUNTING","PCS"],["MMNT-SSLF0401","SFS-LFHN2-01,High L-Feet Group,","MOUNTING","PCS"],["MMNT-SSLF0501","SFS-LFN2-02,L-feet Group with Cone Hole,","MOUNTING","PCS"],["MMNT-SSLF0601","SFS-FFN2-03,Front Feet Group,","MOUNTING","PCS"],["MMNT-SSMC0101","SFS-MCN2-30 ,Mid-Clamp Group 30mm,30 MM","MOUNTING","PCS"],["MMNT-SSMC0102","SFS-MCN2-35 ,Mid-Clamp Group 35mm,35 MM","MOUNTING","PCS"],["MMNT-SSMC0103","SFS-MCN2-40 ,Mid-Clamp Group 40mm,40 MM","MOUNTING","PCS"],["MMNT-SSMC0104","SFS-MCN2-45 ,Mid-Clamp Group 45mm,45 MM","MOUNTING","PCS"],["MMNT-SSMC0105","SFS-MCN2-50 ,Mid-Clamp Group 50mm,50 MM","MOUNTING","PCS"],["MMNT-SSMC0206","SFS-MCG-35 ,Mid-Clamp Group 35mm,","MOUNTING","PCS"],["MMNT-SSND0101","00,N2-Module Nut,","MOUNTING","PCS"],["MMNT-SSRA0101","SFS -SR8-4200,SunRack Rail-8 4200mm, 4200mm","MOUNTING","PCS"],["MMNT-SSRA0102","SFS -SR8-3200,SunRack Rail-8 3200mm, 3200mm","MOUNTING","PCS"],["MMNT-SSRA0103","SFS -SR8-2100,SunRack Rail-8 2100mm, 2100mm","MOUNTING","PCS"],["MMNT-SSRA0201","SFS -SR12-4200,SunRack Rail-12 4200mm,4200mm","MOUNTING","PCS"],["MMNT-SSRC02 01","SFS-SCN2-01,Splice connector Group,DIN912 M8*20 Bolt(SS304)","MOUNTING","PCS"],["MMNT-SSRC02 02","SFS-SCN2-02,Splice connector&,DIN912 M8*22 Bolt(SS304)","MOUNTING","PCS"],["MMNT-SSRH0101","SFS -RHN2-01, 1# Roof Hook Group,","MOUNTING","PCS"],["MMNT-SSRH0102","SFS -RHN2-13, 13# Roof Hook Group,","MOUNTING","PCS"],["MMNT-SSRH0103","SFS -RHN2-02, 02# Roof Hook Group,","MOUNTING","PCS"],["MMNT-SSSP0101","00,Spring Washer for M8 Bolt,","MOUNTING","PCS"],["MMNT-SSTM0101","SFS-RTMG-15,15° Triangular mounts Group,","MOUNTING","PCS"],["MMNT-SSTM0403","SFS-BTMG-15,Triangular Mounts Group(Ballast),","MOUNTING","PCS"],["MMNT-SSTR0301","SFS-SBN2-01,L-Feet Group with stud bolt,","MOUNTING","PCS"],["MMNT-SSUE0101","SFS-UTECG-80, UNIVERSAL THIN FILM END CLAMP(SILVER),80 MM","MOUNTING","PCS"],["MMNT-SSUM0101","SFS-UTMCG-80, UNIVERSAL THIN FILM MID CLAMP(SILVER),80 MM","MOUNTING","PCS"],["MMNT-XEAF0101","EPR-AFL,Adjustable front leg,Adjustable front leg, Drilling Screw TS6.3* 80mm, EDPM","MOUNTING","PCS"],["MMNT-XEAR0101","EPR-ARL,Adjustabable rear leg(5°-10°）,DS TS6.3* 80mm, outer tube L275mm & inner tube L233mm","MOUNTING","PCS"],["MMNT-XEAR0102","EPR-ARL,Adjustabable rear leg(5°-10°）,DS TS6.3* 80mm, outer tube L145mm & inner tube L165mm","MOUNTING","PCS"],["MMNT-XEBB0101","EPR-B-20,M8 Bolt 20mm,","MOUNTING","PCS"],["MMNT-XEBB0102","EPR-B-25,M8 Bolt 25mm,","MOUNTING","PCS"],["MMNT-XEBB0103","EPR-B-40,M8 Bolt 40mm,","MOUNTING","PCS"],["MMNT-XEBB0104","EPR-B-16,M8 Bolt 16mm,","MOUNTING","PCS"],["MMNT-XEBD0101","EPR-BD 01,M8 Bolt 25mm + D-nut02 ,M8 Bolt 25mm + D-nut02","MOUNTING","PCS"],["MMNT-XEBD0102","EPR-BD 02,M8 Bolt 40mm + D-nut02,M8 Bolt 40mm + D-nut02","MOUNTING","PCS"],["MMNT-XEBD0103","EPR-BD 03,M8 Bolt 25mm + D-nut03 ,M8 Bolt 25mm + D-nut03","MOUNTING","PCS"],["MMNT-XEBD0104","EPR-BD 04,M8 Bolt 40mm + D-nut03,M8 Bolt 40mm + D-nut03","MOUNTING","PCS"],["MMNT-XEBD0105","EPR-BD 05,M8 Bolt 20mm + D-nut03,M8 Bolt 20mm + D-nut03","MOUNTING","PCS"],["MMNT-XECC0101","EPR-CC,Cable Clip ,","MOUNTING","PCS"],["MMNT-XECL0101","EPR-CC (FRP),C Clamp (FRP),","MOUNTING","PCS"],["MMNT-XEDC0101","EPR-DC 01,D-Nut combination 01,M8 Bolt 25mm+D-nut02","MOUNTING","PCS"],["MMNT-XEDC0102","EPR-DC 02,D-Nut combination 02,M8 Bolt 20mm + D-nut02 (SET)","MOUNTING","PCS"],["MMNT-XEDC0103","EPR-DC 03,D-Nut combination 03,M8 Bolt 25mm+D-nut03 (SET)","MOUNTING","PCS"],["MMNT-XEDC0104","EPR-DC 04,D-Nut combination 04,M8 Bolt 20mm + D-nut03 (SET)","MOUNTING","PCS"],["MMNT-XEDC0105","EPR-DC 05,D-Nut combination 05,M8 Bolt 16 mm + D-nut03","MOUNTING","PCS"],["MMNT-XEDS0101","EPR-DS-80,Self-drilling Screw ST6.3* 80mm (Metal Roof),Self-drilling Screw ST6.3* 80mm (Metal Roof)","MOUNTING","PCS"],["MMNT-XEDS0102","EPR-DS-100,Self-drilling Screw ST6.3* 100mm (Metal Roof),Self-drilling Screw ST6.3* 100mm (Metal Roo","MOUNTING","PCS"],["MMNT-XEDS0103","EPR-DS-125,Self-drilling Screw ST6.3* 125mm (Metal Roof),Self-drilling Screw ST6.3* 125mm (Metal Roo","MOUNTING","PCS"],["MMNT-XEDS0104","EPR-DS-63,Self-drilling Screw ST6.3* 63mm (Metal Roof),Self-drilling Screw ST6.3* 63mm (Metal Roof)","MOUNTING","PCS"],["MMNT-XEEC0101","EPR-EC01-30,End Clamp 01（30mm）,30 MM","MOUNTING","PCS"],["MMNT-XEEC0102","EPR-EC01-35,End Clamp 01(35mm),35 MM","MOUNTING","PCS"],["MMNT-XEEC0103","EPR-EC01-40,End Clamp 01（40mm）,40 MM","MOUNTING","PCS"],["MMNT-XEEC0104","EPR-EC01-50,End Clamp 01（50mm）,50 MM","MOUNTING","PCS"],["MMNT-XEEC0105","EPR-EC01-33,End Clamp 01（33mm）,33 MM","MOUNTING","PCS"],["MMNT-XEEH0101","EPR-EHB,External Hex Bolt,","MOUNTING","PCS"],["MMNT-XEFE0101","EPR-FEC,Film End Clamp ,","MOUNTING","PCS"],["MMNT-XEFK0101","EPR-FK,Flashing Kit +L feet (FK),Flashing Kit +L feet (FK) 80mm","MOUNTING","PCS"],["MMNT-XEFK0102","EPR-FK,Flashing Kit +L feet (FK),Flashing Kit +L feet (FK) 100 mm","MOUNTING","PCS"],["MMNT-XEFM0101","EPR-FMC,Film Mid Clamp ,","MOUNTING","PCS"],["MMNT-XEFR0101","EPR-FRP-A,FRP Walkway Strengthen A (normal) 3660*387*25 (38*38) W= 40,","MOUNTING","PCS"],["MMNT-XEFR0102","EPR-FRP-A,FRP Walkway  Strengthen A (gritted),","MOUNTING","PCS"],["MMNT-XEFR0103","EPR-FRP-A,FRP Walkway Strengthen A (gritted) 3660*387*25 (38*38) W= 40,","MOUNTING","PCS"],["MMNT-XEFR0104","EPR-FRP-A,FRP Walkway Strengthen A (gritted) 3660*577*25 (38*38) W= 60,","MOUNTING","PCS"],["MMNT-XEFR0105","EPR-FRP-A,FRP Walkway Strengthen A (gritted) 4040*485*25 (40*40) W= 50,","MOUNTING","PCS"],["MMNT-XEFW0101","EPR-FW,Flat Washer for M8 Bolt,","MOUNTING","PCS"],["MMNT-XEGC0101","EPR-GC,Grounding Clip ,Grounding Clip 01( 30.5*36*4.6)","MOUNTING","PCS"],["MMNT-XEGL0101","EPR-GL,Grounding Lug,Grounding Lug  (L20*42*12)","MOUNTING","PCS"],["MMNT-XEHB0101","EPR-HB-200,Hanger Bolt 200mm ,Hanger Bolt 200mm","MOUNTING","PCS"],["MMNT-XEHB0102","EPR-HB-250,Hanger Bolt 250mm,Hanger Bolt 250mm","MOUNTING","PCS"],["MMNT-XEHB0103","EPR-HB-300,Hanger Bolt 300mm ,Hanger Bolt 300mm","MOUNTING","PCS"],["MMNT-XEKL0101","EPR-MRH 10-2,Metal Roof Hook10-2 （700）,","MOUNTING","PCS"],["MMNT-XEKL0102","EPR-MRH 16,Metal Roof Hook 16（406）,","MOUNTING","PCS"],["MMNT-XEKL0107","EPR-MRH 10-2,Metal Roof Hook 10-2 (700)(Not Tap),","MOUNTING","PCS"],["MMNT-XEKL0108","EPR-MRH 34,Metal Roof Hook 34 (028)(Not Tap),","MOUNTING","PCS"],["MMNT-XEKL0203","EPR-MRH 20,Metal Roof Hook 20,","MOUNTING","PCS"],["MMNT-XEKL0304","EPR-MRH 22,Metal Roof Hook 22,","MOUNTING","PCS"],["MMNT-XEKL0405","EPR-MRH 34,Metal Roof Hook 34 (028),","MOUNTING","PCS"],["MMNT-XEKL0506","EPR-MRH 26,Metal Roof Hook 26,","MOUNTING","PCS"],["MMNT-XEKL0708","EPR-MRH 47,Metal Roof Hook 47 (750),","MOUNTING","PCS"],["MMNT-XEKL0809","EPR-MRH 48,Metal Roof Hook 48,","MOUNTING","PCS"],["MMNT-XELF0101","EPR-LF 01,L feet (H80-φ8.5)+B,L-Feet（bottom hole：φ8.5）'-","MOUNTING","PCS"],["MMNT-XELF0201","EPR-LF 02,L feet (H80-φ7)+DS*80,L-Feet（bottom hole：φ7）","MOUNTING","PCS"],["MMNT-XELF0202","EPR-LF 02,L feet (H80-φ7)+DS*100,L-Feet（bottom hole：φ7）","MOUNTING","PCS"],["MMNT-XELF0203","EPR-LF 02,L feet (H80-φ7)+DS*125,L-Feet（bottom hole：φ7）","MOUNTING","PCS"],["MMNT-XELF0301","EPR-LF 03,L feet  (H80-φ8.5),metal roof hook use ( Non bolt)","MOUNTING","PCS"],["MMNT-XELF0401","EPR-LF 04,L feet  (H80-φ7),with ST 6.3*80 drilling /wood screw","MOUNTING","PCS"],["MMNT-XELF0501","EPR-LF 05,L feet  (H80-φ10.5),for hanger bolt","MOUNTING","PCS"],["MMNT-XELF0502","EPR-LF 05,L feet  (H80-φ10.5),with hanger bolt(set)","MOUNTING","PCS"],["MMNT-XEM40101","EPR-MC4-02,Contact matarial Copper (30A), tin plated,MC02 DC1500V","MOUNTING","PCS"],["MMNT-XEM40102","EPR-MC4-02,Contact matarial Copper (25A), tin plated,MC02 DC1500V","MOUNTING","PCS"],["MMNT-XEM40201","EPR-MC4-07,105g/PC,105G/PC DC1500V","MOUNTING","PCS"],["MMNT-XEM40301","EPR-MC4-10,Branch connerctor 30A,DC1500V,","MOUNTING","PCS"],["MMNT-XEM40401","EPR-MC4-10,Branch connerctor 25A,DC1500V,","MOUNTING","PCS"],["MMNT-XEM40501","EPR-MC4-10,Branch connerctor 25A,DC1000V,","MOUNTING","PCS"],["MMNT-XEM40601","EPR-MC4-10,Branch connerctor 32A,DC1500V,","MOUNTING","PCS"],["MMNT-XEM40701","EPR-MC4-01,Contact material Copper (25A), tin plated,MC01 DC1000V","MOUNTING","PCS"],["MMNT-XEMA0101","EPR-MACW,MAC Steel walkway 2000*350*30 mm,","MOUNTING","PCS"],["MMNT-XEMC0101","EPR-MC05-30,Mid Clamp 05（30mm）,30 MM","MOUNTING","PCS"],["MMNT-XEMC0102","EPR-MC05-35,Mid Clamp 05(35mm),35 MM","MOUNTING","PCS"],["MMNT-XEMC0103","EPR-MC05-40,Mid Clamp 05（40mm）,40 MM","MOUNTING","PCS"],["MMNT-XEMC0104","EPR-MC05-50,Mid Clamp 05（50mm）,50 MM","MOUNTING","PCS"],["MMNT-XEMC0105","EPR-MC05-33,Mid Clamp 05（33mm）,33 MM","MOUNTING","PCS"],["MMNT-XEML0101","EPR-MC (FRP),M Clamp (FRP),","MOUNTING","PCS"],["MMNT-XEML0102","EPR-MC（FRP),M Clamp（FRP),with 25 M Type M Clamp","MOUNTING","PCS"],["MMNT-XEND0101","EPR-N02, D-nut 02,","MOUNTING","PCS"],["MMNT-XEND0102","EPR-N03, D-nut 03,","MOUNTING","PCS"],["MMNT-XENN0101","EPR-N,M8 Nut,","MOUNTING","PCS"],["MMNT-XERA0101","EPR-R01N-4200,Rail 01N:L4200mm,L4200mm","MOUNTING","PCS"],["MMNT-XERA0102","EPR-R01N-4700,Rail L : 4700mm, L : 4700mm","MOUNTING","PCS"],["MMNT-XERA0103","EPR-R01N-4600,Rail L : 4600mm,L : 4600mm","MOUNTING","PCS"],["MMNT-XERA0104","EPR-R17N-4200,Rail R17 26.2*51mm,L4200mm","MOUNTING","PCS"],["MMNT-XERB0101","EPR-EPDM,2 xEPDM(38*38*2), no hole","MOUNTING","PCS"],["MMNT-XERB0201","EPR-EPDM,2 xEPDM(38*38*2), With hole","MOUNTING","PCS"],["MMNT-XERB0301","EPR-EPDM,2 xEPDM(50*60*1), No hole","MOUNTING","PCS"],["MMNT-XERC0201","EPR-R01C-150,Rail 01 Connector :L150mm,L150mm","MOUNTING","PCS"],["MMNT-XERC0301","EPR-RC03,Rail Clamp 03,RC","MOUNTING","PCS"],["MMNT-XESP0101","EPR-SP,Spanners,","MOUNTING","PCS"],["MMNT-XESW0101","EPR-SP,Spring Washer for M8 Bolt,","MOUNTING","PCS"],["MMNT-XETH0101","EPR-TRH01,Tile Roof Hook 01,","MOUNTING","PCS"],["MMNT-XETR0101","EPR-TR(U)-5°,Triangle Rack（U) - Angle :5°）,(Angle :5°）","MOUNTING","PCS"],["MMNT-XETR0102","EPR-TR(U)-10°,Triangle Rack(U)-（Angle :10°）,(Angle :10°）","MOUNTING","PCS"],["MMNT-XETR0103","EPR-TR(U)-15°,Triangle Rack(U)-（Angle :15°）,(Angle :15°）","MOUNTING","PCS"],["MMNT-XEWC0101","EPR-WC,Mac steel walkway connector,","MOUNTING","PCS"],["MMNT-XEZC0101","EPR-ZC,Z clamp,","MOUNTING","PCS"],["MOI-4201-01","รายได้อื่นๆ VAT 7%","OTHER","UNIT"],["MOI-4201-02","รายได้อื่นๆ NON VAT","OTHER","Manual"],["MOTH-JGCT04","CT,Current Tranformer,200/5A JIANGSU","OTHER","PCS"],["MOTH-JGCT05","CT,Current Tranformer,300/5A JIANGSU","OTHER","PCS"],["MOTH-JGCT06","CT,Current Tranformer,200/5A JIANGSU","Current Tranformer","PCS"],["MOTH-SG05Y1001","INSURANCE,Upgrade 5 to 10 year Standatd Warranty forSG110CX,","OTHER","UNIT"],["MOTH-SG05Y1003","INSURANCE,Upgrade 10 to 15 year Standatd Warranty for SG110CX,","OTHER","UNIT"],["MOTH-SG05Y1004","INSURANCE,Upgrade 5 to 10 year Standatd Warranty for SG10RT,","OTHER","UNIT"],["MOTH-SG05Y1201","INSURANCE,Upgrade 5 to 10 year Standatd Warranty for SG12KTL&SG12KTL-M,","OTHER","UNIT"],["MOTH-SG05Y1202","INSURANCE,Upgrade 10 to 15 year Standatd Warranty for SG12KTL&SG12KTL-M,","OTHER","UNIT"],["MOTH-SG05Y12501","INSURANCE,Upgrade 5 to 10 year Standatd Warranty forSG125CX-P2,","OTHER","UNIT"],["MOTH-SG05Y12502","INSURANCE,Upgrade 5 to 15 year Standatd Warranty forSG125CX-P2,","OTHER","UNIT"],["MOTH-SG05Y1251","INSURANCE,Upgrade 5 to 10 year Standatd Warranty forSG125CX-P2,","OTHER","UNIT"],["MOTH-SG05Y1501","INSURANCE,Upgrade 5 to 10 year Standatd Warranty for SG15RT,","OTHER","UNIT"],["MOTH-SG05Y2001","INSURANCE,Upgrade 5 to 10 year Standatd Warranty for SG20RT,","OTHER","UNIT"],["MOTH-SG05Y35001","INSURANCE,Upgrade 5 to 10 year Standatd Warranty for SG350HX,","OTHER","UNIT"],["MOTH-SG05Y35002","INSURANCE,Upgrade 5 to 15 year Standard Warranty for SG350HX,","OTHER","UNIT"],["MOTH-SG05Y3602","INSURANCE,Upgrade 10 to 15 year Standatd Warranty for SG36KTL-M,","OTHER","UNIT"],["MOTH-SG05Y3K01","INSURANCE,Upgrade 5to 10 year Standatd Warranty for SG3K-S,","OTHER","UNIT"],["MOTH-SG05Y3R01","INSURANCE,Upgrade 5 to 10 year Standard Warranty for SG3.0RS,","OTHER","UNIT"],["MOTH-SG05Y5001","INSURANCE,Upgrade 5 to 10 year Standatd Warranty for SG50CX,","OTHER","UNIT"],["MOTH-SG05Y5002","INSURANCE,Upgrade 10 to 15 year Standatd Warranty for SG50CX,","OTHER","UNIT"],["MOTH-SG05Y5003","INSURANCE,Upgrade 10 to 15 year Standatd Warranty for SG50KTL-M,","OTHER","UNIT"],["MOTH-SG05Y5004","INSURANCE,Upgrade 5 to 10 year Standard Warranty for SG50CX (AFCI),","OTHER","UNIT"],["MOTH-SG05Y50P201","INSURANCE,Upgrade 5 to 10 year Standatd Warranty for SG50CX-P2,","OTHER","UNIT"],["MOTH-SG05Y50P202","INSURANCE,Upgrade 5 to 15 year Standatd Warranty for SG50CX-P2,","OTHER","UNIT"],["MOTH-SG05Y5K01","INSURANCE,Upgrade 5to 10 year Standatd Warranty for SG5K-D,","OTHER","UNIT"],["MOTH-SG05Y5S01","INSURANCE, Upgrade 5 to 10 year Standatd Warranty for SG5.0RS,SG05Y5S,","OTHER","UNIT"],["MOTH-SG05Y5T01","INSURANCE, Upgrade 5 to 10 year Standatd Warranty for SG5.0RT,SG05T5T,","OTHER","Manual"],["MOTH-SG05Y6001","INSURANCE,Upgrade 5 to 10 year Standatd Warranty for SG60KTL,","OTHER","UNIT"],["MOTH-SG10RT01","OTHER,TEST INVERTER SG10RT-P2,","OTHER","PCS"],["MOTH-SG10Y1002","INSURANCE,Upgrade 5 to 15 year Standatd Warranty for SG110CX,","OTHER","UNIT"],["MOTH-SG10Y1201","INSURANCE,Upgrade 5 to 15 year Standatd Warranty for SG12KTL&SG12KTL-M,","OTHER","UNIT"],["MOTH-SG10Y3601","INSURANCE,Upgrade 5 to 15 year Standatd Warranty for SG36KTL-M,","OTHER","UNIT"],["MOTH-SG10Y5001","INSURANCE,Upgrade 5 to 15 year Standatd Warranty for SG50KTL-M,","OTHER","UNIT"],["MOTH-SG10Y5004","INSURANCE,Upgrade 10 to 20 year Standatd Warranty for SG50KTL-M,","OTHER","UNIT"],["MOTH-SG10Y6002","INSURANCE,Upgrade 5 to 15 year Standatd Warranty for SG60KTL,","OTHER","UNIT"],["MOTH-SG15Y5002","INSURANCE,Upgrade 5 to 20 year Standatd Warranty for SG50KTL-M,","OTHER","UNIT"],["MOTH-SG20RT01","OTHER,TEST INVERTER SG20RT-P2,","OTHER","PCS"],["MOTH-SG3RS01","OTHER,TEST INVERTER SG3.0RS,","OTHER","PCS"],["MOTH-SG5.0RT01","OTHER,TEST INVERTER SG5.0RT-P2,","OTHER","PCS"],["MOTH-SG5RS01","OTHER,TEST INVERTER SG5.0RS,","OTHER","PCS"],["MOTH-SGEMS20001","00,EMS200CP, Local controller,Weight 3kg, /2 Years","OTHER","PCS"],["MOTH-SGSP600S25","SP600S,PV Optimizer support module level MPPT, input 600W., Max short-circuit current 20A, 1:1,25Y","OTHER","Manual"],["MOTH-SGST500V11","ST500-IQ-D,ST500-IQ-D AST03218  POWER STACK-V11,00","OTHER","PCS"],["MOTH-TGCT01","CT,Current Tranformer,200/5A YHDC","OTHER","PCS"],["MOTH-TMCT04","CT,Current Tranformer,200/5A TMDA","OTHER","PCS"],["MOTH-TMCT05","CT,Current Tranformer,100/5A TMDA","OTHER","PCS"],["MOTH-TMCT06","CT,Current Tranformer,300/5A TMDA","OTHER","PCS"],["MOTM-SES140025","S1400-,1GM4MBV,Optimizer 2:1, Cable length  5.4m,Warranty 25 year","OPTIMIZER","PCS"],["MOTM-SGSP600S25","SP600S,PV Optimizer support module level MPPT, input 600W,20A, 1:1,25Y (1200 mm)","OPTIMIZER","PCS"],["MOTM-SGSP600S2502","SP600S,PV Optimizer support module level MPPT, input 600W,20A, 1:1,25Y (1600 mm)","OPTIMIZER","PCS"],["MPVM-KLHKB01","FR-PVMS-HKB,Fonrich-Smart PV PLC Transceiver warranty 5 year,","PV MODULE","Manual"],["MPVM-KLMDEB01","FR-PVMS-MDEB,Fonrich-Smart PV Monitor & Gateway waranty 5 year,","PV MODULE","Manual"],["MPVM-KLTDSB01","FR-PVMS-TDSB,1 RSD fit 1 PV Modules (PLC),Dual Input PV Module Safety Protection Device,","PV MODULE","Manual"],["MPVM-UR54W0101","PV MODULE,FBK_E8W / 144 Cells Mono-Crystalline PV Module,540W.","PV MODULE","PCS"],["MPVM-UR54W0103","PV MODULE,URE,FBK_E8W / 144 Cells Mono-Crystalline PV Module,545W.","PV MODULE","PCS"],["MPVM-URM8B0102","PV MODULE,FBK_M8B / 144 Cells Mono-Crystalline PV Module,540W","PV MODULE","PCS"],["MRSD-BLRP0101","HRSD-2C,Rapid Shutdown,15A, 1000 V,","RAPID SHUTDOWN","PCS"],["MRSD-BYES0101","BFS-ESW12-K,Emergency Button switch , for 100VAC-240VAC  power input, with key,","RAPID SHUTDOWN","PCS"],["MRSD-BYRP0101","BFS-11,Rapid Shutdown ,20V input, 18A with STAUBLI MC4 connectors,","RAPID SHUTDOWN","PCS"],["MRSD-KLTDCB01","FONRICH FR-PVMS-TDCB,20A,Warranty 25 years,","RAPID SHUTDOWN","PCS"],["MRSD-KLTDCH01","FONRICH FR-PVMS-TDCH,20A,Warranty 25 years,","RAPID SHUTDOWN","PCS"],["MRSD-KLTFCB01","FONRICH FR-PVMS-TFCB,20A,Warranty 25 years,","RAPID SHUTDOWN","PCS"],["MRSD-PJPC0101","PEFS-PCY-P,Controller 4 stringa, 40 A , ,","RAPID SHUTDOWN","PCS"],["MRSD-PJPL0101","PEFS-PL80P,Rapid Shutdown ,PEFS-PL80P-11 20A,","RAPID SHUTDOWN","PCS"],["MRSD-SGRP0101","SR20D-M,Rapid Shutdown,30A, 1100 V,","RAPID SHUTDOWN","PCS"],["MRSD-WSPL0101","PEFS-PL80S-21,Rapid Shutdown ,PEFS-PL80S-21, 20A,1000V/1500V,","RAPID SHUTDOWN","PCS"],["MSPP-NBDC-0101","DC-INVERTER,,","SPARE PART","PCS"],["MSPP-SG50KTL0101","BP0002211 SG50kTL communication and string detection board assembly 17 ea,BP0002211 SG50KTL communic","SPARE PART","Manual"],["MSPP-SGACV200","AC SURGE,[BP004352] SG110CX AC LIGHTNUNG PROTECTION BOARD ASSEMBLY  BP-B-001325 V2,","SPARE PART","PCS"],["MSPP-SGB0101","BP002326,SG60KTL lightning protection plate compo,","SPARE PART","PCS"],["MSPP-SGB0202","BP002211,SG50KTL communication and string detection board assembly_BP-H-000224,","SPARE PART","PCS"],["MSPP-SGB0303","BP000931,PCB components of network communication,","SPARE PART","PCS"],["MSPP-SGB0404","VG000118,Spare parts-PC-4 PRO-communication box_PC-4C_S_A,","SPARE PART","PCS"],["MSPP-SGB0505","BP004350,SG110CX DC lightning protection board assembly_BP-B-001403_V1_S,","SPARE PART","PCS"],["MSPP-SGB0606","BP000987, Fiber Optical board PCB module_BP-G-000225,","SPARE PART","PCS"],["MSPP-SGB0707","HB000034,SG110CX Current sensor,","SPARE PART","PCS"],["MSPP-SGB0808","BP006824,SG250HX DC power board assembly (common mode,etc.optimized ST) BP-E-000440-V2,","SPARE PART","PCS"],["MSPP-SGB0909","BP006946,SG250HX Electrolytic Capacitor Plate Assembly_2(Hipengxin)_BP-Q-000208_V6,","SPARE PART","PCS"],["MSPP-SGB1010","BP008338,SG250HX Control board,","SPARE PART","PCS"],["MSPP-SGB1111","BP002325,SG60KTL relay PCBA BP-B-000851,","SPARE PART","PCS"],["MSPP-SGFUAR01","KT000510,Fuse_aR_1500V_160A_Cube,","SPARE PART","PCS"],["MSPP-SGFUPV02","KT000511,Fuse_gPV_1500V_160A_Cube,","SPARE PART","PCS"],["MSPP-SGPC401","VG000126,Spare parts-PC-4 PRO-component temperature sensor_PTWD-2A,","SPARE PART","PCS"],["MSPP-SGPC402","VG000124,Spare parts-PC-4 PRO-temperature and humidity sensor_PTS-3_S_A,","SPARE PART","PCS"],["MSPP-SGPCB0101","BP000931 PCB compponents of network communication 6eaBP000931 PCB compponents of network communicati","SPARE PART","PCS"],["MSPP-SGPV-40101","VG000118,Spare Parts-PV-4 Pro-Communication Box,","SPARE PART","PCS"],["MSSR-SGMeteo02","Meteo Station PC-4 Wind speed, Wind direction, Global radiation,Air temperature, Relative humidity,M","SENSOR","PCS"],["SE5000H-THSNBBX14","SE5000H-THSNBBX14, 5kW 1Phase Home Hub Inverter, 12 years warranty","Solaredge","pcs"],["SE10K-RW05IBNN4","SE10K-RW05IBNN4, 10kW 3Phase Home Network Ready Inverter, 12 years warranty","Solaredge","pcs"],["SE30K-THR0IBNZ4","SE30K-THR0IBNZ4, 30kW 3Phase Glands Inverter, DC safety unit with switch AC&DC SPD, Fuse, RSD, 12 years warranty","Solaredge","pcs"],["SE33.3K-RW05IBNN4","SE33.3K-RW05IBNN4, 33.3kW 3Phase Glands Inverter, DC safety, 12 years warranty","Solaredge","pcs"],["SE90K-RW00IBNE4","SE90K-RW00IBNE4, 90kW 3Phase with synergy Inverter, MC4, DC safety, and SPD fuse, RSD, 12 years warranty","Solaredge","pcs"],["SE100K-RW00IBNE4","SE100K-RW00IBNE4, 100kW 3Phase with synergy Inverter, MC4, DC safety switch ,and SPD, Fuse, RSD, 12 years warranty","Solaredge","pcs"],["S650B-1GM4MBM","S650B-1GM4MBM, Optimizer 650Wp Isc 15A, 85V (For Residential Installations), 25 years warranty","Solaredge","pcs"],["P1100-5RM4MRX","P1100-5RM4MRX, Optimizer 1100Wp, 25 years warranty","Solaredge","pcs"],["S1200-1GM4MBV","S1200-1GM4MBV, Optimizer 1200Wp, 25 years warranty","Solaredge","pcs"],["S1400-1GM4MBV","S1400-1GM4MBV, Optimizer 1400 Wp, 25 years warranty","Solaredge","pcs"],["SE1000-RS485-SPD2 K1","SolarEdge SPD Plug-in for RS485 for 3 phase inverter, 5 years warranty","Solaredge","pcs"],["SE1000-CCG-F-S1","SolarEdge Fire Fighter Gateway (FFG), 5 years warranty","Solaredge","pcs"],["SE1000-CCG-G","SolarEdge Control and Communication Gateway, 5 years warranty","Solaredge","pcs"],["SE1000-SEN-IRR-S","SolarEdge Irradiance sensor, 1 year warranty","Solaredge","pcs"],["SE1000-SEN-TAMB-S2","SolarEdge Ambient temperature sensor, 1 year warranty","Solaredge","pcs"],["SE1000-SEN-TMOD-S2","SolarEdge Module temperature sensor, 1 year warranty","Solaredge","pcs"],["SE1000-SEN-WIND-S1","SolarEdge Wind velocity sensor 4-20mA, 1 year warranty","Solaredge","pcs"],["SE-MTR-3Y-400V-A","SolarEdge 1PH/3PH 230V/400V Elect. Meter with Modbus Connection, Din-Rail, Class05, V2, 5 Years warranty","Solaredge","pcs"],["SECT-SPL-250A-A","SolarEdge 250A Current transformer, 1 year warranty","Solaredge","pcs"],["SECT-SPL-1000A-A","SolarEdge Split-Core CT1000A 50/60Hz 1% Twist, 1 year warranty","Solaredge","pcs"],["SG350HX-20","SG350HX,Sungrow Inverter 350HX","INVERTER","pcs"],["SH5.0RS","SH5.0RS,Sungrow Hybrid 1 Phase , Li-ion battery, Max.PV input voltage 600V(DC), Max.efficiency 97.7%, ,Weight 18.5kg, IP65, /10 Year","INVERTER","pcs"],["ST225KWh-110KW-2h","ST225KWH-110KW-2h CATL0.5C,Anti corrosion C3","INVERTER","pcs"],["EMS3000CP","EMS300CP, controller Linux,Weight 35kg, /5 Years","OTHER","pcs"],["SG1100UD","SG1100UD ,Sungrow Inverter 1100UD","INVERTER","pcs"],["SG500MX","SG500MX,Sungrow Inverter 500MX","INVERTER","pcs"],["MINV-SG50CX-P210","SG50CX-P2,Sungrow Inverter 50kW, Max.PV input voltage 1,100V(DC), Max.efficiency 98.5%,Weight 41kg,","INVERTER","pcs"],["SBR192","SBR192,PV HYBRID INVERTER SERIES,SBR BATTERY SERIES,10 YEAR,19.2 kWh","BATTERY","pcs"],["SH5.0RT-2010","SH5.0RT-20, Hybrid Three Phase Inverter,5 kw 10 YEAR WARRANTY","INVERTER","PCS"],["1+X","1+X Modular Inverter","INVERTER","pcs"],["ST500CP-50HV*5","ST500CP-50HV*5, CATL cell 537kwh","INVERTER","pcs"],["PPC1000","Power Plant Controller configuration :rack server, PPC100 ( controller ), switch, KVM, firewall  \n( optional ), software ( PPC, Insight )","CONNECTOR","pcs"],["MINV-SG350HX12","SG350HX,Sungrow Inverter 350HX, Max.PV inputvoltage 1,500V(DC), 12 MPPT input,20A, Max.efficiency  9","INVERTER","pcs"],["MINV-SG150CX05","SG150CX,SUNGROW INVERTER 150KW, WITH RAPID SHUTDOWN VERSION,WARRANTY 5 YEAR","INVERTER","pcs"],["IDC30E","DC Charger 30Kw IP65 (1 gun)","EV Charger","Pcs"],["SBR224","SBR224,PV HYBRID INVERTER SERIES,SBR BATTERY SERIES,10 YEAR,22.4 kWh","BATTERY","pcs"],["ST225KWh-110KW-2h(CALB)","ST225KWH-110KW-2h CALB0.5C,Anti corrosion C3","INVERTER","pcs"],["SparePart","BP002323 ,SG60KTL inverter board component(Vincote)","INVERTER","pcs"],["MBTR-SGSBS05010","SBS050, Battery, 5.12kWh,10 YEAR WARRANTY","BATTERY","PCS"],["SBR160","SBR160,PV HYBRID INVERTER SERIES,SBR BATTERY SERIES,10 YEAR,16 kWh","BATTERY","pcs"],["SBR096","SBR096,PV HYBRID INVERTER SERIES,SBR BATTERY SERIES,10 YEAR,9.6 kWh","BATTERY","pcs"],["SBR128","SBR128,PV HYBRID INVERTER SERIES,SBR BATTERY SERIES,10 YEAR,12.8 kWh","BATTERY","pcs"],["SBR256","SBR256,PV HYBRID INVERTER SERIES,SBR BATTERY SERIES,10 YEAR,25.6 kWh","BATTERY","pcs"],["BP004242","BP004242_SG136TX electrolytic capacitor plate assembly_BP-B-001326_V2","SPARE PART","pcs"],["MDCC-HT6sq-B4000M","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm. Black,4000 M","DC CABLE","M"],["MDCC-HT6sq-R4000M","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm. Red,4000 M","DC CABLE","M"],["MCNT-XEM40701","EPR-MC4-01,Contact material Copper (25A), tin plated,MC01 DC1000V","MOUNTING","PCS"],["IDC480E Power Cabinet","DC Charger Power Cabinet 480kW","EV Charger","set"],["IDC480E Dispenser Liquid","IDC480E Liquid-cooled dispenser 480kW","EV Charger","set"],["IDC480E Dispenser Air","IDC480E Air-cooled dispenser 480kW","EV Charger","set"],["PVS-16M-V2613","(ASM00220) PVS-16M-V2613","SPARE PART","pcs"],["MINV-SG150CX10","SG150CX,SUNGROW INVERTER 150KW, WITH RAPID SHUTDOWN VERSION,WARRANTY 10 YEAR","INVERTER","pcs"],["ST225KWH-110KW-2h (BESS)","ST225KWH-110KW-2h CALB0.5C,Anti corrosion C3 (BESS), 5 year-warranty","Energy Storage","set"],["ST225KWH-110KW-2h (PCS)","ST225KWH-110KW-2h CALB0.5C,Anti corrosion C3 (PCS), 5 year-warranty","Energy Storage","set"],["SG150CX-P205-01","SG150CX,SUNGROW INVERTER 150KW, WITH RAPID SHUTDOWN VERSION,WARRANTY 5 YEAR","INVERTER","pcs"],["AC22E-01-1P","AC Charger 22kW 3Phase IP65 (1 gun)","EV Charger","Pcs"],["IDC180E","IDC180E, EV Charger DC 180Kw, Air-cooling IP65","EV Charger","Pcs"],["SD1400D","SP1400D,PV Optimizer support module-level MPPT, input 1400W, 2:1,25Y","OPTIMIZER","PCS"],["ST455KWH-110KW-4h (BESS)","ST445KWH-110KW-4h CALB0.5C,Anti corrosion C3 (BESS), 5 year-warranty","Energy Storage","set"],["ST455KWH-110KW-4h (PCS)","ST445KWH-110KW-4h CALB0.5C,Anti corrosion C3 (PCS), 5 year-warranty","Energy Storage","set"],["SGSH5.0RS05","SH5.0RS,(WINET INCKLUDED IN PACKAGE), SUNGROW HYBRID SINGLE PHASE INVERTER 5 KW,WARRANTY 5 YEAR","INVERTER","Pcs"],["SG150CX-P215","SG150CX,SUNGROW INVERTER 150KW, WITH RAPID SHUTDOWN VERSION,WARRANTY 15 YEAR","INVERTER","Pcs"],["SG150CX-P220","SG150CX,SUNGROW INVERTER 150KW, WITH RAPID SHUTDOWN VERSION,WARRANTY 20 YEAR","INVERTER","Pcs"],["ST225KWH-110KW-2h-10 (BESS)","ST225KWH-110KW-2h CALB0.5C,Anti corrosion C3 (BESS), 10 year-warranty","Energy Storage","set"],["ST225KWH-110KW-2h-10 (PCS)","ST225KWH-110KW-2h CALB0.5C,Anti corrosion C3 (PCS), 10 year-warranty","Energy Storage","set"],["KLTTQB01","FONRICH FR-PVMS-TTQB,20A,Warranty 25 years,","RAPID SHUTDOWN","pcs"],["SG36CX-P205","SG36CX-P2, SUNGROW INVERTER 36KW,WARRANTY 5 YEAR","INVERTER","pcs"],["MINV-SGSH5.0RS05-20","SH5.0RS-20,(WINET INCKLUDED IN PACKAGE), SUNGROW HYBRID SINGLE PHASE INVERTER 5 KW,WARRANTY 5 YEAR","INVERTER","pcs"],["MINV-SGSH5.0RS-2010","SH5.0RS-20,(WINET INCKLUDED IN PACKAGE), SUNGROW HYBRID SINGLE PHASE INVERTER 5 KW,WARRANTY 10 YEAR","INVERTER","pcs"],["MINV-SG50CX-P215-01","SG50CX-P2,SUNGROW INVERTER 50KW, WITH OPTIMIZER VERSION,WARRANTY 15 YEAR","INVERTER","PCS"],["MINV-SG125CX-P215-01","SG125CX-P2,SUNGROW INVERTER 125KVA, WITH OPTIMIZER VERSION,WARRANTY 15 YEAR","INVERTER","PCS"],["MINV-SG150CX15","SG150CX,SUNGROW INVERTER 150KW, WITH RAPID SHUTDOWN VERSION,WARRANTY 15 YEAR","INVERTER","PCS"],["MINV-SG50CX-P220-01","SG50CX-P2,SUNGROW INVERTER 50KW, WITH OPTIMIZER VERSION,WARRANTY 20 YEAR","INVERTER","PCS"],["MINV-SG125CX-P220-01","SG125CX-P2,SUNGROW INVERTER 125KVA, WITH OPTIMIZER VERSION,WARRANTY 20 YEAR","INVERTER","PCS"],["MINV-SG150CX20","SG150CX,SUNGROW INVERTER 150KW, WITH RAPID SHUTDOWN VERSION,WARRANTY 20 YEAR","INVERTER","PCS"],["MINV-SG50CX-P225-01","SG50CX-P2,SUNGROW INVERTER 50KW, WITH OPTIMIZER VERSION,WARRANTY 25 YEAR","INVERTER","PCS"],["MINV-SG125CX-P225-01","SG125CX-P2,SUNGROW INVERTER 125KVA, WITH OPTIMIZER VERSION,WARRANTY 25 YEAR","INVERTER","PCS"],["MINV-SG150CX25","SG150CX,SUNGROW INVERTER 150KW, WITH RAPID SHUTDOWN VERSION,WARRANTY 25 YEAR","INVERTER","PCS"],["SG350HX05","SG350HX,SUNGROW INVERTER 350HX, WARRANTY 5 YAER","INVERTER","PCS"],["SG350HX10","SG350HX,SUNGROW INVERTER 350HX, WARRANTY 10 YAER","INVERTER","PCS"],["SG350HX15","SG350HX,SUNGROW INVERTER 350HX, WARRANTY 15 YAER","INVERTER","PCS"],["SG350HX20","SG350HX,SUNGROW INVERTER 350HX, WARRANTY 20 YAER","INVERTER","PCS"],["MBTR-SGSBS050","SBS050,Battery,5.12 kWh, 5 YEAR WARRANTY","BATTERY","PCS"],["SHSH10RT-10","SH10RT, HYBRID THREE PHASE INVERTER 10 KW, 10 YEAR WARRANTY","INVERTER","PCS"],["SH10RT-2010","SH10RT-20, Hybrid Three Phase Inverter,10 kw 10 YEAR WARRANTY","INVERTER","pcs"],["SGSBR064","SBR064,PV HYBRID INVERTER SERIES, SBR BATTERY SERIES,10 YEAR,6.4 kWh","BATTERY","PCS"],["MINV-SG15RT-P210-01","SG15RT-P2,(WINET INCKLUDED IN PACKAGE), SUNGROW INVERTER 15 KW, OPTIMIZER VERSION, WARRANTY 10 YEAR","INVERTER","PCS"],["SG20RT-P210","SG20RT-P2,(WINET INCKLUDED IN PACKAGE), SUNGROW INVERTER 20 KW,WARRANTY 10 YEAR","INVERTER","PCS"],["SG5.0RT-P210","SG5.0RT-P2,(WINET INCLUDED IN PACKAGE), SUNGROW INVERTER 5 KW, OPTIMIZER VERSION, WARRANTY 10 YEAR","INVERTER","PCS"],["SH5.0RT-10","SH5.0RT, Hybrid Three Phase Inverter,5 kw 10 YEAR WARRANTY","INVERTER","PCS"],["SG350HX25","SG350HX,SUNGROW INVERTER 350HX, WARRANTY 25 YAER","INVERTER","PCS"],["SG350HX-2005","SG350HX-20,Sungrow Inverter 350HX WARRANTY 5 YEAR","INVERTER","PCS"],["SG350HX-2010","SG350HX-20,Sungrow Inverter 350HX WARRANTY 10 YEAR","INVERTER","PCS"],["SH25T-10","SH25T-V11, HYBRID THREE PHASE INVERTER 10 KW, 10 YEAR WARRANTY","INVERTER","PCS"],["SBH400","SBH400, PV HYBRID INVERTER SERIES,SBH BATTERY SERIES, 40 kWh, 10 YEAR","BATTERY","PCS"],["ST255CS-2H-5","ST255CS-2H, 257kWh 2h system, 5Y warranty","Energy Storage","SET"],["SG350HX-2015","SG350HX-20,Sungrow Inverter 350HX WARRANTY 15 YEAR","INVERTER","PCS"],["SG350HX-2020","SG350HX-20,Sungrow Inverter 350HX WARRANTY 20 YEAR","INVERTER","PCS"],["ST225kWh-2h-10","ST225KWH-110KW-2h 0.5C,Anti corrosion C3, 10 year-warranty","Energy Storage","SET"],["ST255CS-2H-10","ST255CS-2H, 257kWh 2h system, 10Y warranty","Energy Storage","SET"],["TH000114","TH000114 Transfomer","SPARE PART","PCS"],["BP001485","BP001485 Board","SPARE PART","PCS"],["BP000994","BP000994 DC Board","SPARE PART","PCS"],["BP002325","SG60KTL Relay PCBA_BP-B-000851-S","SPARE PART","PCS"],["SGS2000S-L12","S2000S-L12, Microinverter 2000W,(4:1) 12 YEAR","MICRO INVERTER","PCS"],["SGS1000S-L12","S1000S-L12, Microinverter 1000W,(2:1) 12 YEAR","MICRO INVERTER","PCS"],["MG5RL05","MG5RL, Low voltage 1Phase Hybrid Inverter 5000W, 5Y warranty (Support all 3rd party Lithium ion battery)","INVERTER","PCS"],["MG6RL05","MG6RL, Low voltage 1Phase Hybrid Inverter 6000W, 5Y warranty (Support all 3rd party Lithium ion battery)","INVERTER","PCS"],["SGSH10T10","SH10T, Sungrow 10Kw Residential Hybrid Three Phase Inverter, 10Y warranty (Support unbalanced phase)","INVERTER","PCS"],["SGSH25T10","SH25T, Sungrow 25Kw Residential Hybrid Three Phase Inverter, 10Y warranty (Support unbalanced phase)","INVERTER","PCS"],["SBH100","SBH100, PV HYBRID INVERTER SERIES,SBH BATTERY SERIES, 10 kWh, 10 YEAR","BATTERY","PCS"],["SBH150","SBH150, PV HYBRID INVERTER SERIES,SBH BATTERY SERIES, 15 kWh, 10 YEAR","BATTERY","PCS"],["SBH200","SBH200, PV HYBRID INVERTER SERIES,SBH BATTERY SERIES, 20 kWh, 10 YEAR","BATTERY","PCS"],["SBH250","SBH250, PV HYBRID INVERTER SERIES,SBH BATTERY SERIES, 25 kWh, 10 YEAR","BATTERY","PCS"],["SBH300","SBH300, PV HYBRID INVERTER SERIES,SBH BATTERY SERIES, 30 kWh, 10 YEAR","BATTERY","PCS"],["SBH350","SBH350, PV HYBRID INVERTER SERIES,SBH BATTERY SERIES, 35 kWh, 10 YEAR","BATTERY","PCS"],["COM","Commissioning Cost for ST255","OTHER","JOB"],["ST510CS-4H-5","ST510CS-4H, 514kWh 4h system, 5Y warranty","Energy Storage","SET"],["SD1400D12","SP1400D,PV Optimizer support module-level MPPT, input 1400W, 2:1,25Y (1200 mm)","OPTIMIZER","PCS"],["SD1400D16","SP1400D,PV Optimizer support module-level MPPT, input 1400W, 2:1,25Y (1600 mm)","OPTIMIZER","PCS"],["SGIHOME","iHome Manager","DATA LOGGER","PCS"],["MG5RL10","MG5RL, Low voltage 1Phase Hybrid Inverter 5000W, 10 warranty (Support all 3rd party Lithium ion battery)","INVERTER","PCS"],["SG36CX-P210","SG36CX-P2, SUNGROW INVERTER 36KW,WARRANTY 10 YEAR","INVERTER","PCS"],["SG36CX-P215","SG36CX-P2, SUNGROW INVERTER 36KW,WARRANTY 15 YEAR","INVERTER","PCS"],["SG36CX-P220","SG36CX-P2, SUNGROW INVERTER 36KW,WARRANTY 20 YEAR","INVERTER","PCS"],["ST510CS-4H-10","ST510CS-4H, 514kWh 4h system, 10Y warranty","Energy Storage","PCS"],["ST510CS-4H-15","ST510CS-4H, 514kWh 4h system, 15Y warranty","Energy Storage","PCS"],["MDLG-SGC10005","COM100E,Smart Communication Box with optimizer version/ 5 YEAR,","DATA LOGGER","PCS"],["COM1","Commissioning Cost for ST510","OTHER","JOB"],["Explosion","Explosion-proof panel","OTHER","PCS"],["MDCC-HT10sq","DC,Cable H1Z2Z2-K 1.5 KV 10 Sq.mm.,1000 M","DC CABLE","M"],["VG000118","VG000118, หน้าจอ PC4","SPARE PART","PCS"],["EPR-R1N-2820","EPR-R1N-2820,Rail 1N,(AL6005-T5),L2820*26*44","MOUNTING","PCS"],["EPR-R1N-5150","EPR-R1N-5150,Rail 1N,(AL6005-T5),L5150*26*44","MOUNTING","PCS"],["EPR-R1N-2100","EPR-R1N-2100,Rail 1N,(AL6005-T5),L2100*26*44","MOUNTING","PCS"],["MG10RL05","MG10RL, Low voltage 1Phase Hybrid Inverter 5000W, 5 warranty (Support all 3rd party Lithium ion battery)","INVERTER","PCS"],["MGL060","MGL060, LFP Battery Low voltage 1Phase Hybrid Inverter 6kWh, 5 warranty","BATTERY","PCS"],["MDLG-SGWN0101","WiNet-S2,Sungrow Wireless Communication Module, warranty 2Y,","DATA LOGGER","PCS"],["Folating","Folating Parts + Mounting Structures (For solar panel) + Floating parts for cable (from platform to shore) + Anchoring accessories","Floating","Set"],["ST5015kWh5Y","ST5015-2H 5Y warranty","Energy Storage","PCS"],["COM5015","Commissioning Cost for ST5015","OTHER","PCS"],["MSVST50155","MSV for ST5015 5Y warranty","OTHER","PCS"],["MSVST50152","MSV for ST5015 2Y warranty","OTHER","PCS"],["EMSST5015","EMS for ST5015 2Y warranty","OTHER","PCS"],["ST5015kWh10","ST5015-2H 10Y warranty","Energy Storage","PCS"],["IDC60E","DC Charger 60kW IP65 (2 gun)","EV Charger","PCS"],["ST5015kWh-4H5Y","ST5015-4H 5Y warranty","Energy Storage","PCS"],["ST5015kWh-4H10Y","ST5015-4H 10Y warranty","Energy Storage","PCS"],["AC07E-01","AC Charger 7kW IP65 (1 gun)","EV Charger","PCS"],["AC22E-01-3P","AC Charger 22kW 3Phase IP65 (1 gun)","EV Charger","PCS"],["IDC80E","DC Charger 80kW IP65 (2 gun)","EV Charger","PCS"],["CDC160E","DC Charger 160kW IP55 (2 gun)","EV Charger","PCS"],["LTSA5Y","Long Term Service agreement 1-5Y","Warranty","Y"],["BP006434","SG125CX-P2 interface board (DIDO) module_BP-C-000747_V0_interface board (DIDO) module_SG125CX","SPARE PART","PCS"],["BP004475","Communication terminal board module_BP-W-000086","SPARE PART","PCS"],["Logger1000","AST05958 Data Logger_Logger1000B_V125_N/A_S","SPARE PART","PCS"],["ST255CS-2H-15","ST255CS-2H, 257kWh 2h system, 15Y warranty","Energy Storage","SET"],["ST255CS-2H-20","ST255CS-2H, 257kWh 2h system, 20Y warranty","Energy Storage","SET"],["LTSA10Y","Long Term Service agreement 1-10Y","Warranty","Y"],["LTSA15Y","Long Term Service agreement 1-15Y","Warranty","Y"],["LTSA20Y","Long Term Service agreement 1-20Y","Warranty","Y"],["WarrantyST25515Y","Extend Warranty ST255 5Y to 15Y","Warranty","Y"],["CDC120E","DC Charger 120kW IP55 (2 gun)","EV Charger","PCS"],["MDCC-IL4sq01","DC,Cable H1Z2Z2-K KV 4 Sq.mm,1000 0M","DC CABLE","M"],["WarrantyST25510Y","Extend Warranty ST255 5Y to 10Y","Warranty","Y"],["WarrantyST25520Y","Extend Warranty ST255 5Y to 20Y","Warranty","Y"],["WarrantyST51010Y","Extend Warranty ST510 5Y to 10Y","Warranty","Y"],["WarrantyST51015Y","Extend Warranty ST510 5Y to 15Y","Warranty","Y"],["WarrantyST51020Y","Extend Warranty ST510 5Y to 20Y","Warranty","Y"],["SGSH25T15","SH25T, Sungrow 25Kw Residential Hybrid Three Phase Inverter, 15Y warranty (Support unbalanced phase)","INVERTER","PCS"],["SBH40015","SBH400, PV HYBRID INVERTER SERIES,SBH BATTERY SERIES, 40 kWh, 15 YEAR","BATTERY","PCS"],["BP007143","BP007143, Interface board module_BP-C-000746_V1_RS485_SG125CX-P2_S","SPARE PART","PCS"],["1+X05","1+X Modular Inverter, 5Y warranty","INVERTER","Mw"],["BP001892","BP001892 CPU PCB module_BP-A-000441_N/A_S","SPARE PART","Unit"],["BP004133","BP004133 Sigma DSP pinboard PCB module_BP-D-000297_V3_N/A_S","SPARE PART","Unit"],["COMST5015","Commissioning Cost for ST5015","OTHER","Job"],["CPG10Y","Capacity Performance Guarantee (CPG) 1-10Y for ST255","Warranty","Unit"],["DC Cable, 500 m","DC,LINK-DC,PV Solar Cable H1Z2Z2-K 1.5 KV 4 Sq.mm, 500 m","DC CABLE","M"],["DC Cable, Link6sq.mm","DC,LINK-DC,PV Solar Cable H1Z2Z2-K 1.5 KV 6 Sq.mm.Black,1000M","DC CABLE","M"],["DC Cable,HT","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm.,2000 M","DC CABLE","M"],["DC Cable,Link","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm.,2000 M","DC CABLE","M"],["DC Cable,Prysmian","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm.,2000 M","DC CABLE","M"],["EMSST50155Y","EMS for ST5015 5Y warranty","OTHER","Unit"],["EMU300A","EMU300A, ENERGY MANAGEMENT UNIT","DATA LOGGER","Mw"],["EPR-BK-6900","EPR-BK-6900,Beam Kit 6900,AL6005","Carport","pcs"],["EPR-CC02","EPR-CC02,Cable Clip 02,SUS 304,L20","MOUNTING","pcs"],["EPR-EC02-33","EPR-EC02-33,End Clamp 02,AL6005,L40mm","Carport","pcs"],["EPR-GC","EPR-GC,Grounding Clip ,SUS304,L30mm","Carport","pcs"],["EPR-GL","EPR-GL,Grounding Lug,Grounding Lug  (L17.5*42*12)","Carport","pcs"],["EPR-JB600","EPR-JB600, J bolt (Q235B) L600mm","Carport","pcs"],["EPR-LFE-H80","EPR-LFE-H80,L-Feet,H40*80 Light","MOUNTING","pcs"],["EPR-MRH 10-1","EPR-MRH 10-1,Metal Roof Hook 10-1","MOUNTING","pcs"],["EPR-MRH09","EPR-MRH 09,Metal Roof Hook 09","MOUNTING","pcs"],["EPR-MRH10-1","EPR-MRH10-1,Metal Roof Hook 10-1,L50","MOUNTING","pcs"],["EPR-MRH11","Metal Roof Hook 11","MOUNTING","pcs"],["EPR-MRH37","EPR-MRH 37,Metal Roof Hook 37","MOUNTING","pcs"],["EPR-R11-3400","EPR-R11-3400,Rail R11(AL6005) L3400mm","Carport","pcs"],["EPR-R11-4000","EPR-R11-4000,Rail R11(AL6005-T5) L4000mm","Carport","pcs"],["EPR-R11-5000","EPR-R11-5000,Rail R11(AL6005-T5) L5000mm","Carport","pcs"],["EPR-R11-C","EPR-R11-C,Rail 11 Connector,AL6005,L500mm","Carport","pcs"],["EPR-R1N4800","EPR-R1N4800,R1N-4800,AL6005-T5","MOUNTING","pcs"],["EPR-R1N600","EPR-R1N-600,R1N-600,AL6005-T5","MOUNTING","pcs"],["EPR-R30","EPR-R30,Rail 4.2 m,4200*29.3*52","MOUNTING","pcs"],["EPR-R30-C","EPR-R30-C,Splice For Rail,L120","MOUNTING","pcs"],["EPR-RC02","EPR-RC02,Rail clamp 02 (AL6005-T5) 30*11.2*5*L40mm","Carport","pcs"],["EPR-TRH-06","EPR-TRH06,Tile Roof Hook 06,","MOUNTING","pcs"],["EPR-WDC(Aluminium,SUS304)","Water Drain Clamp,33 mm, (Aluminium)(SUS304)","MOUNTING","pcs"],["EPR-WDC(Plastic)","Water Drain Clamp,33 mm, (Plastic)","MOUNTING","pcs"],["EPR-WDC(SUS304)","Water Drain Clamp,30 mm, (SUS 304)","MOUNTING","pcs"],["Farm","Farm 100 MW for SCG Project, Concrete","MOUNTING","MW"],["IDC480E","IDC480E Power Cabinet IP65,C5,K10,480kW Power Cabinet contains 16 power modules (30kW perpower module）","EV Charge","unit"],["MDCC-BC4sq01","DC,Cable H1Z2Z2-K 1.5 KV 4 Sq.mm.Black,Red","DC CABLE","M"],["MDCC-BC6sq","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm.,5000 M  BK/RD","DC CABLE","M"],["MDCC-BC6sq01","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm.,","DC CABLE","M"],["MDCC-BC6sq06","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm.Black,","DC CABLE","M"],["MDCC-HT4sq05","DC,Cable H1Z2Z2-K 1.5 KV 4 Sq.mm., 4000 M","DC CABLE","M"],["MDCC-HT6sqAR","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm, Anti Rodent","DC CABLE","M"],["MDCC-IL4sq03","DC,Cable H1Z2Z2-K KV 4 Sq.mm,4000 0M","DC CABLE","M"],["MDCC-KB10sq","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm","DC CABLE","M"],["MDCC-KB4sq","DC,Cable H1Z2Z2-K 1.5 KV 4 Sq.mm","DC CABLE","M"],["MDCC-KB6sq","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm","DC CABLE","M"],["MDCC-LD10sq","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm","DC CABLE","M"],["MDCC-LD4sq","DC,Cable H1Z2Z2-K 1.5 KV 4 Sq.mm","DC CABLE","M"],["MDCC-LD6sq","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm","DC CABLE","M"],["MDCC-MC4sq","DC,Cable H1Z2Z2-K 1.5 KV 4 Sq.mm.","DC CABLE","M"],["MDCC-MC6sq01","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm.Black,","DC CABLE","M"],["MDCC-PYS10sq01","DC,Cable H1Z2Z2-K 1.5 KV 10 Sq.mm.,","DC CABLE","M"],["MDCC-PYS6sq01","DC,Cable H1Z2Z2-K 1.5 KV 6 Sq.mm.,","DC CABLE","M"],["MG10RL10","MG10RL, Low voltage 1Phase Hybrid Inverter 5000W, 10 warranty (Support all 3rd party Lithium ion battery)","INVERTER","Mw"],["MGL06010","MGL060, LFP Battery Low voltage 1Phase Hybrid Inverter 6kWh, 10 warranty","BATTERY","Mw"],["MINV-SGMG10RL(AFCI)10","MG10RL,(AFCI)SUNGROW HYBRID INVERTER 10kW 1 PHASE FOR LOW VOLT,WARRANTY 10 YEAR","INVERTER","Mw"],["MINV-SGMG5RL(AFCI)10","MG5RL,(AFCI)SUNGROW HYBRID INVERTER 5kW 1 PHASE FOR LOW VOLT,WARRANTY 10 YEAR","INVERTER","Mw"],["MMNT-XELF0120","EPR-LF120,L feet (H120-7) with rubber & ST6.3*80 drilling screw","MOUNTING","pcs"],["Roof","Roof  50 MW for SCG Project, Metal","MOUNTING","MW"],["SBH5KWH","SBH battery 5KWh, 10Y waarnty","BATTERY","Mw"],["SBHACCESSORY","ESS SBH accessory, 10Y warranty","BATTERY","Mw"],["Service1","ค่าบริการตรวจสอบ Inverter","Service","Job"],["Service2","ค่าบริการซ่อม/เปลี่ยนอุปกรณ์ AC terminal ไหม้","Service","Job"],["Service3","ค่าบริการตรวจสอบระบบการทำงานหลังซ่อม","Service","Job"],["ServiceSG15RT","ค่าบริการตรวจสอบ Inverter นอกประกัน SG15RT-P2","Service","Job"],["SG510HX","SG510HX, Inverter 510Kw, 5Y warranty","INVERTER","Mw"],["SG510HX10","SG510HX, Inverter 510Kw, 10Y warranty","INVERTER","Unit"],["SG-DispensorAIr","Air-cooled ,400A+400A / 5m ,Payment terminal NO,RFID / QR code / Autocharge","EV Charge","unit"],["SH125CX05","SH125CX, Hybrid Inverter, 5Y warranty","INVERTER","Mw"],["SH50CX5Y","SH50CX, Sungrow 50Kw Hybrid Inverter, 5Y warranty","INVERTER","Mw"],["SH80CX5Y","SH80CX, Sungrow 50Kw Hybrid Inverter, 5Y warranty","INVERTER","Mw"],["STC12505","STC125, Battery 12.48 kWh LFP module, 5Y warranty","BATTERY","Mw"],["STCSWITCHBOX","Switch box + main column base for STC, 5Y warranty","OTHER","Mw"],["STTOPCOVER","Top cover + auxiliary column base for STC, 5Y warranty","OTHER","Mw"],["TE000085","TE000085  Single-phase transformer_0.02kVA_315_130_NA_NA_BW_S","SPARE PART","Unit"],["WarrantyST501510Y","Extend Warranty ST5015 5Y to 10Y","Warranty","Unit"],["WarrantyST501515Y","Extend Warranty ST5015 5Y to 15Y","Warranty","Unit"],["WarrantyST501520Y","Extend Warranty ST5015 5Y to 20Y","Warranty","Unit"],["Water Drain Clamp","Water Drain Clamp,30 mm, (SUS 304)","MOUNTING","pcs"]]/*END_CATALOG*/;
+const LOGO=/*LOGO*/"data:image/png;base64,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"/*END_LOGO*/;
+
+const $=s=>document.querySelector(s);
+const esc=s=>(s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=(n,d=2)=>(n==null||isNaN(n))?'—':Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmt0=n=>fmt(n,0);
+const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const LS={get:(k,d)=>{try{const v=localStorage.getItem('mgs_sales_'+k);return v?JSON.parse(v):d}catch(e){return d}},
+  set:(k,v)=>{try{localStorage.setItem('mgs_sales_'+k,JSON.stringify(v))}catch(e){}},
+  del:k=>{try{localStorage.removeItem('mgs_sales_'+k)}catch(e){}}};
+async function hashPass(plain){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode((plain||'')+HASH_SALT));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+/* ============================================================ STATE */
+const S={token:'',user:null,users:[],rows:{},settings:{},products:[],serverTime:'',
+  route:{page:'me',id:''},filter:'all',search:'',polling:false,pollTimer:null,flash:{},form:null};
+const caps=()=>(S.user&&S.user.caps)||{};
+const isInternal=()=>['ADMIN','MANAGEMENT','INTERNAL'].indexOf(S.user&&S.user.tier)>=0;
+const canTeam=()=>!!caps().viewAllSales;               // เห็นหน้าของ Sales คนอื่น
+const canRequestForOthers=()=>!!caps().writeQuote;     // ขอราคาแทน Sales คนอื่น (Sourcing/Manager)
+
+/* ============================================================ API (google.script.run เมื่อเปิดผ่าน /exec · fetch เมื่อโฮสต์ที่อื่น) */
+function gsRun(){return !!(window.google&&google.script&&google.script.run)}
+function withTimeout(p){return new Promise(res=>{let done=false;const t=setTimeout(()=>{if(!done){done=true;res({ok:false,error:'timeout'})}},TIMEOUT_MS);
+  p.then(r=>{if(!done){done=true;clearTimeout(t);res(r)}},e=>{if(!done){done=true;clearTimeout(t);res({ok:false,error:String(e&&e.message||e)})}})})}
+function parse(r){try{return (typeof r==='string')?JSON.parse(r):(r||{ok:false,error:'empty'})}catch(e){return {ok:false,error:'bad response'}}}
+async function api(payload){
+  payload=Object.assign({},payload);if(S.token&&!payload.token)payload.token=S.token;
+  const r=await withTimeout(new Promise(async res=>{
+    if(gsRun()){google.script.run.withSuccessHandler(x=>res(parse(x))).withFailureHandler(e=>res({ok:false,error:String(e&&e.message||e)})).apiPost(JSON.stringify(payload));return}
+    try{const x=await fetch(CLOUD_URL,{method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});res(parse(await x.text()))}
+    catch(e){res({ok:false,error:'network'})}
+  }));
+  if(r&&r.error==='AUTH_REQUIRED'&&payload.action!=='login'&&payload.action!=='ssoLogin')sessionExpired();
+  return r;
+}
+async function apiGet(type,arg){
+  const r=await withTimeout(new Promise(async res=>{
+    if(gsRun()){google.script.run.withSuccessHandler(x=>res(parse(x))).withFailureHandler(e=>res({ok:false,error:String(e&&e.message||e)})).apiGet(type,S.token,arg==null?'':String(arg));return}
+    const q='?type='+encodeURIComponent(type)+'&token='+encodeURIComponent(S.token)+(arg?((type==='quote'?'&id=':'&since=')+encodeURIComponent(arg)):'');
+    try{const x=await fetch(CLOUD_URL+q,{redirect:'follow'});res(parse(await x.text()))}catch(e){res({ok:false,error:'network'})}
+  }));
+  if(r&&r.error==='AUTH_REQUIRED')sessionExpired();
+  return r;
+}
+
+/* ============================================================ LOGIN */
+const LOGIN_ERR={AUTH_FAILED:'อีเมลหรือรหัสผ่านไม่ถูกต้อง',ACCOUNT_DISABLED:'บัญชีนี้ถูกปิดใช้งาน — ติดต่อผู้ดูแลระบบ',
+  SSO_UNAVAILABLE:'ระบบมองไม่เห็นอีเมล Google ของคุณ (มักเกิดกับ Gmail ส่วนตัว) — กรุณาใช้อีเมล + รหัสผ่าน',
+  timeout:'เชื่อมต่อเซิร์ฟเวอร์ไม่ทันเวลา — ลองใหม่อีกครั้ง',network:'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจอินเทอร์เน็ต'};
+async function doLogin(){
+  const user=($('#loginUser').value||'').trim(),pass=$('#loginPass').value;
+  if(!user||!pass){$('#loginErr').textContent='กรุณากรอกอีเมลและรหัสผ่าน';return}
+  const b=$('#loginBtn');b.disabled=true;b.innerHTML='<span class="spin"></span> กำลังตรวจสอบ…';
+  const r=await api({action:'login',user,passHash:await hashPass(pass),agent:'sales-app '+(navigator.userAgent||'').slice(0,80)});
+  b.disabled=false;b.textContent='เข้าสู่ระบบ →';
+  if(!r.ok){$('#loginErr').textContent=LOGIN_ERR[r.error]||('เข้าสู่ระบบไม่สำเร็จ ('+(r.error||'-')+')');return}
+  LS.set('lastUser',user);$('#loginPass').value='';
+  if(pass==='1234')setTimeout(()=>openChangePassword(true),900);   // BUSINESS RULE: รหัสตั้งต้นต้องเปลี่ยน
+  startSession(r);
+}
+async function ssoLogin(silent){
+  if(!gsRun()){if(!silent)$('#loginErr').textContent='Google Sign-in ใช้ได้เมื่อเปิดผ่านลิงก์ของระบบ (/exec) เท่านั้น';return false}
+  if(!silent)$('#loginErr').innerHTML='<span class="spin"></span> กำลังตรวจสอบบัญชี Google…';
+  const r=await api({action:'ssoLogin',agent:'sales-app google'});
+  if(r.ok){startSession(r);return true}
+  if(!silent)$('#loginErr').textContent=r.error==='SSO_NO_USER'
+    ?('อีเมล '+(r.email||'')+' ยังไม่ได้ลงทะเบียนในระบบ — แจ้งผู้ดูแลให้เพิ่มอีเมลนี้ในแท็บ Users')
+    :(LOGIN_ERR[r.error]||('Google Sign-in ไม่สำเร็จ ('+(r.error||'-')+')'));
+  else $('#loginErr').textContent='';
+  return false;
+}
+function startSession(r){
+  S.token=r.token;S.user=r.user;LS.set('token',S.token);LS.set('user',S.user);
+  $('#loginErr').textContent='';boot();
+}
+let _expiredShown=false;
+function sessionExpired(){
+  if(_expiredShown||!S.token)return;_expiredShown=true;
+  stopPoll();S.token='';LS.del('token');
+  modal(`<div class="modal-h"><h3>⏱ เซสชันหมดอายุ</h3></div>
+    <div class="modal-b" style="line-height:1.8">กรุณาเข้าสู่ระบบอีกครั้ง — ร่างคำขอราคาที่ยังไม่ได้ส่งถูกเก็บไว้ในเครื่องนี้</div>
+    <div class="modal-f"><button class="btn" onclick="closeModal();showLogin()">เข้าสู่ระบบ</button></div>`);
+}
+function logout(){
+  if(S.token)api({action:'logout'});
+  stopPoll();S.token='';S.user=null;S.rows={};LS.del('token');LS.del('user');closeModal();showLogin();
+}
+function showLogin(){
+  _expiredShown=false;
+  $('#app').classList.add('hidden');$('#login').classList.remove('hidden');
+  const last=LS.get('lastUser','');if(last&&!$('#loginUser').value)$('#loginUser').value=last;
+  $('#ssoBox').classList.toggle('hidden',!gsRun());
+}
+
+/* ============================================================ BOOT / DATA */
+async function boot(){
+  $('#login').classList.add('hidden');$('#app').classList.remove('hidden');
+  const u=S.user;
+  $('#meAv').textContent=(u.name||'?')[0].toUpperCase();$('#meName').textContent=u.name;$('#meRole').textContent=ROLE_TH[u.role]||u.role;
+  $('#main').innerHTML='<div class="empty"><div class="spin"></div><div style="margin-top:10px">กำลังโหลดงาน…</div></div>';
+  const [us,st,pr]=await Promise.all([apiGet('users'),apiGet('settings'),apiGet('products')]);
+  S.users=(us&&us.users)||[];S.settings=(st&&st.ok)?st:{};
+  S.products=buildProducts((pr&&pr.products)||[]);
+  await loadAll();
+  readRoute(()=>{render();startPoll()});
+}
+function buildProducts(sheetItems){
+  const m={};
+  CATALOG_LITE.forEach(p=>{m[p[0]]={code:p[0],desc:p[1],group:p[2],uom:p[3]}});
+  sheetItems.forEach(p=>{if(p&&p.code)m[p.code]={code:String(p.code),desc:p.desc||'',group:p.group||'',uom:p.uom||''}});
+  return Object.values(m);
+}
+function addRow(row){
+  let d=null;try{d=row.salesDetail?JSON.parse(row.salesDetail):null}catch(e){d=null}
+  row.d=d;S.rows[row.id]=row;
+}
+async function loadAll(){
+  const d=await apiGet('salesview');
+  if(!d||!d.ok){toast('โหลดข้อมูลไม่สำเร็จ: '+((d&&d.error)||'-'),'bad');return false}
+  S.rows={};(d.quotations||[]).forEach(addRow);S.serverTime=d.serverTime||'';setLive();
+  return true;
+}
+/* Live: ดึงเฉพาะงานที่เปลี่ยนทุก 30 วินาที — เห็นสถานะใหม่ (เช่น ปล่อยราคาแล้ว) โดยไม่ต้องรีเฟรช */
+async function poll(force){
+  if(S.polling||!S.token||(document.hidden&&!force))return;
+  S.polling=true;
+  try{
+    const since=S.serverTime?new Date(Date.parse(S.serverTime)-OVERLAP_MS).toISOString():'';
+    const d=since?await apiGet('salesview',since):null;
+    if(!d){if(!since)await loadAll();return}
+    if(!d.ok)return;
+    const moved=[];let changed=0;
+    (d.quotations||[]).forEach(row=>{
+      const old=S.rows[row.id];
+      if(old&&old.updatedAt===row.updatedAt)return;
+      if(old&&old.status!==row.status)moved.push(row);
+      addRow(row);S.flash[row.id]=Date.now();changed++;
+    });
+    S.serverTime=d.serverTime||S.serverTime;setLive();
+    if(changed){
+      if(moved.length===1)toast('🔔 '+(moved[0].docNo||'')+' : '+stageOf(S.rows[moved[0].id]).label,'good');
+      else if(moved.length>1)toast('🔔 สถานะงานเปลี่ยน '+moved.length+' รายการ','good');
+      if(!$('#modalRoot').innerHTML&&S.route.page!=='request')render();
+    }
+  }finally{S.polling=false}
+}
+function startPoll(){stopPoll();S.pollTimer=setInterval(poll,POLL_MS)}
+function stopPoll(){if(S.pollTimer){clearInterval(S.pollTimer);S.pollTimer=null}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.token)poll(true)});
+function setLive(){const el=$('#live');if(!el)return;const t=new Date();el.className='live';
+  el.textContent='● Live · '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
+  el.title='อัปเดตอัตโนมัติทุก '+(POLL_MS/1000)+' วินาที';}
+
+/* ============================================================ DOMAIN HELPERS */
+const isSR=r=>String(r.docType||'QT')==='SR';
+const hdr=r=>(r.d&&r.d.header)||{};
+const titleOf=r=>hdr(r).title||r.title||hdr(r).customer||r.customer||'(ไม่มีชื่อโครงการ)';
+const custOf=r=>hdr(r).customer||r.customer||'';
+const ownerOf=r=>String(r.salesUserId||hdr(r).salesUserId||'');
+const userName=id=>{const u=S.users.find(x=>x.id===id);return u?u.name:''};
+const daysSince=iso=>{const t=Date.parse(iso||'');return isNaN(t)?null:Math.floor((Date.now()-t)/86400000)};
+const agoTH=iso=>{const d=daysSince(iso);return d===null?'—':d<=0?'วันนี้':d===1?'เมื่อวาน':d+' วันที่แล้ว'};
+function priceShown(r){return !isSR(r)&&!r.priceLocked&&r.d&&Array.isArray(r.d.lines)&&r.d.lines.some(l=>l.unitPrice!=null)}
+function valueOf(r){return priceShown(r)?(+r.d.total||+r.salesValue||0):0}
+/* ขั้นตอนของงาน ในภาษาที่ Sales อ่านแล้วรู้ว่าต้องทำอะไร */
+function stageOf(r){
+  const st=String(r.status||'');
+  if(isSR(r)){
+    if(st==='Draft')return {key:'req',label:'ร่าง — ยังไม่ได้ส่ง',color:'grey'};
+    if(st==='Accepted')return {key:'req',label:'Sourcing รับงานแล้ว กำลังทำราคา',color:'blue'};
+    if(st==='Quoted')return {key:'done',label:'ทำใบเสนอราคาแล้ว',color:'green'};
+    if(st==='Cancelled')return {key:'done',label:'ยกเลิกคำขอ',color:'grey'};
+    return {key:'req',label:'รอ Sourcing รับงาน',color:'orange'};
+  }
+  if(st==='Requested'||st==='In Progress')return {key:'wip',label:'Sourcing กำลังทำราคา',color:'orange'};
+  if(st==='Submitted'||st==='Partial Approved')return {key:'wip',label:'รอผู้บริหารอนุมัติราคา',color:'amber'};
+  if(st==='Approved')return {key:'wip',label:'อนุมัติแล้ว · รอปล่อยราคา',color:'blue'};
+  if(st==='Pending')return {key:'ready',label:'ราคาพร้อม · ติดตามลูกค้า',color:'green'};
+  if(st==='Won')return {key:'done',label:'ปิดการขายได้ 🎉',color:'green'};
+  if(st==='Closed')return {key:'done',label:'ปิดงาน',color:'grey'};
+  return {key:'wip',label:st||'—',color:'grey'};
+}
+function lastUpd(r){return (r.d&&r.d.salesUpdate&&r.d.salesUpdate.at)?r.d.salesUpdate:null}
+function followDate(r){return (r.d&&r.d.followUpDate)||''}
+function needsUpdate(r){
+  if(isSR(r)||String(r.status)!=='Pending')return false;
+  const u=lastUpd(r);const d=u?daysSince(u.at):null;
+  return !u||d===null||d>=SALES_UPDATE_DAYS||(followDate(r)&&followDate(r)<todayISO());
+}
+function srEditable(r){
+  if(!isSR(r)||r.deleted||r.assignedTo)return false;
+  if(['Draft','Submitted'].indexOf(String(r.status||'Submitted'))<0)return false;
+  if(r.d&&(r.d.quoteIds||[]).length)return false;
+  return ownerOf(r)===S.user.id||canRequestForOthers();
+}
+function rowsOf(personId){
+  return Object.values(S.rows).filter(r=>!r.deleted&&(personId==='*'||ownerOf(r)===personId));
+}
+
+/* ============================================================ ROUTER (รองรับ hash ของหน้า /exec ด้วย google.script.url) */
+function parseRoute(h,params){
+  h=String(h||'').replace(/^#?\/?/,'');
+  const [page,id]=h.split('/');
+  if(params&&params.u){                                   // ?app=sales&u=<email หรือ id>
+    const key=String(params.u).toLowerCase();
+    const u=S.users.find(x=>x.id.toLowerCase()===key||String(x.email||'').toLowerCase()===key);
+    if(u)return {page:'sales',id:u.id};
+  }
+  if(page==='team'||page==='request'||page==='sales')return {page,id:decodeURIComponent(id||'')};
+  return {page:'me',id:''};
+}
+function readRoute(cb){
+  if(window.google&&google.script&&google.script.url){
+    google.script.url.getLocation(loc=>{S.route=parseRoute(loc.hash,flatParams(loc.parameter));cb()});
+    if(google.script.history)google.script.history.setChangeHandler(e=>{S.route=parseRoute(e.location.hash);render()});
+    return;
+  }
+  S.route=parseRoute(location.hash,Object.fromEntries(new URLSearchParams(location.search)));cb();
+}
+function flatParams(p){const o={};Object.keys(p||{}).forEach(k=>o[k]=p[k]);return o}
+window.addEventListener('hashchange',()=>{if(!gsRun()&&S.user){S.route=parseRoute(location.hash);render()}});
+function go(hash){
+  S.route=parseRoute(hash);S.filter='all';S.search='';
+  if(window.google&&google.script&&google.script.history)google.script.history.push({},{},hash);
+  else if(location.hash!=='#'+hash)history.pushState(null,'','#'+hash);
+  render();window.scrollTo(0,0);
+}
+function guardRoute(){
+  const r=S.route;
+  if(r.page==='sales'&&r.id!==S.user.id&&!canTeam())S.route={page:'me',id:''};   // Sales ทั่วไปเปิดหน้าคนอื่นไม่ได้
+  if(r.page==='team'&&!canTeam())S.route={page:'me',id:''};
+}
+
+/* ============================================================ RENDER */
+function render(){
+  if(!S.user)return;
+  guardRoute();
+  const r=S.route;
+  const navs=[{h:'/me',p:'me',ic:'🗂',t:'งานของฉัน'},{h:'/request',p:'request',ic:'➕',t:'ขอราคาใหม่'}];
+  if(canTeam())navs.push({h:'/team',p:'team',ic:'👥',t:'ทีมขาย'});
+  const on=n=>(n.p===r.page)||(n.p==='me'&&r.page==='sales'&&r.id===S.user.id)||(n.p==='team'&&r.page==='sales'&&r.id!==S.user.id);
+  $('#tabs').innerHTML=navs.map(n=>`<button class="tab ${on(n)?'on':''}" onclick="${n.p==='request'?'newRequest()':`go('${n.h}')`}">${n.ic} ${n.t}</button>`).join('');
+  $('#bnav').innerHTML=navs.map(n=>`<button class="${on(n)?'on':''}" onclick="${n.p==='request'?'newRequest()':`go('${n.h}')`}"><span class="ic">${n.ic}</span>${n.t}</button>`).join('');
+  const m=$('#main');
+  if(r.page==='team')m.innerHTML=viewTeam();
+  else if(r.page==='request'){m.innerHTML=viewRequest();fillRequestForm();}
+  else m.innerHTML=viewPerson(r.page==='sales'&&r.id?r.id:S.user.id);
+}
+
+/* ---------- หน้าของ Sales แต่ละคน ---------- */
+const FILTERS=[{k:'all',t:'ทั้งหมด'},{k:'req',t:'คำขอราคา'},{k:'wip',t:'รอราคา'},{k:'ready',t:'พร้อมเสนอ'},{k:'update',t:'ต้องอัปเดต'},{k:'done',t:'ปิดแล้ว'}];
+function viewPerson(pid){
+  const u=S.users.find(x=>x.id===pid)||(pid===S.user.id?S.user:{id:pid,name:pid,role:'Sales'});
+  const mine=pid===S.user.id;
+  const all=rowsOf(pid);
+  const by=k=>all.filter(r=>k==='update'?needsUpdate(r):stageOf(r).key===k);
+  const ready=by('ready'),won=all.filter(r=>r.status==='Won');
+  let list=S.filter==='all'?all.filter(r=>stageOf(r).key!=='done'||daysSince(r.updatedAt)<=30):by(S.filter);
+  if(S.search){const s=S.search.toLowerCase();list=list.filter(r=>(titleOf(r)+' '+custOf(r)+' '+(r.docNo||'')).toLowerCase().indexOf(s)>=0)}
+  list.sort((a,b)=>(needsUpdate(b)-needsUpdate(a))||String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+  const link=CLOUD_URL+'?app=sales&u='+encodeURIComponent(u.email||u.id);
+  return `
+  ${isInternal()&&mine?`<div class="banner blue">👀 คุณเป็น <b>${esc(ROLE_TH[S.user.role]||S.user.role)}</b> — แอปนี้แสดงมุมมองของทีมขาย (ไม่มีต้นทุน) · ดูหน้าของ Sales แต่ละคนได้ที่แท็บ <a href="javascript:go('/team')">ทีมขาย</a>
+     <span class="spacer"></span><a class="btn sm ghost" href="${esc(CLOUD_URL)}" target="_top">เปิดระบบทำราคา →</a></div>`:''}
+  <div class="person">
+    <div class="avatar lg">${esc((u.name||'?')[0].toUpperCase())}</div>
+    <div style="flex:1;min-width:200px"><h1>${mine?'งานของฉัน':'หน้าของ '+esc(u.name)}</h1>
+      <div class="hint">${esc(u.name)}${u.email?' · '+esc(u.email):''} · <span class="tag ${u.role==='Sales'?'orange':'blue'}" style="font-size:10.5px">${esc(ROLE_TH[u.role]||u.role)}</span></div></div>
+    ${!mine?`<button class="btn sm ghost" onclick="copyText('${esc(link)}','คัดลอกลิงก์หน้านี้แล้ว')" title="ส่งให้ Sales คนนี้เปิดหน้าของตัวเอง">🔗 คัดลอกลิงก์</button>`:''}
+    ${mine||canRequestForOthers()?`<button class="btn sm" onclick="newRequest('${esc(mine?'':pid)}')">➕ ขอราคาใหม่${mine?'':' ให้ '+esc(u.name)}</button>`:''}
+  </div>
+  <div class="kpis">
+    ${kpiBox('all','งานที่เปิดอยู่',all.filter(r=>stageOf(r).key!=='done').length,'คำขอ + ใบเสนอราคา')}
+    ${kpiBox('req','คำขอราคา',by('req').length,'รอ Sourcing')}
+    ${kpiBox('ready','พร้อมเสนอลูกค้า',ready.length,'฿'+fmt0(ready.reduce((s,r)=>s+valueOf(r),0)))}
+    ${kpiBox('update','ต้องอัปเดต',by('update').length,'เกิน '+SALES_UPDATE_DAYS+' วัน / เลยนัด',by('update').length?'red':'')}
+    ${kpiBox('done','ปิดการขายได้',won.length,'฿'+fmt0(won.reduce((s,r)=>s+valueOf(r),0)))}
+  </div>
+  <div class="toolbar">
+    <input class="inp search" placeholder="🔍 ค้นหา ลูกค้า / โครงการ / เลขเอกสาร" value="${esc(S.search)}" oninput="S.search=this.value;rerenderList('${esc(pid)}')">
+    <select class="inp" style="width:auto" onchange="S.filter=this.value;render()">${FILTERS.map(f=>`<option value="${f.k}" ${S.filter===f.k?'selected':''}>${f.t}</option>`).join('')}</select>
+    <span class="hint">${list.length} รายการ</span>
+  </div>
+  <div class="jobs" id="jobList">${jobsHTML(list)}</div>`;
+}
+function rerenderList(pid){
+  const html=viewPerson(pid);const tmp=document.createElement('div');tmp.innerHTML=html;
+  const nl=tmp.querySelector('#jobList');if(nl&&$('#jobList'))$('#jobList').innerHTML=nl.innerHTML;
+}
+function kpiBox(k,l,v,s,color){
+  return `<div class="kpi ${S.filter===k?'on':''}" onclick="S.filter='${k}';render()"><div class="l">${l}</div>
+    <div class="v" style="${color?'color:var(--'+color+')':''}">${v}</div><div class="s">${s}</div></div>`;
+}
+function jobsHTML(list){
+  if(!list.length)return `<div class="empty" style="grid-column:1/-1"><div class="big">📭</div>ยังไม่มีงานในหมวดนี้<div style="margin-top:12px"><button class="btn sm" onclick="newRequest()">➕ ขอราคาใหม่</button></div></div>`;
+  return list.map(jobCard).join('');
+}
+function jobCard(r){
+  const sg=stageOf(r),upd=lastUpd(r),need=needsUpdate(r),fl=followDate(r);
+  const flash=S.flash[r.id]&&Date.now()-S.flash[r.id]<6000;
+  const shown=priceShown(r);
+  const unapproved=shown&&['Approved','Pending','Won','Closed'].indexOf(String(r.status))<0;
+  let val;
+  if(isSR(r))val=`<span class="hint">${(r.d&&r.d.lines||[]).length} รายการที่ขอ${hdr(r).needBy?' · ต้องการภายใน '+esc(hdr(r).needBy):''}</span>`;
+  else if(shown)val=`<span class="job-val">฿${fmt0(valueOf(r))}</span>${r.gp!=null&&isInternal()?` <span class="tag ${r.gp>=20?'green':r.gp>=12?'amber':'red'}">GP ${fmt(r.gp,1)}%</span>`:''}`;
+  else val=`<span class="hint">🔒 ${String(r.status)==='Approved'?'อนุมัติแล้ว รอปล่อยราคาให้คุณ':'ยังไม่ถึงขั้นตอนเห็นราคา'}</span>`;
+  const acts=[];
+  if(isSR(r)){
+    acts.push(`<button class="btn sm ghost" onclick="openDetail('${r.id}')">ดูรายละเอียด</button>`);
+    if(srEditable(r))acts.push(`<button class="btn sm ghost" onclick="editRequest('${r.id}')">✏️ แก้ไข</button>`,
+      `<button class="btn sm ghost" style="color:var(--red)" onclick="deleteRequest('${r.id}')">ลบ</button>`);
+  }else{
+    if(shown)acts.push(`<button class="btn sm" onclick="openDetail('${r.id}')">💰 ดูราคา</button>`);
+    else acts.push(`<button class="btn sm ghost" onclick="openDetail('${r.id}')">ดูรายละเอียด</button>`);
+    if(String(r.status)==='Pending'&&(ownerOf(r)===S.user.id||canTeam()))acts.push(`<button class="btn sm ${need?'red':'ghost'}" onclick="openUpdate('${r.id}')">📝 อัปเดตความคืบหน้า</button>`);
+    if(r.canRelease)acts.push(`<button class="btn sm blue" onclick="releasePrice('${r.id}')">🔓 ปล่อยราคาให้ ${esc(userName(ownerOf(r))||r.sales||'Sales')}</button>`);
+  }
+  return `<div class="job ${need?'alert':''} ${flash?'flash':''}">
+    <div class="job-top"><div style="min-width:0"><div class="job-t">${esc(titleOf(r))}</div><div class="job-c">${esc(custOf(r))}</div></div>
+      <div class="job-no">${esc(r.docNo||'—')}${isSR(r)?'':''}</div></div>
+    <div class="job-mid"><span class="tag ${sg.color}">${esc(sg.label)}</span>${unapproved?'<span class="tag red" title="ราคานี้ยังไม่ผ่านการอนุมัติ ห้ามส่งให้ลูกค้า">⚠ ราคายังไม่อนุมัติ</span>':''}</div>
+    <div class="job-mid">${val}</div>
+    <div class="job-meta"><span>${isSR(r)?'📨 คำขอราคา':'📄 ใบเสนอราคา'}</span>
+      ${S.route.page==='sales'&&S.route.id!==S.user.id||canTeam()?`<span>👤 ${esc(userName(ownerOf(r))||r.sales||'ไม่ระบุ')}</span>`:''}
+      <span>อัปเดต ${esc(agoTH(r.updatedAt))}</span>
+      ${upd?`<span>📝 ${esc(upd.stage||'')} · ${esc(agoTH(upd.at))}</span>`:''}
+      ${fl?`<span style="${fl<todayISO()?'color:var(--red);font-weight:600':''}">📅 นัด ${esc(fl)}</span>`:''}</div>
+    ${acts.length?`<div class="job-acts">${acts.join('')}</div>`:''}
+  </div>`;
+}
+
+/* ---------- ทีมขาย (ผู้จัดการ) ---------- */
+function viewTeam(){
+  const ids=new Set(S.users.filter(u=>u.role==='Sales'||u.role==='Sales Manager').filter(u=>u.active!==false).map(u=>u.id));
+  Object.values(S.rows).forEach(r=>{if(!r.deleted)ids.add(ownerOf(r))});
+  const people=[...ids].map(id=>{
+    const rs=rowsOf(id),u=S.users.find(x=>x.id===id);
+    const open=rs.filter(r=>stageOf(r).key!=='done'),ready=rs.filter(r=>stageOf(r).key==='ready');
+    return {id,u,name:u?u.name:(id?id:'ไม่ระบุเจ้าของ'),open:open.length,req:rs.filter(r=>stageOf(r).key==='req').length,
+      ready:ready.length,readyVal:ready.reduce((s,r)=>s+valueOf(r),0),upd:rs.filter(needsUpdate).length,
+      won:rs.filter(r=>r.status==='Won').length};
+  }).sort((a,b)=>b.upd-a.upd||b.open-a.open);
+  return `<div class="person"><div style="flex:1"><h1>ทีมขาย</h1><div class="hint">เลือก Sales เพื่อเปิดหน้าของคนนั้น · ข้อมูลอัปเดตอัตโนมัติ</div></div></div>
+  <div class="team" style="margin-top:16px">${people.map(p=>`<div class="tcard" onclick="go('/sales/${encodeURIComponent(p.id)}')">
+    <div class="row"><div class="avatar">${esc((p.name||'?')[0].toUpperCase())}</div>
+      <div style="flex:1;min-width:0"><b>${esc(p.name)}</b><div class="hint">${esc((p.u&&p.u.email)||(p.id?p.id:'งานที่ยังไม่ผูก Sales'))}</div></div>
+      ${p.upd?`<span class="tag red">ค้างอัปเดต ${p.upd}</span>`:''}</div>
+    <div class="tstats"><div><b>${p.open}</b><span>งานเปิด</span></div><div><b>${p.req}</b><span>คำขอ</span></div>
+      <div><b>${p.ready}</b><span>พร้อมเสนอ</span></div><div><b>${p.won}</b><span>Won</span></div></div>
+    <div class="hint">มูลค่าพร้อมเสนอ <b class="mono" style="color:var(--ink)">฿${fmt0(p.readyVal)}</b></div></div>`).join('')
+    ||'<div class="empty"><div class="big">👥</div>ยังไม่มี Sales ในระบบ</div>'}</div>`;
+}
+
+/* ---------- รายละเอียด / ราคา ---------- */
+function openDetail(id){
+  const r=S.rows[id];if(!r)return;
+  const H=hdr(r),d=r.d||{},sg=stageOf(r),shown=priceShown(r);
+  let body;
+  if(isSR(r)){
+    body=`<div class="tw"><table class="pt"><thead><tr><th>#</th><th>สินค้า</th><th class="r">จำนวน</th><th>หน่วย</th><th class="r">ราคาเป้าหมาย</th><th>หมายเหตุ</th></tr></thead><tbody>
+      ${(d.lines||[]).map((L,i)=>`<tr><td>${i+1}</td><td><b>${esc(L.code||'')}</b> ${esc(L.desc||'')}</td><td class="r mono">${fmt0(L.qty)}</td><td>${esc(L.uom||'')}</td>
+        <td class="r mono">${(+L.targetUp||0)>0?fmt(+L.targetUp):'—'}</td><td>${esc(L.salesNote||'')}</td></tr>`).join('')}</tbody></table></div>
+      ${d.salesNote?`<div style="margin-top:10px"><b>รายละเอียด / สเปค:</b><div class="hint" style="white-space:pre-wrap;font-size:13px;color:var(--ink-2)">${esc(d.salesNote)}</div></div>`:''}`;
+  }else if(shown){
+    body=`<div class="tw"><table class="pt"><thead><tr><th>#</th><th>สินค้า</th><th class="r">จำนวน</th><th>หน่วย</th><th class="r">ราคา/หน่วย</th><th class="r">รวม</th></tr></thead><tbody>
+      ${(d.lines||[]).map((L,i)=>`<tr><td>${i+1}</td><td><b>${esc(L.code||'')}</b><div class="hint">${esc(L.desc||'')}${L.warranty?' · ประกัน '+esc(L.warranty):''}${L.lead?' · '+esc(L.lead):''}</div></td>
+        <td class="r mono">${fmt0(L.qty)}</td><td>${esc(L.uom||'')}</td><td class="r mono">${fmt(L.unitPrice)}</td><td class="r mono"><b>${fmt(L.amount)}</b></td></tr>`).join('')}
+      ${(+d.extrasTotal||0)>0?`<tr><td colspan="5" class="r">ค่าใช้จ่ายเพิ่มเติม</td><td class="r mono">${fmt(d.extrasTotal)}</td></tr>`:''}
+      <tr style="background:var(--orange-soft)"><td colspan="5" class="r"><b>รวมทั้งสิ้น (${esc(H.currency||'THB')})</b></td><td class="r mono"><b>${fmt(d.total)}</b></td></tr></tbody></table></div>
+      <div class="hint" style="margin-top:8px">${esc(H.incoterm||'')} · ${esc(H.priceTerm||'')} · ยืนราคา ${esc(H.validity||30)} วัน${H.offerDate?' นับจาก '+esc(H.offerDate):''}</div>
+      ${(d.remarks||[]).filter(x=>String(x).trim()).length?`<ol style="margin:8px 0 0 18px;font-size:12.5px;color:var(--ink-2)">${d.remarks.filter(x=>String(x).trim()).map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`:''}
+      ${['Approved','Pending','Won','Closed'].indexOf(String(r.status))<0?'<div class="banner amber" style="margin-top:10px">⚠ ราคานี้ยังไม่ผ่านการอนุมัติของผู้บริหาร — ใช้ดูภายในเท่านั้น ห้ามส่งให้ลูกค้า</div>':''}`;
+  }else{
+    body=`<div class="empty"><div class="big">🔒</div>${String(r.status)==='Approved'
+      ?'ราคาอนุมัติแล้ว รอผู้ปล่อยราคาส่งต่อให้คุณ — ระบบจะแจ้งบนหน้านี้อัตโนมัติเมื่อปล่อยแล้ว'
+      :'ใบนี้ยังอยู่ระหว่าง <b>'+esc(sg.label)+'</b> — จะเห็นราคาเมื่อผู้บริหารอนุมัติและปล่อยราคาแล้ว'}</div>`;
+  }
+  const upd=lastUpd(r);
+  modal(`<div class="modal-h"><div style="min-width:0"><h3>${esc(titleOf(r))}</h3><div class="hint">${esc(r.docNo||'')} · ${esc(custOf(r))} · <span class="tag ${sg.color}">${esc(sg.label)}</span></div></div>
+    <div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b">${body}
+      ${upd?`<div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)"><b style="font-size:13px">อัปเดตล่าสุด</b>
+        <div class="hint" style="font-size:12.5px;color:var(--ink-2)">${esc(upd.stage||'')} — ${esc(upd.note||'')}${upd.next?' · ถัดไป: '+esc(upd.next):''} <span class="hint">(${esc(upd.byName||'')} · ${esc(agoTH(upd.at))})</span></div></div>`:''}</div>
+    <div class="modal-f">
+      ${shown&&['Approved','Pending','Won','Closed'].indexOf(String(r.status))>=0?`<button class="btn ghost" onclick="copyQuote('${r.id}')">📋 คัดลอกเป็นข้อความ</button>`:''}
+      ${!isSR(r)&&String(r.status)==='Pending'?`<button class="btn ghost" onclick="closeModal();openUpdate('${r.id}')">📝 อัปเดตความคืบหน้า</button>`:''}
+      <button class="btn" onclick="closeModal()">ปิด</button></div>`,true);
+}
+function copyQuote(id){
+  const r=S.rows[id];if(!r||!r.d)return;const H=hdr(r),d=r.d;
+  const lines=(d.lines||[]).map((L,i)=>`${i+1}. ${L.code?L.code+' ':''}${L.desc||''}\n   ${fmt0(L.qty)} ${L.uom||''} × ${fmt(L.unitPrice)} = ${fmt(L.amount)} ${H.currency||'THB'}`).join('\n');
+  const txt=`ใบเสนอราคา ${r.docNo||''}\nโครงการ: ${titleOf(r)}\nลูกค้า: ${custOf(r)}\n\n${lines}\n${(+d.extrasTotal||0)>0?'ค่าใช้จ่ายเพิ่มเติม: '+fmt(d.extrasTotal)+'\n':''}รวมทั้งสิ้น: ${fmt(d.total)} ${H.currency||'THB'}\n${H.incoterm||''} · ยืนราคา ${H.validity||30} วัน`;
+  copyText(txt,'คัดลอกรายละเอียดราคาแล้ว');
+}
+function copyText(t,msg){
+  const done=()=>toast(msg||'คัดลอกแล้ว','good');
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,()=>fallbackCopy(t,done));else fallbackCopy(t,done);
+}
+function fallbackCopy(t,done){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');done()}catch(e){prompt('คัดลอกข้อความนี้',t)}a.remove()}
+
+/* ---------- อัปเดตความคืบหน้า (ใช้ salesPatch — แก้ได้เฉพาะ field ของ Sales) ---------- */
+function openUpdate(id){
+  const r=S.rows[id];if(!r)return;const u=lastUpd(r)||{};
+  modal(`<div class="modal-h"><h3>📝 อัปเดตความคืบหน้ากับลูกค้า</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
+  <div class="modal-b">
+    <div class="hint" style="margin-bottom:12px">${esc(r.docNo||'')} · ${esc(titleOf(r))}${u.at?' · อัปเดตล่าสุด '+esc(agoTH(u.at)):''}</div>
+    <div class="field"><label class="lbl">สถานะกับลูกค้าตอนนี้</label><select class="inp" id="up_stage">${CUST_STAGES.map(x=>`<option ${u.stage===x?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
+    <div class="field"><label class="lbl">รายละเอียด / สิ่งที่คุยกับลูกค้า</label><textarea class="inp" id="up_note" rows="3" placeholder="เช่น ลูกค้าขอส่วนลดเพิ่ม 3% เทียบอยู่กับอีก 2 เจ้า">${esc(u.note||(r.d&&r.d.salesNote)||'')}</textarea></div>
+    <div class="row" style="align-items:flex-start">
+      <div class="field" style="flex:1"><label class="lbl">ขั้นตอนถัดไป</label><select class="inp" id="up_next">${NEXT_STEPS.map(x=>`<option ${u.next===x?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
+      <div class="field" style="flex:1"><label class="lbl">วันที่นัดติดตาม</label><input class="inp" id="up_date" type="date" value="${esc(followDate(r))}"></div></div>
+  </div>
+  <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" id="upBtn" onclick="saveUpdate('${r.id}')">บันทึกการอัปเดต</button></div>`);
+}
+async function saveUpdate(id){
+  const r=S.rows[id];if(!r)return;
+  const stage=$('#up_stage').value,note=($('#up_note').value||'').trim(),next=$('#up_next').value,date=$('#up_date').value||'';
+  const at=new Date().toISOString();
+  const patch={salesUpdate:{at,by:S.user.id,byName:S.user.name,stage,note,next},salesUpdatedAt:at,salesNote:note,followUpDate:date};
+  $('#upBtn').disabled=true;
+  const res=await api({action:'salesPatch',id,patch:JSON.stringify(patch),note:'Sales update: '+stage+(next?' · ถัดไป '+next:'')+(date?' · นัด '+date:'')});
+  if(!res.ok){$('#upBtn').disabled=false;toast('บันทึกไม่สำเร็จ: '+(res.error||'-'),'bad');return}
+  if(r.d)Object.assign(r.d,patch);r.updatedAt=res.updatedAt||at;S.flash[id]=Date.now();
+  closeModal();toast('บันทึกความคืบหน้าแล้ว','good');render();
+}
+
+/* ---------- ปล่อยราคา (เฉพาะผู้ปล่อยราคา / ผู้จัดการ — server ตรวจสิทธิ์เอง) ---------- */
+function releasePrice(id){
+  const r=S.rows[id];if(!r)return;const owner=userName(ownerOf(r))||r.sales||'Sales';
+  modal(`<div class="modal-h"><h3>ยืนยันการปล่อยราคา</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b" style="line-height:1.9">ปล่อยราคาใบ <b>${esc(r.docNo||'')}</b> ให้ <b style="color:var(--blue)">${esc(owner)}</b><br>
+      มูลค่ารวม <b>฿${fmt0(valueOf(r)||r.salesValue)}</b> · สถานะจะเปลี่ยนเป็น “ราคาพร้อม · ติดตามลูกค้า”</div>
+    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn blue" id="relBtn" onclick="doRelease('${r.id}')">🔓 ยืนยันปล่อยราคา</button></div>`);
+}
+async function doRelease(id){
+  $('#relBtn').disabled=true;
+  const res=await api({action:'release',id});
+  closeModal();
+  if(!res.ok){toast(res.error==='NOT_APPROVED'?'ใบนี้ไม่ได้อยู่ในสถานะอนุมัติแล้ว (มีคนเปลี่ยนสถานะไปก่อน)':('ปล่อยราคาไม่สำเร็จ: '+(res.error||'-')),'bad');await poll(true);return}
+  toast('ปล่อยราคาแล้ว','good');await poll(true);render();
+}
+
+/* ============================================================ ขอราคาใหม่ (SR) */
+const DRAFT_KEY='srDraft';
+function blankForm(ownerId){
+  return {id:'',status:'Submitted',ownerId:ownerId||S.user.id,
+    header:{title:'',customer:'',groupType:'Inverter',currency:'THB',priceTerm:'Special price',incoterm:'CIF at MGS',validity:30,needBy:''},
+    spec:'',lines:[{code:'',desc:'',qty:1,uom:'pcs',targetUp:'',note:''}]};
+}
+function newRequest(ownerId){
+  const dr=LS.get(DRAFT_KEY,null);
+  S.form=(dr&&dr.userId===S.user.id&&!dr.form.id&&!ownerId)?dr.form:blankForm(ownerId&&canRequestForOthers()?ownerId:S.user.id);
+  go('/request');
+}
+function editRequest(id){
+  const r=S.rows[id];if(!r||!srEditable(r)){toast('คำขอนี้ถูก Sourcing รับงานแล้ว แก้ไขไม่ได้','bad');return}
+  const d=r.d||{},H=hdr(r);
+  S.form={id,status:r.status==='Draft'?'Draft':'Submitted',ownerId:ownerOf(r),docNo:r.docNo,
+    header:{title:H.title||'',customer:H.customer||'',groupType:H.groupType||'Inverter',currency:H.currency||'THB',
+      priceTerm:H.priceTerm||'Special price',incoterm:H.incoterm||'CIF at MGS',validity:H.validity||30,needBy:H.needBy||''},
+    spec:d.salesNote||'',
+    lines:(d.lines||[]).map(L=>({code:L.code||'',desc:L.desc||'',qty:L.qty||1,uom:L.uom||'pcs',targetUp:(+L.targetUp||'')||'',note:L.salesNote||''}))};
+  if(!S.form.lines.length)S.form.lines=blankForm().lines;
+  go('/request/'+id);
+}
+function listOf(k){const v=S.settings[k];return Array.isArray(v)&&v.length?v:DEF_LISTS[k]}
+function viewRequest(){
+  if(!S.form){S.form=blankForm()}
+  const F=S.form,H=F.header,opts=(arr,v)=>arr.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('');
+  const salesPeople=S.users.filter(u=>(u.role==='Sales'||u.role==='Sales Manager')&&u.active!==false);
+  return `<div class="person"><div style="flex:1"><h1>${F.id?'แก้ไขคำขอราคา '+esc(F.docNo||''):'ขอราคาใหม่'}</h1>
+    <div class="hint">กรอกข้อมูลลูกค้าและรายการสินค้า → ส่งให้ทีม Sourcing ทำราคา · เลขคำขอ (SR) ระบบออกให้อัตโนมัติ</div></div></div>
+  <div class="card" style="margin-top:16px"><div class="card-h"><h2>ข้อมูลโครงการ</h2></div><div class="card-b"><div class="fgrid">
+    <div class="s2"><label class="lbl req">ลูกค้า</label><input class="inp" id="f_customer" list="custList" value="${esc(H.customer)}" placeholder="ชื่อบริษัทลูกค้า" oninput="fset('customer',this.value)">
+      <datalist id="custList">${[...new Set(Object.values(S.rows).map(custOf).filter(Boolean))].sort().map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
+    <div class="s2"><label class="lbl">ชื่อโครงการ</label><input class="inp" value="${esc(H.title)}" placeholder="เช่น Thaibev Rooftop 1MW" oninput="fset('title',this.value)"></div>
+    ${canRequestForOthers()?`<div class="s2"><label class="lbl">Sales เจ้าของงาน</label><select class="inp" onchange="S.form.ownerId=this.value;saveDraft()">
+      <option value="${esc(S.user.id)}" ${F.ownerId===S.user.id?'selected':''}>${esc(S.user.name)} (ฉัน)</option>
+      ${salesPeople.filter(u=>u.id!==S.user.id).map(u=>`<option value="${esc(u.id)}" ${F.ownerId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>`
+      :`<div class="s2"><label class="lbl">Sales เจ้าของงาน</label><div class="inp" style="background:var(--surface-2)">${esc(S.user.name)}</div></div>`}
+    <div><label class="lbl">กลุ่มงาน</label><select class="inp" onchange="fset('groupType',this.value)">${opts(GROUP_TYPES,H.groupType)}</select></div>
+    <div><label class="lbl">ต้องการราคาภายใน</label><input class="inp" type="date" value="${esc(H.needBy)}" min="${todayISO()}" onchange="fset('needBy',this.value)"></div>
+    <div><label class="lbl">สกุลเงินที่เสนอ</label><select class="inp" onchange="fset('currency',this.value)">${opts(['THB','USD','CNY'],H.currency)}</select></div>
+    <div><label class="lbl">Incoterm</label><select class="inp" onchange="fset('incoterm',this.value)">${opts(listOf('incoterms'),H.incoterm)}</select></div>
+    <div><label class="lbl">Price term</label><select class="inp" onchange="fset('priceTerm',this.value)">${opts(listOf('priceTerms'),H.priceTerm)}</select></div>
+    <div><label class="lbl">ยืนราคา (วัน)</label><input class="inp" type="number" min="1" value="${esc(H.validity)}" oninput="fset('validity',+this.value||30)"></div>
+    <div class="s4"><label class="lbl">รายละเอียดงาน / สเปค / เงื่อนไขพิเศษ</label><textarea class="inp" rows="3" placeholder="เช่น ติดตั้งบนหลังคาเมทัลชีท, ลูกค้าต้องการแบรนด์ Sungrow, ส่งของภายใน มี.ค." oninput="S.form.spec=this.value;saveDraft()">${esc(F.spec)}</textarea></div>
+  </div></div></div>
+  <div class="card" style="margin-top:16px"><div class="card-h"><h2>รายการสินค้าที่ขอราคา</h2><span class="hint">พิมพ์รหัสหรือชื่อสินค้าเพื่อค้นหาจากแคตตาล็อก หรือพิมพ์ชื่อสินค้าใหม่ได้เลย</span>
+    <div class="spacer"></div><button class="btn sm ghost" onclick="addLine()">+ เพิ่มรายการ</button></div>
+    <div class="card-b"><div class="lines" id="lineBox"></div>
+      <datalist id="prodList">${S.products.map(p=>`<option value="${esc(p.code)}">${esc(p.desc)}</option>`).join('')}</datalist></div></div>
+  <div class="formbar">
+    <span class="hint" id="draftHint"></span><div class="spacer"></div>
+    <button class="btn ghost" onclick="cancelRequest()">ยกเลิก</button>
+    <button class="btn ghost" id="btnDraft" onclick="submitRequest('Draft')">💾 บันทึกร่าง</button>
+    <button class="btn" id="btnSend" onclick="submitRequest('Submitted')">📨 ${F.id&&F.status==='Submitted'?'บันทึกการแก้ไข':'ส่งคำขอให้ Sourcing'}</button>
+  </div>`;
+}
+function fillRequestForm(){renderLines()}
+function fset(k,v){S.form.header[k]=v;saveDraft()}
+function saveDraft(){if(!S.form||S.form.id)return;LS.set(DRAFT_KEY,{userId:S.user.id,form:S.form,at:new Date().toISOString()});
+  const h=$('#draftHint');if(h)h.textContent='ร่างถูกเก็บไว้ในเครื่องนี้อัตโนมัติ';}
+function renderLines(){
+  const box=$('#lineBox');if(!box)return;
+  box.innerHTML=S.form.lines.map((L,i)=>`<div class="lrow">
+    <div class="no">${i+1}</div>
+    <div class="c2"><label>รหัสสินค้า</label><input class="inp" list="prodList" value="${esc(L.code)}" placeholder="ค้นหารหัส/ชื่อ" onchange="pickCode(${i},this.value)"></div>
+    <div class="c2"><label>ชื่อสินค้า / รายละเอียด *</label><input class="inp" id="ld_${i}" value="${esc(L.desc)}" placeholder="เช่น Inverter 110kW" oninput="lset(${i},'desc',this.value)"></div>
+    <div><label>จำนวน</label><input class="inp" type="number" min="0" step="any" value="${esc(L.qty)}" oninput="lset(${i},'qty',this.value)"></div>
+    <div><label>หน่วย</label><input class="inp" id="lu_${i}" list="uomList" value="${esc(L.uom)}" oninput="lset(${i},'uom',this.value)"></div>
+    <div><label>ราคาเป้าหมาย/หน่วย</label><input class="inp" type="number" min="0" step="any" value="${esc(L.targetUp)}" placeholder="ถ้ามี" oninput="lset(${i},'targetUp',this.value)"></div>
+    <div class="c2"><label>หมายเหตุ</label><input class="inp" value="${esc(L.note)}" placeholder="เช่น ยี่ห้อ / สเปค" oninput="lset(${i},'note',this.value)"></div>
+    <button class="del" onclick="delLine(${i})" title="ลบรายการ">✕</button></div>`).join('')+
+    `<datalist id="uomList">${listOf('units').map(u=>`<option value="${esc(u)}">`).join('')}</datalist>`;
+}
+function lset(i,k,v){S.form.lines[i][k]=v;saveDraft()}
+function pickCode(i,code){
+  const L=S.form.lines[i];L.code=(code||'').trim();
+  const p=S.products.find(x=>x.code.toLowerCase()===L.code.toLowerCase())
+        ||S.products.find(x=>(x.desc||'').toLowerCase()===L.code.toLowerCase());
+  if(p){L.code=p.code;if(!L.desc)L.desc=p.desc;if(p.uom)L.uom=String(p.uom).toLowerCase()==='pcs'?'pcs':p.uom;L.group=p.group||'';}
+  saveDraft();renderLines();
+}
+function addLine(){S.form.lines.push({code:'',desc:'',qty:1,uom:'pcs',targetUp:'',note:''});saveDraft();renderLines();
+  setTimeout(()=>{const el=$('#ld_'+(S.form.lines.length-1));if(el)el.focus()},30)}
+function delLine(i){if(S.form.lines.length===1){S.form.lines=blankForm().lines}else S.form.lines.splice(i,1);saveDraft();renderLines()}
+function cancelRequest(){S.form=null;go('/me')}
+let _submitting=false;
+async function submitRequest(status){
+  if(_submitting)return;
+  const F=S.form,H=F.header;
+  const lines=F.lines.filter(L=>(L.desc||'').trim()||(L.code||'').trim());
+  if(!(H.customer||'').trim()){toast('กรุณาใส่ชื่อลูกค้า','bad');$('#f_customer').focus();return}
+  if(!lines.length){toast('กรุณาใส่รายการสินค้าอย่างน้อย 1 รายการ','bad');return}
+  if(lines.some(L=>!(L.desc||'').trim()&&!(L.code||'').trim())){toast('กรุณาใส่ชื่อสินค้าให้ครบทุกรายการ','bad');return}
+  if(lines.some(L=>!(+L.qty>0))){toast('จำนวนสินค้าต้องมากกว่า 0','bad');return}
+  const owner=S.users.find(u=>u.id===F.ownerId)||S.user;
+  const id=F.id||uid();
+  const now=new Date().toISOString();
+  // โครงสร้างเดียวกับ submitSalesRequest() ใน Index.html → ฝั่ง Sourcing รับงาน/สร้าง QT ต่อได้ทันที
+  const doc={id,_v:2,docType:'SR',docNo:F.docNo||'',status,quoteIds:[],assignedTo:null,
+    updated:todayISO(),updatedAt:now,rev:1,stage:'Draft',followStatus:'Requested',round:1,
+    salesNote:(F.spec||'').trim(),approvals:[],parentId:null,releasedTo:[],
+    header:{ref:F.docNo||'',customer:H.customer.trim(),title:(H.title||'').trim()||H.customer.trim(),
+      sales:owner.name,salesUserId:owner.id,groupType:H.groupType,reqDate:todayISO(),needBy:H.needBy||'',
+      currency:H.currency,priceTerm:H.priceTerm,incoterm:H.incoterm,offerDate:todayISO(),validity:+H.validity||30},
+    lines:lines.map(L=>({code:(L.code||'').trim(),desc:(L.desc||L.code||'').trim(),group:L.group||H.groupType,
+      uom:L.uom||'pcs',qty:+L.qty||1,targetUp:+L.targetUp||0,salesNote:(L.note||'').trim()})),
+    remarks:[]};
+  _submitting=true;['#btnDraft','#btnSend'].forEach(s=>{const b=$(s);if(b)b.disabled=true});
+  const res=await api({action:'saveSR',id,detail:JSON.stringify(doc)});
+  _submitting=false;['#btnDraft','#btnSend'].forEach(s=>{const b=$(s);if(b)b.disabled=false});
+  if(!res.ok){
+    toast(res.error==='SR_LOCKED'?'คำขอนี้ถูก Sourcing รับงานไปแล้ว แก้ไขไม่ได้':('ส่งไม่สำเร็จ: '+(res.error||'-')+' — ร่างยังอยู่ ลองใหม่ได้'),'bad');return}
+  if(!F.id)LS.del(DRAFT_KEY);
+  S.form=null;S.flash[id]=Date.now();
+  toast(status==='Draft'?('บันทึกร่าง '+(res.docNo||'')+' แล้ว'):('ส่งคำขอ '+(res.docNo||'')+' ให้ Sourcing แล้ว ✓'),'good');
+  await poll(true);
+  go(owner.id===S.user.id?'/me':'/sales/'+encodeURIComponent(owner.id));
+}
+function deleteRequest(id){
+  const r=S.rows[id];if(!r)return;
+  modal(`<div class="modal-h"><h3>ลบคำขอราคา?</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b">ลบ <b>${esc(titleOf(r))}</b> (${esc(r.docNo||'')}) — ลบได้เพราะ Sourcing ยังไม่รับงาน</div>
+    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn red" onclick="doDelete('${r.id}')">ลบคำขอ</button></div>`);
+}
+async function doDelete(id){
+  closeModal();const res=await api({action:'delete',id});
+  if(!res.ok){toast(res.error==='SR_LOCKED'?'Sourcing รับงานไปแล้ว ลบไม่ได้':('ลบไม่สำเร็จ: '+(res.error||'-')),'bad');return}
+  if(S.rows[id])S.rows[id].deleted=true;toast('ลบคำขอแล้ว','good');render();
+}
+
+/* ============================================================ บัญชีของฉัน */
+function openMe(){
+  const u=S.user;
+  modal(`<div class="modal-h"><h3>บัญชีของฉัน</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b"><div class="row"><div class="avatar lg">${esc((u.name||'?')[0].toUpperCase())}</div>
+      <div><b style="font-size:16px">${esc(u.name)}</b><div class="hint">${esc(u.email||u.id)}</div>
+      <span class="tag orange">${esc(ROLE_TH[u.role]||u.role)}</span></div></div>
+      <div class="hint" style="margin-top:14px;line-height:1.8">สิทธิ์: ${canTeam()?'เห็นงานของ Sales ทุกคน':'เห็นเฉพาะงานของตัวเอง'} · ${canRequestForOthers()?'ขอราคาแทน Sales คนอื่นได้':'ขอราคาในนามตัวเอง'}<br>
+      การเปลี่ยนสิทธิ์ทำได้โดยผู้ดูแลระบบ (แท็บ Users / หน้าจัดการผู้ใช้)</div></div>
+    <div class="modal-f"><button class="btn ghost" onclick="openChangePassword()">🔑 เปลี่ยนรหัสผ่าน</button><button class="btn red" onclick="logout()">ออกจากระบบ</button></div>`);
+}
+function openChangePassword(forced){
+  modal(`<div class="modal-h"><h3>${forced?'⚠️ กรุณาตั้งรหัสผ่านใหม่':'เปลี่ยนรหัสผ่าน'}</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b">${forced?'<div class="banner amber">บัญชีของคุณยังใช้รหัสตั้งต้นของระบบ ซึ่งคนอื่นเดาได้ง่าย</div>':''}
+      <div class="field"><label class="lbl">รหัสผ่านปัจจุบัน</label><input class="inp" id="pw_old" type="password" autocomplete="current-password" value="${forced?'1234':''}"></div>
+      <div class="field"><label class="lbl">รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)</label><input class="inp" id="pw_new" type="password" autocomplete="new-password"></div>
+      <div class="field"><label class="lbl">ยืนยันรหัสผ่านใหม่</label><input class="inp" id="pw_new2" type="password" autocomplete="new-password"></div>
+      <div class="login-err" id="pw_err"></div></div>
+    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ไว้ทีหลัง</button><button class="btn" onclick="saveChangePassword()">บันทึก</button></div>`);
+}
+async function saveChangePassword(){
+  const o=$('#pw_old').value,n1=$('#pw_new').value,n2=$('#pw_new2').value;
+  if(!n1||n1.length<6){$('#pw_err').textContent='รหัสใหม่ต้องอย่างน้อย 6 ตัว';return}
+  if(n1!==n2){$('#pw_err').textContent='รหัสใหม่ทั้งสองช่องไม่ตรงกัน';return}
+  if(n1==='1234'){$('#pw_err').textContent='ห้ามใช้รหัสตั้งต้น';return}
+  const r=await api({action:'changePassword',oldHash:await hashPass(o),newHash:await hashPass(n1)});
+  if(!r.ok){$('#pw_err').textContent=r.error==='BAD_OLD_PASSWORD'?'รหัสผ่านปัจจุบันไม่ถูกต้อง':('ไม่สำเร็จ: '+(r.error||'-'));return}
+  closeModal();toast('เปลี่ยนรหัสผ่านแล้ว','good');
+}
+
+/* ============================================================ MODAL / TOAST / START */
+function modal(html,wide){$('#modalRoot').innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()"><div class="modal ${wide?'wide':''}">${html}</div></div>`}
+function closeModal(){$('#modalRoot').innerHTML=''}
+let _tt;function toast(msg,kind){const t=$('#toast');t.className='toast '+(kind||'')+' show';t.textContent=msg;clearTimeout(_tt);_tt=setTimeout(()=>t.className='toast '+(kind||''),3000)}
+
+(async function start(){
+  $('#buildStamp').textContent=BUILD;
+  if(LOGO){$('#loginLogo').src=LOGO;$('#topLogo').src=LOGO}else{$('#loginLogo').remove();$('#topLogo').remove()}
+  $('#loginUser').addEventListener('keydown',e=>{if(e.key==='Enter')$('#loginPass').focus()});
+  $('#loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+  S.token=LS.get('token','');S.user=LS.get('user',null);
+  if(S.token&&S.user){
+    const w=await apiGet('whoami');                       // ตรวจว่า token ยังใช้ได้ + สิทธิ์ล่าสุดจาก server
+    if(w&&w.ok){S.user=Object.assign({},S.user,w.user);LS.set('user',S.user);boot();return}
+    S.token='';LS.del('token');
+  }
+  showLogin();
+  if(gsRun())ssoLogin(true);                               // เปิดผ่าน /exec + Google account ลงทะเบียนไว้ → เข้าเลย
+})();
+</script>
+</body>
+</html>

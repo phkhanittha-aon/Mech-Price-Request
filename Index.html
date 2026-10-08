@@ -401,7 +401,7 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
       <button class="btn full" onclick="doLogin()">เข้าสู่ระบบ →</button>
       <div class="login-err" id="loginErr"></div>
       <div class="login-hint">ลืมรหัสผ่าน? ติดต่อผู้ดูแลระบบเพื่อตั้งรหัสใหม่
-        <div style="margin-top:6px;opacity:.65;font-size:10.5px" class="mono" id="buildStamp">2026-10-08 · build 4.1</div></div>
+        <div style="margin-top:6px;opacity:.65;font-size:10.5px" class="mono" id="buildStamp">2026-10-08 · build 4.2</div></div>
     </div>
   </div>
 </div>
@@ -451,19 +451,26 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const BUILD='2026-10-08 · build 4.1 · RBAC + Live Sync';
+const BUILD='2026-10-08 · build 4.2 · Email login + Sales App';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
    ============================================================ */
 const ROLE_TIER={'GM':'ADMIN','Admin':'ADMIN','Procurement Mgr':'MANAGEMENT','BD Mgr':'MANAGEMENT',
-  'Sourcing':'INTERNAL','Sales':'SALES'};
+  'Sourcing':'INTERNAL','Sales Manager':'SALES','Sales':'SALES'};
 /* ชื่อ role ที่สะกดต่างในแท็บ Users → ชื่อมาตรฐาน (ต้องตรงกับ ROLE_ALIASES ใน Code.gs)
    เดิม "BD Manager" / "procurement mgr " หา ROLE_PERMS ไม่เจอ → ผู้จัดการถูกมองเป็น Sales และไม่เห็นราคา */
 const ROLE_ALIASES={'gm':'GM','general manager':'GM','admin':'Admin','administrator':'Admin',
   'procurement mgr':'Procurement Mgr','procurement manager':'Procurement Mgr','procurement mgr.':'Procurement Mgr',
   'bd mgr':'BD Mgr','bd manager':'BD Mgr','bd mgr.':'BD Mgr','business development manager':'BD Mgr',
-  'sourcing':'Sourcing','sales':'Sales'};
+  'sourcing':'Sourcing','sales':'Sales','sales manager':'Sales Manager','sales mgr':'Sales Manager','sales mgr.':'Sales Manager'};
+// v4.2: รายการ role ที่เลือกได้ในหน้าจัดการผู้ใช้ (ต้องตรงกับ ROLE_MATRIX ใน Code.gs)
+const ROLE_OPTIONS=[
+  {group:'ผู้บริหาร (Manager) — เห็นต้นทุน + อนุมัติ',roles:['GM','Admin','Procurement Mgr','BD Mgr']},
+  {group:'ทีม Sourcing — เห็นต้นทุน + ทำราคา',roles:['Sourcing']},
+  {group:'ทีมขาย — ใช้แอป Sales (ไม่เห็นต้นทุน)',roles:['Sales Manager','Sales']}];
+const ROLE_DESC={'GM':'อนุมัติแทนได้ทั้ง 2 ฝ่าย · จัดการผู้ใช้','Admin':'จัดการผู้ใช้ + ตั้งค่า','Procurement Mgr':'อนุมัติฝั่ง Procurement',
+  'BD Mgr':'อนุมัติฝั่ง BD','Sourcing':'ทำราคา / รับคำขอราคา','Sales Manager':'เห็นงานของ Sales ทุกคน (ไม่มีต้นทุน)','Sales':'ขอราคา + ติดตามงานของตัวเอง'};
 function normRole(role){
   const raw=String(role||'').trim();
   if(ROLE_TIER[raw])return raw;
@@ -565,6 +572,7 @@ const ROLE_PERMS={
   'BD Mgr':{create:true,approve:true,settings:true,users:true,margin:true},
   'GM':{create:true,approve:true,settings:true,users:true,margin:true},
   'Admin':{create:true,approve:true,settings:true,users:true,margin:true},
+  'Sales Manager':{create:false,approve:false,settings:false,users:false,margin:false},
 };
 
 /* ---------- GROUP TYPES (project level) ---------- */
@@ -1199,6 +1207,7 @@ function findUser(input){
   const v=(input||'').trim().toLowerCase();
   if(!v)return null;
   return USERS.find(u=>String(u.id).toLowerCase()===v)
+      || USERS.find(u=>String(u.email||'').trim().toLowerCase()===v)       // v4.2: ล็อกอินด้วยอีเมล
       || USERS.find(u=>String(u.name||'').trim().toLowerCase()===v)
       || null;
 }
@@ -1228,6 +1237,18 @@ async function setUserPassword(userId,plain){
   u.passHash=await hashPass(plain); delete u.pass;
   LS.set('users',USERS); pushUsers(); return true;
 }
+/* v4.2: เปลี่ยนรหัสของตัวเองผ่าน action changePassword
+   (เดิมใช้ saveUsers ซึ่งต้องมีสิทธิ์ manageUsers → Sourcing / Procurement / BD เปลี่ยนรหัสบน server ไม่ได้จริง) */
+async function changeOwnPassword(oldPlain,newPlain){
+  const oldHash=await hashPass(oldPlain),newHash=await hashPass(newPlain);
+  if(cloudReady()&&SESSION_TOKEN){
+    const r=await postCloud({action:'changePassword',oldHash,newHash});
+    if(!r.ok&&/unknown action/i.test(r.error||'')){await setUserPassword(CURRENT.id,newPlain);return {ok:true}}   // Code.gs รุ่นเก่า
+    if(!r.ok)return {ok:false,error:(r.data&&r.data.error)||r.error};
+  }
+  CURRENT.passHash=newHash;delete CURRENT.pass;LS.set('users',USERS);
+  return {ok:true};
+}
 /* ---- ขอ session token จาก server (ตัวจริงที่กำหนดสิทธิ์) ---- */
 async function serverLogin(userId,passHash){
   if(!cloudReady())return {ok:false,offline:true};
@@ -1247,28 +1268,42 @@ function salesAppNotice(name){
   const url=(SETTINGS.cloudUrl||'')+'?app=sales';
   modal(`<div class="modal-h"><h3>บัญชีนี้ใช้ “แอปติดตามงานขาย”</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
   <div class="modal-b"><p style="line-height:1.8">สวัสดีคุณ <b>${esc(name)}</b> — ระบบทำราคานี้เป็นมุมมองภายใน (มีต้นทุนและ %GP)
-    บัญชีของทีมขายจึงใช้แอปอีกตัวที่ออกแบบมาให้โดยเฉพาะ</p>
+    บัญชีของทีมขายใช้ <b>แอป Sales</b> สำหรับ “ขอราคาใหม่” และ “ติดตามงานของฉัน” (ล็อกอินด้วยอีเมลเดียวกันได้เลย)</p>
     <div class="hint" style="margin-top:10px;word-break:break-all">${esc(url)}</div></div>
   <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ปิด</button>
     <a class="btn" href="${esc(url)}" target="_blank" rel="noopener">เปิดแอปติดตามงานขาย →</a></div>`);
 }
 async function doLogin(){
-  const u=findUser($('#loginUser').value);
+  const input=($('#loginUser').value||'').trim(),plain=$('#loginPass').value;
+  let u=findUser(input);
+  // v4.2: ถ้าเครื่องนี้ยังไม่รู้จักบัญชี (เช่น ล็อกอินด้วยอีเมลครั้งแรก) → ให้ server ตรวจ แล้วจำผู้ใช้ไว้ในเครื่อง
+  if(!u&&cloudReady()){
+    SERVER_CAPS=null;LS.set('caps',null);
+    const sv0=await serverLogin(input,await hashPass(plain));
+    if(sv0.ok&&sv0.user){
+      u=USERS.find(x=>x.id===sv0.user.id);
+      if(!u){u={id:sv0.user.id,name:sv0.user.name,role:normRole(sv0.user.role),scope:'all'};USERS.push(u);}
+      u.email=sv0.user.email||u.email||'';u.passHash=await hashPass(plain);delete u.pass;LS.set('users',USERS);
+    }else if(sv0.error==='ACCOUNT_DISABLED'){$('#loginErr').textContent='บัญชีนี้ถูกปิดใช้งาน — ติดต่อผู้ดูแลระบบ';return}
+  }
   // ข้อความเดียวกันทั้งกรณีชื่อผิดและรหัสผิด — ไม่บอกใบ้ว่ามีบัญชีนี้อยู่จริงไหม
-  const ok=u?await verifyPass(u,$('#loginPass').value):false;
-  if(!ok){$('#loginErr').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';return}
+  const ok=u?await verifyPass(u,plain):false;
+  if(!ok){$('#loginErr').textContent='ชื่อผู้ใช้ / อีเมล หรือรหัสผ่านไม่ถูกต้อง';return}
   // ด่านที่ 1: role SALES ไม่มีสิทธิ์เข้าแอปนี้เลย (ไม่ใช่แค่ซ่อน UI — ไม่มี session ให้ตั้งแต่ต้น)
   if(!isInternalUser(u)){
     $('#loginErr').textContent='';$('#loginPass').value='';
     salesAppNotice(u.name);return;
   }
-  LS.set('lastUser',u.name||u.id);
+  LS.set('lastUser',input||u.name||u.id);
   SERVER_CAPS=null;LS.set('caps',null);   // v4.1: ไม่ใช้สิทธิ์ค้างของผู้ใช้คนก่อนบนเครื่องเดียวกัน
   // ด่านที่ 2: ขอ token จาก server — สิทธิ์จริงมาจากตรงนี้
-  const sv=await serverLogin(u.id,await hashPass($('#loginPass').value));
+  const sv=await serverLogin(u.id,await hashPass(plain));
   if(!sv.ok&&!sv.offline){
-    $('#loginErr').textContent='เข้าสู่ระบบที่เซิร์ฟเวอร์ไม่สำเร็จ ('+esc(sv.error||'-')+')';return;
+    $('#loginErr').textContent=sv.error==='ACCOUNT_DISABLED'?'บัญชีนี้ถูกปิดใช้งาน — ติดต่อผู้ดูแลระบบ'
+      :sv.error==='AUTH_FAILED'?'รหัสผ่านบนเซิร์ฟเวอร์ไม่ตรง (อาจถูกเปลี่ยนจากเครื่องอื่น) — ลองรหัสล่าสุด'
+      :'เข้าสู่ระบบที่เซิร์ฟเวอร์ไม่สำเร็จ ('+esc(sv.error||'-')+')';return;
   }
+  if(sv.ok&&sv.user&&sv.user.email!==undefined){u.email=sv.user.email;LS.set('users',USERS);}
   if(sv.ok&&sv.user&&sv.user.role&&normRole(sv.user.role)!==u.role){
     u.role=normRole(sv.user.role);LS.set('users',USERS);   // role ที่เชื่อถือได้คือของ server
   }
@@ -1303,7 +1338,8 @@ async function saveFactoryPass(){
   if(!n1||n1.length<4){$('#fp_err').textContent='รหัสใหม่ต้องอย่างน้อย 4 ตัว';return}
   if(n1!==n2){$('#fp_err').textContent='รหัสใหม่ทั้งสองช่องไม่ตรงกัน';return}
   if(n1===FACTORY_PASS){$('#fp_err').textContent='ห้ามใช้รหัสตั้งต้นเดิม';return}
-  await setUserPassword(CURRENT.id,n1);
+  const r=await changeOwnPassword(FACTORY_PASS,n1);
+  if(!r.ok){$('#fp_err').textContent='บันทึกไม่สำเร็จ: '+(r.error||'-');return}
   closeModal();toast('ตั้งรหัสผ่านใหม่เรียบร้อย','good');
 }
 function logout(){
@@ -3555,25 +3591,93 @@ function saveSettings(){
 }
 
 /* ============================================================ USERS */
+/* ============================================================ USERS (v4.2)
+   ตัวตน = อีเมล (ใช้ล็อกอินทั้งระบบทำราคาและแอป Sales) · สิทธิ์ = บทบาท (Role)
+   ทุกการแก้ไขถูกส่งขึ้นแท็บ Users ทันที (server ตรวจอีเมลซ้ำ / รูปแบบอีเมลให้อีกชั้น)
+   ============================================================ */
+function roleSelectHTML(cur,onchange){
+  return `<select class="inp" style="padding:6px 28px 6px 9px;font-size:12.5px;width:auto" onchange="${onchange}">
+    ${ROLE_OPTIONS.map(g=>`<optgroup label="${esc(g.group)}">${g.roles.map(r=>`<option value="${esc(r)}" ${r===cur?'selected':''}>${esc(r)}</option>`).join('')}</optgroup>`).join('')}
+    ${ROLE_TIER[cur]?'':`<option selected value="${esc(cur||'')}">${esc(cur||'(ไม่ระบุ)')} — ไม่รู้จัก</option>`}</select>`;
+}
+function salesAppUrl(u){return (SETTINGS.cloudUrl||CLOUD_URL)+'?app=sales'+(u?'&u='+encodeURIComponent(u.email||u.id):'')}
+const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const userRejected=r=>!r.ok&&/EMAIL|ACCESS_DENIED/.test(r.error||'');
+function setUserField(i,k,v){
+  const u=USERS[i];if(!u)return;
+  if(k==='email'){v=String(v||'').trim().toLowerCase();
+    if(v&&!EMAIL_RE.test(v)){toast('รูปแบบอีเมลไม่ถูกต้อง','bad');render();return}
+    if(v&&USERS.some((x,j)=>j!==i&&String(x.email||'').toLowerCase()===v)){toast('อีเมลนี้ถูกใช้กับ '+USERS.find((x,j)=>j!==i&&String(x.email||'').toLowerCase()===v).name+' แล้ว','bad');render();return}}
+  if(k==='role'&&u.id===CURRENT.id&&!['GM','Admin'].includes(v)){toast('เปลี่ยนบทบาทของตัวเองออกจาก GM/Admin ไม่ได้ (กันล็อกตัวเองออกจากหน้านี้)','bad');render();return}
+  if(k==='active'&&u.id===CURRENT.id&&!v){toast('ปิดบัญชีของตัวเองไม่ได้','bad');render();return}
+  const old=u[k];u[k]=v;LS.set('users',USERS);
+  pushUsers().then(r=>{if(r&&r.ok)toast('บันทึก '+u.name+' แล้ว','good');
+    else if(r&&userRejected(r)){u[k]=old;LS.set('users',USERS);render();}});   // server ปฏิเสธข้อมูล → คืนค่าเดิม (เน็ตหลุด = เก็บคิวไว้ส่งใหม่)
+  render();
+}
 function viewUsers(){
-  return `<div class="card"><div class="card-h"><h2>ผู้ใช้งานในระบบ</h2><div class="spacer"></div>
-    <span class="hint">แก้รหัสผ่านได้ที่ช่อง “รหัสผ่าน” · กำหนดกลุ่มสินค้าที่แต่ละคนเห็นได้ที่ปุ่ม “กลุ่มสินค้า”</span></div>
-  <div class="card-b" style="padding:0"><div class="tw" style="border:none"><table>
-    <thead><tr><th>ชื่อ</th><th>Username</th><th>บทบาท</th><th>เห็นกำไร/คอม</th><th>สิทธิ์กลุ่มสินค้า</th><th>รหัสผ่าน</th></tr></thead>
-    <tbody>${USERS.map((u,i)=>{const p=ROLE_PERMS[u.role]||{};
-      const scopeTxt=(u.scope==='all'||!u.scope)?'ทุกกลุ่ม':(Array.isArray(u.scope)?u.scope.length+' กลุ่ม':'—');
-      return `<tr><td><div class="row-flex"><div class="avatar" style="width:30px;height:30px;font-size:12px">${esc(u.name[0]||'?')}</div>
-        <input class="cell-inp txt" value="${esc(u.name)}" onchange="USERS[${i}].name=this.value;LS.set('users',USERS);pushUsers();toast('บันทึกชื่อแล้ว','good')"></div></td>
-      <td class="mono" style="font-size:12px">${esc(u.id)}</td><td><span class="tag orange">${esc(u.role)}</span></td>
-      <td>${p.margin?'<span class="tag green">เห็น</span>':'<span class="tag grey">ซ่อน</span>'}</td>
-      <td><button class="btn tiny ghost" onclick="openScope('${u.id}')">${(u.scope==='all'||!u.scope)?'🌐 ทุกกลุ่ม':'🔒 '+scopeTxt}</button></td>
-      <td><div class="pill-input" style="padding:2px 4px 2px 8px;width:170px"><input type="password" placeholder="ตั้งรหัสใหม่…" autocomplete="new-password" style="border:none;outline:none;width:100%;background:transparent" onchange="adminSetPassword('${esc(u.id)}',this)"></div>
-        <div class="hint" style="font-size:10px">${u.passHash?'เก็บเป็น hash แล้ว':'ยังไม่ตั้งรหัส'}</div></td></tr>`}).join('')}
-    </tbody></table></div></div>
-    <div class="card-b"><div class="row-flex" style="justify-content:space-between;margin-bottom:8px">
-      <span class="hint" style="color:var(--amber)">⚠ รหัสผ่านถูกเก็บเป็น SHA-256 hash (ไม่ใช่ security ระดับ production — แค่กันการเปิดดูรหัสตรง ๆ ใน devtools/Sheet)</span>
-      <button class="btn tiny ghost" onclick="pushUsers(true)">⤴ ซิงค์ผู้ใช้ขึ้น Sheet</button></div>
-      <div class="hint">• กำไร/คอมมิชชั่น แสดงเฉพาะ Manager ขึ้นไป &nbsp;•&nbsp; รหัสผ่านเริ่มต้นทุกคน = 1234 &nbsp;•&nbsp; ผู้ใช้ทั่วไปเปลี่ยนรหัสตัวเองได้จากปุ่ม “เปลี่ยนรหัส” มุมซ้ายล่าง</div></div></div>`;
+  const tierTag=r=>{const t=ROLE_TIER[r];return t==='SALES'?'orange':t==='INTERNAL'?'blue':t?'green':'red'};
+  const rows=USERS.map((u,i)=>{
+    const scopeTxt=(u.scope==='all'||!u.scope)?'ทุกกลุ่ม':(Array.isArray(u.scope)?u.scope.length+' กลุ่ม':'—');
+    const isSalesTier=ROLE_TIER[u.role]==='SALES';
+    const off=u.active===false;
+    return `<tr style="${off?'opacity:.55':''}">
+      <td><div class="row-flex" style="flex-wrap:nowrap"><div class="avatar" style="width:30px;height:30px;font-size:12px;flex:0 0 30px">${esc((u.name||'?')[0])}</div>
+        <input class="cell-inp txt" style="min-width:120px" value="${esc(u.name)}" onchange="setUserField(${i},'name',this.value)"></div></td>
+      <td><input class="cell-inp txt" type="email" style="min-width:210px" placeholder="name@company.com" value="${esc(u.email||'')}" onchange="setUserField(${i},'email',this.value)">
+        ${u.email?'':'<div class="hint" style="font-size:10px;color:var(--amber)">ยังไม่มีอีเมล — ล็อกอินด้วย Username</div>'}</td>
+      <td class="mono" style="font-size:11.5px">${esc(u.id)}</td>
+      <td>${roleSelectHTML(u.role,`setUserField(${i},'role',this.value)`)}<div><span class="tag ${tierTag(u.role)}" style="font-size:10px;margin-top:3px">${esc(ROLE_DESC[u.role]||'ไม่รู้จัก → สิทธิ์ต่ำสุด (Sales)')}</span></div></td>
+      <td><label class="row-flex" style="gap:6px;cursor:pointer;font-size:12.5px"><input type="checkbox" style="width:auto" ${off?'':'checked'} onchange="setUserField(${i},'active',this.checked)">${off?'ปิดใช้งาน':'ใช้งาน'}</label></td>
+      <td>${isSalesTier?'<span class="hint">—</span>':`<button class="btn tiny ghost" onclick="openScope('${esc(u.id)}')">${(u.scope==='all'||!u.scope)?'🌐 ทุกกลุ่ม':'🔒 '+scopeTxt}</button>`}</td>
+      <td>${isSalesTier?`<button class="btn tiny ghost" onclick="copySalesLink(${i})" title="ลิงก์หน้าของ Sales คนนี้ในแอป Sales">🔗 หน้า Sales</button>`:'<span class="hint">ระบบทำราคา</span>'}</td>
+      <td><div class="pill-input" style="padding:2px 4px 2px 8px;width:150px"><input type="password" placeholder="ตั้งรหัสใหม่…" autocomplete="new-password" style="border:none;outline:none;width:100%;background:transparent" onchange="adminSetPassword('${esc(u.id)}',this)"></div>
+        <div class="hint" style="font-size:10px">${u.passHash?'ตั้งรหัสแล้ว':'ยังไม่ตั้งรหัส'}</div></td></tr>`}).join('');
+  return `<div class="card"><div class="card-h"><h2>ผู้ใช้งานในระบบ</h2><span class="hint" style="margin-left:6px">${USERS.length} บัญชี</span><div class="spacer"></div>
+      <button class="btn sm ghost" onclick="copyText_(salesAppUrl(),'คัดลอกลิงก์แอป Sales แล้ว')">🔗 ลิงก์แอป Sales</button>
+      <button class="btn sm" onclick="openAddUser()">+ เพิ่มผู้ใช้</button></div>
+    <div class="card-b" style="padding:0"><div class="tw" style="border:none"><table>
+      <thead><tr><th>ชื่อ</th><th>อีเมล (ใช้ล็อกอิน)</th><th>Username</th><th>บทบาท / สิทธิ์</th><th>สถานะ</th><th>กลุ่มสินค้า</th><th>หน้าใช้งาน</th><th>รหัสผ่าน</th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>
+    <div class="card-b"><div class="grid" style="grid-template-columns:repeat(3,1fr);gap:12px">
+      ${ROLE_OPTIONS.map(g=>`<div style="background:var(--surface-2);border-radius:10px;padding:10px 12px"><b style="font-size:12.5px">${esc(g.group)}</b>
+        ${g.roles.map(r=>`<div class="hint" style="font-size:11.5px;margin-top:3px"><b style="color:var(--ink-2)">${esc(r)}</b> — ${esc(ROLE_DESC[r]||'')}</div>`).join('')}</div>`).join('')}</div>
+      <div class="row-flex" style="justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px">
+        <span class="hint">• ผู้ใช้ล็อกอินด้วย <b>อีเมล</b> หรือ Username ได้ทั้งสองแอป &nbsp;• Sales / Sales Manager ใช้แอป Sales &nbsp;• รหัสเริ่มต้น = 1234 (ระบบบังคับเปลี่ยนตอนล็อกอิน)<br>
+          • ถ้า Deploy แบบ “Execute as: User accessing” หรือใช้ Google Workspace — ผู้ใช้ที่อีเมลตรงกับคอลัมน์ Email เข้าแอป Sales ด้วยปุ่ม Google ได้โดยไม่ต้องใช้รหัส</span>
+        <button class="btn tiny ghost" onclick="pushUsers(true)">⤴ ซิงค์ผู้ใช้ขึ้น Sheet</button></div></div></div>`;
+}
+function copySalesLink(i){const u=USERS[i];if(u)copyText_(salesAppUrl(u),'คัดลอกลิงก์หน้าของ '+u.name+' แล้ว — ส่งให้เปิดในมือถือได้เลย')}
+function copyText_(t,msg){
+  const ok=()=>toast(msg||'คัดลอกแล้ว','good');
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(ok,()=>prompt('คัดลอกลิงก์นี้',t));else prompt('คัดลอกลิงก์นี้',t);
+}
+function openAddUser(){
+  modal(`<div class="modal-h"><h3>เพิ่มผู้ใช้ใหม่</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
+  <div class="modal-b">
+    <div class="field"><label class="lbl">ชื่อที่แสดง *</label><input class="inp" id="nu_name" placeholder="เช่น Khun Pim"></div>
+    <div class="field"><label class="lbl">อีเมล (ใช้ล็อกอิน) *</label><input class="inp" id="nu_email" type="email" placeholder="pim@company.com" oninput="if(!$('#nu_id')._t)$('#nu_id').value=(this.value.split('@')[0]||'').toLowerCase().replace(/[^a-z0-9_.-]/g,'')"></div>
+    <div class="field"><label class="lbl">Username (ไม่ซ้ำ) *</label><input class="inp mono" id="nu_id" oninput="this._t=true" placeholder="pim"></div>
+    <div class="field"><label class="lbl">บทบาท / สิทธิ์</label>${roleSelectHTML('Sales',"")}</div>
+    <div class="field"><label class="lbl">รหัสผ่านเริ่มต้น</label><input class="inp" id="nu_pass" value="1234"><div class="hint">ผู้ใช้จะถูกบังคับให้เปลี่ยนตอนล็อกอินครั้งแรก</div></div>
+    <div class="login-err" id="nu_err"></div></div>
+  <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" onclick="saveNewUser()">เพิ่มผู้ใช้</button></div>`);
+  setTimeout(()=>{const e=$('#nu_name');if(e)e.focus()},50);
+}
+async function saveNewUser(){
+  const name=($('#nu_name').value||'').trim(),email=($('#nu_email').value||'').trim().toLowerCase(),id=($('#nu_id').value||'').trim();
+  const role=document.querySelector('#modalRoot select').value,pass=$('#nu_pass').value||'1234';
+  const err=m=>{$('#nu_err').textContent=m};
+  if(!name)return err('กรุณาใส่ชื่อ');
+  if(!EMAIL_RE.test(email))return err('รูปแบบอีเมลไม่ถูกต้อง');
+  if(!/^[A-Za-z0-9_.-]{2,40}$/.test(id))return err('Username ใช้ได้เฉพาะ a-z 0-9 _ . - (2–40 ตัว)');
+  if(USERS.some(u=>u.id.toLowerCase()===id.toLowerCase()))return err('Username นี้มีอยู่แล้ว');
+  if(USERS.some(u=>String(u.email||'').toLowerCase()===email))return err('อีเมลนี้มีผู้ใช้อยู่แล้ว');
+  const u={id,name,email,role,active:true,scope:'all',passHash:await hashPass(pass)};
+  USERS.push(u);LS.set('users',USERS);
+  const r=await pushUsers();
+  if(r&&userRejected(r)){USERS.splice(USERS.indexOf(u),1);LS.set('users',USERS);return err('Sheet ปฏิเสธ: '+(r.error||'-'))}
+  closeModal();render();toast('เพิ่ม '+name+' ('+role+') แล้ว','good');
 }
 function openScope(uid){
   const u=USERS.find(x=>x.id===uid);if(!u)return;
@@ -3628,7 +3732,8 @@ async function saveMyPassword(){
   if(!ok){$('#pw_err').textContent='รหัสผ่านปัจจุบันไม่ถูกต้อง';return}
   if(!n1||n1.length<4){$('#pw_err').textContent='รหัสใหม่ต้องอย่างน้อย 4 ตัว';return}
   if(n1!==n2){$('#pw_err').textContent='รหัสใหม่ทั้งสองช่องไม่ตรงกัน';return}
-  await setUserPassword(CURRENT.id,n1);
+  const r=await changeOwnPassword(old,n1);
+  if(!r.ok){$('#pw_err').textContent=r.error==='BAD_OLD_PASSWORD'?'รหัสผ่านปัจจุบันบนเซิร์ฟเวอร์ไม่ตรง':('บันทึกไม่สำเร็จ: '+(r.error||'-'));return}
   closeModal();toast('เปลี่ยนรหัสผ่านเรียบร้อย','good');
 }
 /* ---- manager resets someone else's password (write-only field, never shows the old one) ---- */
@@ -3747,11 +3852,12 @@ async function _cloudGet(type,arg){
 async function pushUsers(showToast){
   if(!cloudReady()){if(showToast)toast('ยังไม่ได้เชื่อมต่อ Google Sheet','bad');return {ok:false,offline:true}}
   const payload={action:'saveUsers',by:CURRENT?CURRENT.name:'-',
-    users:JSON.stringify(USERS.map(u=>({id:u.id,name:u.name,role:u.role,
+    users:JSON.stringify(USERS.map(u=>({id:u.id,name:u.name,role:u.role,email:u.email||'',active:u.active!==false,
       scope:(u.scope==='all'||!u.scope)?'all':u.scope,passHash:u.passHash||''})))};
   const r=await postCloud(payload);
-  if(showToast)toast(r.ok?'ซิงค์ผู้ใช้ขึ้น Sheet แล้ว':'ซิงค์ผู้ใช้ไม่สำเร็จ: '+(r.error||'-'),r.ok?'good':'bad');
-  if(!r.ok)enqueueSync(payload);
+  const USER_ERR={DUPLICATE_EMAIL:'อีเมลนี้ถูกใช้กับผู้ใช้อื่นแล้ว',BAD_EMAIL:'รูปแบบอีเมลไม่ถูกต้อง',ACCESS_DENIED:'ต้องเป็น Admin / GM จึงแก้ผู้ใช้ได้'};
+  if(showToast||(!r.ok&&USER_ERR[r.error]))toast(r.ok?'ซิงค์ผู้ใช้ขึ้น Sheet แล้ว':'ซิงค์ผู้ใช้ไม่สำเร็จ: '+(USER_ERR[r.error]||r.error||'-')+((r.data&&r.data.email)?' ('+r.data.email+')':''),r.ok?'good':'bad');
+  if(!r.ok&&!USER_ERR[r.error])enqueueSync(payload);   // ข้อมูลผิดรูปแบบไม่ต้องเข้าคิวส่งซ้ำ
   return r;
 }
 async function pullUsers(){
@@ -3764,12 +3870,14 @@ async function pullUsers(){
     let scope=r.scope;
     if(typeof scope==='string'&&scope!=='all'){try{scope=JSON.parse(scope)}catch(e){scope=scope?scope.split(',').map(x=>x.trim()).filter(Boolean):'all'}}
     const u=USERS.find(x=>x.id===r.id);
-    if(!u){USERS.push({id:r.id,name:r.name||r.id,role:normRole(r.role||'Sales'),scope:scope||'all',passHash:r.passHash||''});changed++;}
+    if(!u){USERS.push({id:r.id,name:r.name||r.id,role:normRole(r.role||'Sales'),email:r.email||'',active:r.active!==false,scope:scope||'all',passHash:r.passHash||''});changed++;}
     else{
       if(r.name&&u.name!==r.name){u.name=r.name;changed++;}
       if(r.role&&u.role!==normRole(r.role)){u.role=normRole(r.role);changed++;}
       if(scope&&JSON.stringify(u.scope)!==JSON.stringify(scope)){u.scope=scope;changed++;}
       if(r.passHash&&u.passHash!==r.passHash){u.passHash=r.passHash;delete u.pass;changed++;}
+      if(r.email!==undefined&&(u.email||'')!==r.email){u.email=r.email;changed++;}
+      if(r.active!==undefined&&(u.active!==false)!==(r.active!==false)){u.active=r.active!==false;changed++;}
     }
   });
   if(changed){LS.set('users',USERS);initLogin();}

@@ -21,7 +21,8 @@ function makeRuntime(codePath) {
   Sheet.prototype.deleteRows = function (r, n) { this.rows.splice(r - 1, n); };
   Sheet.prototype.appendRow = function (a) { this.rows.push(a.slice()); };
   const cacheStore = {};
-  const cache = { get: k => (k in cacheStore ? cacheStore[k] : null), put: (k, v) => { cacheStore[k] = String(v); }, remove: k => { delete cacheStore[k]; } };
+  const cache = { get: k => (k in cacheStore ? cacheStore[k] : null), put: (k, v) => { cacheStore[k] = String(v); }, remove: k => { delete cacheStore[k]; },
+    getAll: ks => { const o = {}; ks.forEach(k => { if (k in cacheStore) o[k] = cacheStore[k]; }); return o; } };
   const ss = { getSheetByName: n => sheets[n] || null, insertSheet: n => (sheets[n] = new Sheet(n)), getId: () => 'x', toast() {} };
   const ctx = {
     SpreadsheetApp: { getActive: () => ss, openById: () => ss },
@@ -32,9 +33,14 @@ function makeRuntime(codePath) {
       DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
       computeDigest: (alg, str) => Array.from(crypto.createHash('sha256').update(String(str), 'utf8').digest()).map(b => b > 127 ? b - 256 : b) },
     CacheService: { getScriptCache: () => cache },
-    Logger: { log() {} }, Session: { getActiveUser: () => ({ getEmail: () => (globalThis.__SSO_EMAIL || '') }) },
+    Logger: { log() {} }, Session: { getActiveUser: () => ({ getEmail: () => (globalThis.__SSO_EMAIL || '') }),
+               getEffectiveUser: () => ({ getEmail: () => (globalThis.__EFFECTIVE_EMAIL || 'owner@mglobalsourcing.net') }) },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: t => ({ setMimeType() { return { text: t }; } }) },
-    HtmlService: {}, DriveApp: {}, console, globalThis, Date, JSON, Math, Object, String, Number, Array
+    HtmlService: {   // พอสำหรับทดสอบว่า doGet เลือกไฟล์ไหน
+      XFrameOptionsMode: { ALLOWALL: 'ALLOWALL' },
+      createHtmlOutputFromFile: name => { const o = { file: name, setTitle() { return o; }, addMetaTag() { return o; }, setXFrameOptionsMode() { return o; }, getContent: () => '' }; return o; },
+      createHtmlOutput: h => { const o = { html: h, setTitle() { return o; } }; return o; } },
+    DriveApp: {}, console, globalThis, Date, JSON, Math, Object, String, Number, Array
   };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(codePath, 'utf8'), ctx);

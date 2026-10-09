@@ -70,7 +70,7 @@ async function salesLogin(p, email, pw) { await p.fill('#loginUser', email); awa
 
   // 3) Sourcing in Index sees the SR and takes it
   const src = await page(b, '/');
-  await src.fill('#loginUser', 'chat@mgs.co'); await src.fill('#loginPass', 'secret99'); await src.click('button:has-text("เข้าสู่ระบบ")'); await src.waitForTimeout(1800);
+  await src.fill('#loginUser', 'chat@mgs.co'); await src.fill('#loginPass', 'secret99'); await src.click('button:has-text("เข้าสู่ระบบ →")'); await src.waitForTimeout(1800);
   ok('Index: Sourcing logs in by email (first time on this device)', await src.evaluate(() => !!CURRENT && CURRENT.id === 'sourcing1'));
   const srLocal = await src.evaluate(() => { const q = QUOTES.find(x => x.docType === 'SR' && x.header.customer === 'Thaibev'); return q ? { st: q.status, need: srAwaitingIntake(q), lines: q.lines.length, desc: q.lines[0].desc, owner: q.header.salesUserId } : null; });
   ok('SR appears in Sourcing queue with lines + owner', srLocal && srLocal.need && srLocal.lines === 2 && srLocal.desc.includes('Meteo') && srLocal.owner === 'sales_boss', JSON.stringify(srLocal));
@@ -93,7 +93,7 @@ async function salesLogin(p, email, pw) { await p.fill('#loginUser', email); awa
 
   // 5) Admin: Index users page with Email + roles + add user
   const adm = await page(b, '/');
-  await adm.fill('#loginUser', 'admin@mgs.co'); await adm.fill('#loginPass', 'secret99'); await adm.click('button:has-text("เข้าสู่ระบบ")'); await adm.waitForTimeout(1800);
+  await adm.fill('#loginUser', 'admin@mgs.co'); await adm.fill('#loginPass', 'secret99'); await adm.click('button:has-text("เข้าสู่ระบบ →")'); await adm.waitForTimeout(1800);
   await adm.evaluate(() => { closeModal(); go('users'); }); await adm.waitForTimeout(400);
   t = await adm.textContent('#content');
   ok('users page shows Email column + role groups', t.includes('อีเมล (ใช้ล็อกอิน)') && t.includes('Sales Manager') && t.includes('ผู้บริหาร (Manager)'));
@@ -105,7 +105,7 @@ async function salesLogin(p, email, pw) { await p.fill('#loginUser', email); awa
   ok('new user can log in to Sales app by email', post({ action: 'login', user: 'pim@mgs.co', passHash: H('1234') }).ok);
   // Sales user trying the Index app → redirected to Sales app notice
   const s2 = await page(b, '/');
-  await s2.fill('#loginUser', 'pair@mgs.co'); await s2.fill('#loginPass', 'secret99'); await s2.click('button:has-text("เข้าสู่ระบบ")'); await s2.waitForTimeout(1500);
+  await s2.fill('#loginUser', 'pair@mgs.co'); await s2.fill('#loginPass', 'secret99'); await s2.click('button:has-text("เข้าสู่ระบบ →")'); await s2.waitForTimeout(1500);
   ok('Sales in Index → "use Sales app" notice, no session', (await s2.textContent('#modalRoot')).includes('แอป Sales') && await s2.evaluate(() => !CURRENT));
   console.log(fails ? '\n' + fails + ' FAILED' : '\nALL SALES E2E PASSED');
   await b.close(); srv.close(); process.exit(fails ? 1 : 0);

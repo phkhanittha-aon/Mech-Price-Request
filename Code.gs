@@ -19,6 +19,11 @@
  *     รหัสผ่าน: เก็บแบบ v2$salt$hash (salt ต่อผู้ใช้ + วนซ้ำ) ค่าใน Sheet ใช้ล็อกอินแทนรหัสไม่ได้แล้ว · ผิด 5 ครั้งล็อก 15 นาที
  *     valueTHB: มูลค่าใบแปลงเป็นบาทด้วยอัตราที่ล็อกไว้ในใบ (ใช้รวมยอดข้ามสกุลเงิน)
  *     → หลังวางไฟล์ รัน setup() หนึ่งครั้ง (แปลง hash รหัสผ่านเดิมเป็น v2 ให้อัตโนมัติ ผู้ใช้ไม่ต้องตั้งรหัสใหม่)
+ *  G) v4.4 (Phase 2 Login): ตัวตนมาจากอีเมล Google ของผู้ที่เปิดหน้าเว็บก่อน (Session.getActiveUser) แล้วค่อยใช้รหัสผ่าน
+ *     · ไม่ใช้ getEffectiveUser() เป็นตัวตน — ถ้า Deploy แบบ "Execute as: Me" ค่านี้คืออีเมลเจ้าของสคริปต์เสมอ
+ *       (ทุกคนจะกลายเป็นเจ้าของสคริปต์) จึงใช้ได้แค่แสดงผลวินิจฉัยเท่านั้น
+ *     · ทุก request ดึง role / สถานะ Active ใหม่จากแท็บ Users (เดิมใช้ role ที่จำไว้ตอนล็อกอิน นานสุด 12 ชม.)
+ *     · เปิดลิงก์หลัก (ไม่มี ?app=) → server เลือกหน้าให้ตามสิทธิ์ของอีเมลนั้น: Sales → แอป Sales, ทีมภายใน → ระบบทำราคา
  *  * v4.2: รัน setup() หนึ่งครั้ง เพื่อเพิ่มคอลัมน์ Email / Active ในแท็บ Users แล้ว Deploy → New version
  *
  * สิ่งที่เปลี่ยนจาก v2.1 (สำคัญ — ต้องอัปเดต HTML ทั้ง 2 ไฟล์พร้อมกัน)
@@ -37,6 +42,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
+var APP_VERSION = '4.4';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -157,6 +163,10 @@ function doGet(e) {
   if (!type) {
     var page = String((e && e.parameter && e.parameter.app) || (e && e.parameter && e.parameter.page) || DEFAULT_PAGE).toLowerCase();
     var isSales = (page === 'sales');
+    // v4.4: ลิงก์เดียวใช้ได้ทุกคน — ไม่ระบุ ?app= แล้วอีเมล Google เป็นของ Sales → เปิดแอป Sales ให้เลย (ใช้แค่เลือกหน้า ไม่ใช่การให้สิทธิ์)
+    if (!page) {
+      try { var who = googleIdentity_(); if (who.user && who.user.tier === 'SALES' && who.user.active) isSales = true; } catch (err) {}
+    }
     return HtmlService.createHtmlOutputFromFile(isSales ? 'Sales' : 'Index')
       .setTitle(isSales ? 'MGS Sales — ติดตามงานขาย' : 'MGS Project Pricing')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, viewport-fit=cover')
@@ -189,8 +199,12 @@ function diagHtml_() {
   var add = function (name, ok, detail) {
     rows.push('<tr><td>' + (ok ? '✅' : '❌') + '</td><td><b>' + name + '</b></td><td>' + detail + '</td></tr>');
   };
-  add('Code.gs', true, 'version 4.3 · ' + nowISO_());
-  [['Index', 'build 4.3'], ['Sales', 'Sales build 4.3']].forEach(function (f) {
+  add('Code.gs', true, 'version ' + APP_VERSION + ' · ' + nowISO_());
+  var g = {}; try { g = googleIdentity_(); } catch (e) {}
+  var eff = ''; try { eff = String(Session.getEffectiveUser().getEmail() || ''); } catch (e) {}
+  add('อีเมล Google ของผู้เปิดหน้านี้', !!g.email, g.email ? (g.email + (g.user ? ' → ' + g.user.name + ' (' + g.user.role + (g.user.active ? '' : ' · ปิดใช้งาน') + ')' : ' — <b>ยังไม่มีในแท็บ Users</b>'))
+      : 'อ่านไม่ได้ (ล็อกอินด้วยรหัสผ่านแทนได้) — ตรวจ Deploy: Who has access = ทุกคนในโดเมน · สคริปต์รันในนาม: ' + (eff || '-'));
+  [['Index', "APP_VERSION='" + APP_VERSION + "'"], ['Sales', "APP_VERSION='" + APP_VERSION + "'"]].forEach(function (f) {
     try {
       var c = HtmlService.createHtmlOutputFromFile(f[0]).getContent();
       var tail = c.replace(/\s+$/, '').slice(-7).toLowerCase();
@@ -324,17 +338,28 @@ function login_(p) {
   return issueSession_(f.r, f.idx, p.agent, 'password');
 }
 
-/** Google Sign-in: ใช้อีเมลที่ Google ยืนยันให้ฝั่ง server (ปลอมจาก client ไม่ได้)
- *  ได้อีเมลเมื่อ Deploy แบบ "Execute as: User accessing the web app"
- *  หรือ "Execute as: Me" + ผู้ใช้อยู่ใน Google Workspace โดเมนเดียวกัน — Gmail ส่วนตัวมักได้ค่าว่าง → ใช้รหัสผ่านแทน */
-function ssoLogin_(p) {
+/** อีเมล Google ของ "คนที่เปิดหน้าเว็บ" — Google ยืนยันให้ฝั่ง server (ปลอมจาก client ไม่ได้)
+ *  ได้ค่าเมื่อ Deploy แบบ "Execute as: User accessing the web app"
+ *  หรือ "Execute as: Me" + Who has access = ทุกคนในโดเมน (ผู้ใช้อยู่ใน Workspace เดียวกัน)
+ *  Gmail ส่วนตัว / เปิดแบบไม่ล็อกอิน / WebView บางแอป → ได้ค่าว่าง → ใช้รหัสผ่านแทน
+ *  ⚠ ห้ามใช้ getEffectiveUser() แทน: ใน "Execute as: Me" มันคืออีเมลเจ้าของสคริปต์สำหรับทุกคน */
+function googleIdentity_() {
   var email = '';
   try { email = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase(); } catch (e) {}
-  if (!email) return { ok:false, error:'SSO_UNAVAILABLE' };
+  if (!email) return { email:'' };
   var f = findUserRow_(email);
-  if (!f) { logRow_('sso-fail', '', email, '', 'no user with this email'); return { ok:false, error:'SSO_NO_USER', email:email }; }
-  if (!isActiveUser_(f.r, f.idx)) return { ok:false, error:'ACCOUNT_DISABLED' };
-  return issueSession_(f.r, f.idx, p.agent, 'google');
+  if (!f) return { email:email };
+  var role = normRole_(cell_(f.r, f.idx, 'Role'));
+  return { email:email, f:f, user:{ id:String(cell_(f.r, f.idx, 'Id')), name:String(cell_(f.r, f.idx, 'Name')),
+           role:role, tier:capsOf_(role).tier, active:isActiveUser_(f.r, f.idx) } };
+}
+/** Google Sign-in — เส้นทางหลัก: ไม่ต้องกรอกอะไร ถ้าอีเมลตรงกับแท็บ Users และบัญชีเปิดใช้งาน */
+function ssoLogin_(p) {
+  var g = googleIdentity_();
+  if (!g.email) return { ok:false, error:'SSO_UNAVAILABLE' };
+  if (!g.f) { logRow_('sso-fail', '', g.email, '', 'no user with this email'); return { ok:false, error:'SSO_NO_USER', email:g.email }; }
+  if (!g.user.active) { logRow_('sso-fail', '', g.email, g.user.name, 'inactive'); return { ok:false, error:'ACCOUNT_DISABLED', email:g.email }; }
+  return issueSession_(g.f.r, g.f.idx, p.agent, 'google');
 }
 
 function issueSession_(found, idx, agent, method) {
@@ -376,18 +401,38 @@ function changePassword_(p, sess) {
   return { ok:true };
 }
 
+var AUTH_FAIL_ = '';   // เหตุผลที่ auth_ ล่าสุดไม่ผ่าน (ส่งให้ client แสดงข้อความถูกต้อง)
+function authError_() { var r = AUTH_FAIL_ || 'NO_SESSION'; AUTH_FAIL_ = ''; return { ok:false, error:'AUTH_REQUIRED', code:401, reason:r }; }
 function auth_(token) {
+  AUTH_FAIL_ = '';
   if (!token) return null;
   var ss = sheet_(SH.SESSIONS), idx = headerIndex_(ss);
-  if (ss.getLastRow() < 2) return null;
+  if (ss.getLastRow() < 2) { AUTH_FAIL_ = 'SESSION_EXPIRED'; return null; }
   var row = findRow_(ss, idx, 'Token', token);
-  if (!row) return null;
+  // มี token แต่หาไม่เจอ = หมดอายุแล้ว (แถวถูกล้างโดย purgeSessions_ ตอนคนอื่นล็อกอิน) / ถูกเพิกถอน
+  if (!row) { AUTH_FAIL_ = 'SESSION_EXPIRED'; return null; }
   var r = ss.getRange(row, 1, 1, ss.getLastColumn()).getValues()[0];
   var expMs = expiryMs_(r, idx);
-  if (expMs && expMs < Date.now()) { ss.deleteRow(row); return null; }
-  var role = normRole_(cell_(r, idx, 'Role'));
-  return { token:token, userId:String(cell_(r, idx, 'UserId')), name:String(cell_(r, idx, 'Name')),
-           role:role, caps:capsOf_(role) };
+  if (expMs && expMs < Date.now()) { ss.deleteRow(row); AUTH_FAIL_ = 'SESSION_EXPIRED'; return null; }
+  // v4.4: role / สถานะ Active มาจากแท็บ Users "ทุก request" — Admin เปลี่ยนสิทธิ์หรือปิดบัญชีแล้วมีผลทันที
+  var uid = String(cell_(r, idx, 'UserId'));
+  var ush = sheet_(SH.USERS), uidx = headerIndex_(ush), urow = findRow_(ush, uidx, 'Id', uid);
+  if (!urow) { ss.deleteRow(row); AUTH_FAIL_ = 'ACCOUNT_REMOVED'; return null; }
+  var u = ush.getRange(urow, 1, 1, ush.getLastColumn()).getValues()[0];
+  if (!isActiveUser_(u, uidx)) { ss.deleteRow(row); AUTH_FAIL_ = 'ACCOUNT_DISABLED'; logRow_('session-revoked', '', uid, '', 'inactive'); return null; }
+  var role = normRole_(cell_(u, uidx, 'Role'));
+  return { token:token, userId:uid, name:String(cell_(u, uidx, 'Name') || cell_(r, idx, 'Name')),
+           email:String(cell_(u, uidx, 'Email') || ''), role:role, caps:capsOf_(role) };
+}
+
+/** ข้อมูลผู้ใช้ปัจจุบัน (role สด ๆ จากแท็บ Users) — แนบไปกับทุกคำตอบอ่านข้อมูล ให้ client รู้ทันทีถ้าสิทธิ์ถูกเปลี่ยน */
+function meOf_(sess) { return { id:sess.userId, name:sess.name, email:sess.email || '', role:sess.role, tier:sess.caps.tier, caps:sess.caps }; }
+/** Admin ปลดล็อกบัญชีที่กรอกรหัสผิดเกินกำหนด (ไม่ต้องตั้งรหัสใหม่) */
+function unlockUser_(p, sess) {
+  if (!p.id) return { ok:false, error:'missing id' };
+  loginClear_('id:' + String(p.id).toLowerCase());
+  logRow_('unlockUser', '', p.id, sess.name, '');
+  return { ok:true, id:p.id };
 }
 
 function logout_(p) {
@@ -427,14 +472,15 @@ function handle_(p) {
   try {
     if (action === 'login') return login_(p);
     if (action === 'ssoLogin') return ssoLogin_(p);
-    if (action === 'ping')  return { ok:true, pong:true, time:nowISO_(), version:'4.3' };
+    if (action === 'ping')  return { ok:true, pong:true, time:nowISO_(), version:APP_VERSION };
 
-    var sess = auth_(p.token);
-    if (!sess) return { ok:false, error:'AUTH_REQUIRED', code:401 };
     if (action === 'logout') return logout_(p);
+    var sess = auth_(p.token);
+    if (!sess) return authError_();
 
     switch (action) {
-      case 'whoami':       return { ok:true, user:{ id:sess.userId, name:sess.name, role:sess.role, tier:sess.caps.tier, caps:sess.caps } };
+      case 'whoami':       return { ok:true, user:meOf_(sess) };
+      case 'unlockUser':   return need_(sess,'manageUsers') || unlockUser_(p, sess);
       case 'approve':      return need_(sess,'approve') || approve_(p, sess);
       case 'changePassword': return changePassword_(p, sess);
       case 'save':         return need_(sess,'writeQuote') || saveQuote_(p, sess);
@@ -467,17 +513,17 @@ function need_(sess, cap) {
 function apiGetObj_(type, token, arg) {
   try {
     var sess = auth_(token);
-    if (!sess) return { ok:false, error:'AUTH_REQUIRED', code:401 };
+    if (!sess) return authError_();
     // serverTime ถูกจับ "ก่อน" อ่านข้อมูล → รอบ polling ถัดไปใช้ค่านี้เป็น since ได้โดยไม่พลาดแถวที่เขียนระหว่างอ่าน
     var serverTime = nowISO_();
     var view = seesFullData_(sess) ? 'internal' : 'sales';
     switch (type) {
-      case 'quotations': return { ok:true, quotations:getQuotations_(sess), view:view, serverTime:serverTime };
+      case 'quotations': return { ok:true, quotations:getQuotations_(sess), view:view, serverTime:serverTime, me:meOf_(sess) };
       case 'changes': {
         // Live polling: ส่งเฉพาะแถวที่ UpdatedAt ใหม่กว่า since (เบากว่าดึงทั้งชีททุก 30 วินาทีมาก)
         var sinceMs = toMs_(arg);
         if (!sinceMs) return { ok:false, error:'missing since' };
-        return { ok:true, quotations:getQuotations_(sess, { sinceMs:sinceMs }), view:view, serverTime:serverTime };
+        return { ok:true, quotations:getQuotations_(sess, { sinceMs:sinceMs }), view:view, serverTime:serverTime, me:meOf_(sess) };
       }
       case 'quote': {
         // เปิดดู/แก้ใบเดียว → ดึงเวอร์ชันล่าสุดของใบนั้นจาก Sheet (ผ่านกฎ projection เดียวกันทุกประการ)
@@ -488,11 +534,11 @@ function apiGetObj_(type, token, arg) {
       case 'products':   return { ok:true, products:getProducts_(sess) };
       case 'settings':   return getSettings_(sess);
       case 'users':      return { ok:true, users:getUsers_(sess) };
-      case 'whoami':     return { ok:true, user:{ id:sess.userId, name:sess.name, role:sess.role, tier:sess.caps.tier, caps:sess.caps } };
+      case 'whoami':     return { ok:true, user:meOf_(sess) };
       case 'salesview': {
         // แอป Sales: ทุก role ได้ "มุมมองปลอดต้นทุน" (SalesDetail) — role ภายในเห็นทุกคน + ยอด/GP สรุป
         var sv = toMs_(arg);
-        return { ok:true, quotations:getQuotations_(sess, { salesView:true, sinceMs:sv || 0 }), view:'salesview', serverTime:serverTime };
+        return { ok:true, quotations:getQuotations_(sess, { salesView:true, sinceMs:sv || 0 }), view:'salesview', serverTime:serverTime, me:meOf_(sess) };
       }
       default:           return { ok:false, error:'unknown type: ' + type };
     }
@@ -1271,6 +1317,15 @@ function getUsers_(sess) {
     // v4.3: ไม่ส่งค่า hash ออกจาก server อีกเลย (แม้แต่ Admin) — บอกแค่ว่าตั้งรหัสแล้วหรือยัง
     if (sess.caps.manageUsers) u.hasPassword = !!String(cell_(r, idx, 'PassHash') || '');
     out.push(u);
+  }
+  if (sess.caps.manageUsers) {
+    // สถานะถูกล็อก (กรอกรหัสผิดเกินกำหนด) — อ่าน cache ครั้งเดียวทั้งชุด (ห้าม I/O ในลูป)
+    var keys = out.map(function (u) { return loginLockKey_('id:' + u.id.toLowerCase()); }), got = {};
+    try { got = CacheService.getScriptCache().getAll(keys) || {}; } catch (e) {}
+    out.forEach(function (u, i) {
+      var v = got[keys[i]]; if (!v) return;
+      try { var st = JSON.parse(v); if (st.until && st.until > Date.now()) u.lockedMinutes = Math.ceil((st.until - Date.now()) / 60000); } catch (e) {}
+    });
   }
   return out;
 }

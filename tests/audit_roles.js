@@ -46,7 +46,7 @@ async function open(b,path,w){const c=await b.newContext({viewport:{width:w||136
  }
  console.log('\n=== INDEX (internal) ===');
  for(const who of ['gm','admin','procurement','bd','sourcing1']){
-  const p=await open(b,'/',1366);await p.fill('#loginUser',who+'@mglobalsourcing.net');await p.fill('#loginPass','pw123456');await p.click('button:has-text("เข้าสู่ระบบ")');await p.waitForTimeout(1800);await p.evaluate(()=>closeModal());
+  const p=await open(b,'/',1366);await p.fill('#loginUser',who+'@mglobalsourcing.net');await p.fill('#loginPass','pw123456');await p.click('button:has-text("เข้าสู่ระบบ →")');await p.waitForTimeout(1800);await p.evaluate(()=>closeModal());
   const routes=await p.evaluate(()=>NAV.filter(n=>n.id&&(!n.perm||perms()[n.perm])).map(n=>n.id));
   const res=[];
   for(const r of routes){await p.evaluate(r=>{closeModal();go(r,true)},r);await p.waitForTimeout(250);
@@ -62,7 +62,7 @@ async function open(b,path,w){const c=await b.newContext({viewport:{width:w||136
   console.log('   errors:',p._errs.join(';')||'none');
  }
  for(const w of [1280,1440,1920]){
-  const p=await open(b,'/',w);await p.fill('#loginUser','sourcing1');await p.fill('#loginPass','pw123456');await p.click('button:has-text("เข้าสู่ระบบ")');await p.waitForTimeout(1500);
+  const p=await open(b,'/',w);await p.fill('#loginUser','sourcing1');await p.fill('#loginPass','pw123456');await p.click('button:has-text("เข้าสู่ระบบ →")');await p.waitForTimeout(1500);
   if(w===1280)console.log('username login w/ correct server pw ->',JSON.stringify(await p.textContent('#loginErr')),' logged in:',await p.evaluate(()=>!!CURRENT));
   await p.waitForTimeout(1000);
   await p.evaluate(()=>{closeModal();editQuote('S1')});await p.waitForTimeout(900);

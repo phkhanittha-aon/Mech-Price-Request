@@ -43,7 +43,7 @@ async function newUser(browser, id) {
   });
   await p.goto(URL);
   await p.waitForTimeout(400);
-  await p.fill('#loginUser', id); await p.fill('#loginPass', '1234'); await p.click('button:has-text("เข้าสู่ระบบ")');
+  await p.fill('#loginUser', id); await p.fill('#loginPass', '1234'); await p.click('button:has-text("เข้าสู่ระบบ →")');
   await p.waitForTimeout(1500);
   await p.evaluate(() => closeModal());   // factory-password prompt
   return p;
@@ -52,6 +52,9 @@ async function newUser(browser, id) {
   const browser = await chromium.launch();
   const proc = await newUser(browser, 'procurement');
   const bd = await newUser(browser, 'bd');
+  // v4.4: หน้าแรกของผู้อนุมัติเปลี่ยนเป็น "รออนุมัติ" (ตั้งใจ) — ตรวจหน้าแรกก่อน แล้วค่อยไป Dashboard
+  ok('Procurement หน้าแรก = รออนุมัติ (2 ใบรอคุณ)', (await proc.evaluate(() => route)) === 'approvals' && (await proc.textContent('#content')).includes('รอคุณอนุมัติ (2)'));
+  await proc.evaluate(() => go('dashboard', true)); await bd.evaluate(() => go('dashboard', true)); await proc.waitForTimeout(300);
   // 1) dashboard approval cards
   let txt = await proc.textContent('#content');
   ok('Procurement dashboard shows approval queue', txt.includes('รออนุมัติราคา (2)'), txt.slice(0, 200));
@@ -131,7 +134,7 @@ async function newUser(browser, id) {
   // 8) Admin: sees prices + manager nav
   const adm = await newUser(browser, 'gm');      // pull users first (admin not in default local list)
   await adm.evaluate(() => logout());
-  await adm.fill('#loginUser', 'admin'); await adm.fill('#loginPass', '1234'); await adm.click('button:has-text("เข้าสู่ระบบ")');
+  await adm.fill('#loginUser', 'admin'); await adm.fill('#loginPass', '1234'); await adm.click('button:has-text("เข้าสู่ระบบ →")');
   await adm.waitForTimeout(1500); await adm.evaluate(() => closeModal());
   ok('Admin can see price of every quote/status', await adm.evaluate(() => CURRENT.role === 'Admin' && QUOTES.filter(q => !q.deleted).every(q => canSeePrice(q)) && perms().margin));
   ok('Admin nav has สรุปยอดขาย/GP', (await adm.textContent('#nav')).includes('สรุปยอดขาย'));

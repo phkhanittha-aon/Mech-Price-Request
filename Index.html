@@ -63,6 +63,13 @@ a{color:var(--orange-deep);text-decoration:none}
 .btn.danger{background:var(--red)}.btn.danger:hover{background:#9d2f25}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .login-err{color:var(--red);font-size:13px;margin-top:10px;min-height:18px}
+.sso-btn{background:#fff!important;color:var(--ink)!important;border:1px solid var(--line-2);gap:10px}
+.sso-btn:hover{background:var(--surface-2)!important}
+.login-who{font-size:12px;color:var(--ink-2);margin-top:8px;line-height:1.6;min-height:4px}
+.login-who:empty{display:none}
+.login-who.warn{background:var(--amber-soft);border-radius:9px;padding:8px 10px}
+.login-or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:14px 0 6px}
+.login-or::before,.login-or::after{content:'';flex:1;height:1px;background:var(--line)}
 .login-hint{margin-top:18px;font-size:12px;color:var(--muted);text-align:center;line-height:1.6}
 
 #app{display:flex;min-height:100vh}
@@ -445,12 +452,19 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
         <div><div class="lt">M Global Sourcing</div><div class="ls">Project Pricing</div></div></div>
       <div class="login-h">เข้าสู่ระบบ</div>
       <div class="login-sub">ระบบทำราคา Mechanical Costing</div>
-      <div class="field"><label>ชื่อผู้ใช้</label><input id="loginUser" placeholder="ชื่อผู้ใช้ของคุณ" autocomplete="username" autocapitalize="off" spellcheck="false"></div>
+      <div id="ssoBox" class="hidden">
+        <button class="btn full sso-btn" id="ssoBtn" onclick="doSso(false)">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+          เข้าสู่ระบบด้วยบัญชี Google</button>
+        <div class="login-who" id="loginWho"></div>
+        <div class="login-or">หรือใช้ชื่อผู้ใช้ / อีเมล + รหัสผ่าน</div>
+      </div>
+      <div class="field"><label>ชื่อผู้ใช้ หรือ อีเมล</label><input id="loginUser" placeholder="ชื่อผู้ใช้ / name@mglobalsourcing.net" autocomplete="username" autocapitalize="off" spellcheck="false"></div>
       <div class="field"><label>รหัสผ่าน</label><input id="loginPass" type="password" placeholder="••••••••" autocomplete="off"></div>
       <button class="btn full" onclick="doLogin()">เข้าสู่ระบบ →</button>
       <div class="login-err" id="loginErr"></div>
-      <div class="login-hint">ลืมรหัสผ่าน? ติดต่อผู้ดูแลระบบเพื่อตั้งรหัสใหม่
-        <div style="margin-top:6px;opacity:.65;font-size:10.5px" class="mono" id="buildStamp">2026-10-09 · build 4.3</div></div>
+      <div class="login-hint">ลืมรหัสผ่าน / บัญชีถูกล็อก? ติดต่อผู้ดูแลระบบ (Admin) เพื่อตั้งรหัสใหม่หรือปลดล็อก
+        <div style="margin-top:6px;opacity:.65;font-size:10.5px" class="mono" id="buildStamp">v4.4 · 2026-10-09</div></div>
     </div>
   </div>
 </div>
@@ -500,7 +514,8 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const BUILD='2026-10-09 · build 4.3 · Follow-up + Security';
+const APP_VERSION='4.4';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const BUILD='2026-10-09 · build 4.4 · Google login';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
@@ -1302,6 +1317,8 @@ function findUser(input){
 }
 function initLogin(){
   $('#loginLogo').src=LOGO; $('#sideLogo').src=LOGO;
+  $('#buildStamp').textContent='v'+APP_VERSION+' · '+BUILD;
+  $('#ssoBox').classList.toggle('hidden',!gsRun());
   const el=$('#loginUser');
   const last=LS.get('lastUser','');
   if(el&&last&&!el.value)el.value=last;
@@ -1342,15 +1359,12 @@ async function changeOwnPassword(oldPlain,newPlain){
   return {ok:true};
 }
 /* ---- ขอ session token จาก server (ตัวจริงที่กำหนดสิทธิ์) ---- */
+function applySession(d){SESSION_TOKEN=d.token;SERVER_CAPS=d.user&&d.user.caps;LS.set('token',SESSION_TOKEN);LS.set('caps',SERVER_CAPS);}
 async function serverLogin(userId,passHash){
   if(!cloudReady())return {ok:false,offline:true};
   const r=await postCloud({action:'login',user:userId,passHash,agent:(navigator.userAgent||'').slice(0,100)});
   const d=r&&r.data;
-  if(r.ok&&d&&d.token){
-    SESSION_TOKEN=d.token;SERVER_CAPS=d.user&&d.user.caps;
-    LS.set('token',SESSION_TOKEN);LS.set('caps',SERVER_CAPS);
-    return {ok:true,user:d.user};
-  }
+  if(r.ok&&d&&d.token){applySession(d);return {ok:true,user:d.user};}
   // network=true เมื่อไม่ได้คำตอบจาก server เลย (ออฟไลน์ / timeout) — ใช้ตัดสินว่าจะยอมตรวจรหัสในเครื่องหรือไม่
   return {ok:false,error:(d&&d.error)||r.error||'AUTH_FAILED',info:d||{},network:!d,offline:!!r.offline};
 }
@@ -1366,6 +1380,60 @@ function salesAppNotice(name){
   <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ปิด</button>
     <a class="btn" href="${esc(url)}" target="_blank" rel="noopener">เปิดแอปติดตามงานขาย →</a></div>`);
 }
+/* ============================================================ v4.4 LOGIN (Phase 2)
+   เส้นทางที่ 1 (ค่าเริ่มต้น): อีเมล Google ของคนที่เปิดหน้า — server อ่านเอง (ssoLogin) ไม่ต้องกรอกอะไร
+   เส้นทางที่ 2 (สำรอง): ชื่อผู้ใช้ / อีเมล + รหัสผ่าน (doLogin)
+   ทั้งสองเส้นทางจบที่ finishLogin() → พาไปหน้าแรกตามบทบาท
+   ============================================================ */
+const SSO_ERR_TH={SSO_UNAVAILABLE:'ระบบอ่านอีเมล Google ของคุณไม่ได้ (ยังไม่ได้ล็อกอิน Google / ใช้บัญชีนอกโดเมน / เปิดในแอปที่ไม่ใช่เบราว์เซอร์) — ใช้ชื่อผู้ใช้ + รหัสผ่านด้านล่างแทน',
+  SSO_NO_USER:'ยังไม่มีสิทธิ์เข้าระบบ — แจ้งผู้ดูแลระบบให้เพิ่มอีเมลนี้ในหน้าจัดการผู้ใช้ หรือเข้าด้วยรหัสผ่านด้านล่าง',
+  ACCOUNT_DISABLED:'บัญชีนี้ถูกปิดใช้งาน — ติดต่อผู้ดูแลระบบ (Admin)'};
+async function doSso(silent){
+  if(!gsRun())return false;
+  const who=$('#loginWho');
+  if(!silent&&who){who.className='login-who';who.textContent='กำลังตรวจสอบบัญชี Google…';}
+  SERVER_CAPS=null;LS.set('caps',null);
+  const r=await postCloud({action:'ssoLogin',agent:(navigator.userAgent||'').slice(0,100)});
+  const d=r&&r.data;
+  if(r.ok&&d&&d.token){applySession(d);return finishLogin(d.user,{method:'google'});}
+  if(who){
+    const em=d&&d.email;
+    who.className='login-who'+(d&&d.error&&d.error!=='SSO_UNAVAILABLE'?' warn':'');
+    // แสดงอีเมลที่ตรวจพบเสมอ — ช่วยกรณีเปิดผิดโปรไฟล์ Chrome / ล็อกอินหลายบัญชี
+    who.innerHTML=em?('ตรวจพบบัญชี Google: <b>'+esc(em)+'</b><br>'+esc(SSO_ERR_TH[d.error]||d.error||''))
+      :(silent?'':esc(SSO_ERR_TH[(d&&d.error)||'SSO_UNAVAILABLE']||'เข้าสู่ระบบด้วย Google ไม่สำเร็จ'));
+  }
+  return false;
+}
+/* หน้าแรกตามบทบาท: ผู้อนุมัติ → รออนุมัติ · Sourcing → คิวคำขอราคา · อื่น ๆ → ภาพรวม */
+function homeRoute(u){
+  const r=normRole((u||CURRENT||{}).role);
+  if(REQUIRED_APPROVAL_ROLES.indexOf(r)>=0||APPROVAL_OVERRIDE_ROLES.indexOf(r)>=0)return 'approvals';
+  if(r==='Sourcing')return 'srqueue';
+  return 'dashboard';
+}
+/* ปิดท้ายการล็อกอินทุกเส้นทาง — su = ข้อมูลผู้ใช้จาก server */
+async function finishLogin(su,opts){
+  opts=opts||{};
+  let u=USERS.find(x=>x.id===su.id);
+  if(!u){u={id:su.id,name:su.name,role:normRole(su.role),scope:'all'};USERS.push(u);}
+  u.name=su.name||u.name;u.role=normRole(su.role);                    // role ที่เชื่อถือได้คือของ server
+  if(su.email!==undefined)u.email=su.email;
+  if(opts.clientHash){u.passHash=opts.clientHash;delete u.pass;}       // เก็บเฉพาะบัญชีของตัวเอง (ใช้ตอนออฟไลน์)
+  LS.set('users',USERS);
+  if(!isInternalUser(u)){                                             // Sales → แอป Sales
+    $('#loginErr').textContent='';$('#loginPass').value='';clearSession();salesAppNotice(u.name);return false;
+  }
+  LS.set('lastUser',opts.input||u.email||u.id);
+  const wasFactory=opts.clientHash?await isFactoryPass(u):false;
+  CURRENT=u;LS.set('session',u.id);$('#loginErr').textContent='';$('#loginPass').value='';
+  route=homeRoute(u);
+  $('#login').classList.add('hidden');$('#app').classList.remove('hidden');mountApp();
+  if(opts.method==='google')toast('เข้าสู่ระบบด้วย '+(su.email||'บัญชี Google')+' แล้ว','good');
+  // ไม่โฆษณารหัสเริ่มต้นบนหน้า login และเตือนให้เปลี่ยนถ้ายังใช้รหัสโรงงานอยู่
+  if(wasFactory)setTimeout(promptChangeFactoryPass,400);
+  return true;
+}
 /* v4.3 LOGIN — server ตัดสินก่อนเสมอ (H2: เดิมตรวจรหัสในเครื่องก่อน ทำให้คนที่เพิ่งถูกเปลี่ยนรหัสจากเครื่องอื่นเข้าไม่ได้)
    ตรวจรหัสในเครื่องเฉพาะตอน "ติดต่อ server ไม่ได้เลย" และเฉพาะบัญชีที่เคยล็อกอินสำเร็จบนเครื่องนี้ */
 const LOGIN_ERR_TH={AUTH_FAILED:'ชื่อผู้ใช้ / อีเมล หรือรหัสผ่านไม่ถูกต้อง',ACCOUNT_DISABLED:'บัญชีนี้ถูกปิดใช้งาน — ติดต่อผู้ดูแลระบบ',
@@ -1380,12 +1448,7 @@ async function doLogin(){
     $('#loginErr').textContent='กำลังตรวจสอบ…';
     const sv=await serverLogin(input,clientHash);
     if(sv.ok&&sv.user){
-      u=USERS.find(x=>x.id===sv.user.id);
-      if(!u){u={id:sv.user.id,name:sv.user.name,role:normRole(sv.user.role),scope:'all'};USERS.push(u);}
-      u.name=sv.user.name||u.name;u.role=normRole(sv.user.role);   // role ที่เชื่อถือได้คือของ server
-      if(sv.user.email!==undefined)u.email=sv.user.email;
-      u.passHash=clientHash;delete u.pass;                          // เก็บไว้เฉพาะบัญชีของตัวเอง (ใช้ตอนออฟไลน์)
-      LS.set('users',USERS);
+      await finishLogin(sv.user,{clientHash,input,method:'password'});return;
     }else if(!sv.network){
       const e=sv.error,info=sv.info||{};
       $('#loginErr').textContent=(LOGIN_ERR_TH[e]||('เข้าสู่ระบบไม่สำเร็จ ('+e+')'))+
@@ -1449,6 +1512,7 @@ function logout(){
 const NAV=[
   {group:'งานหลัก'},
   {id:'dashboard',label:'ภาพรวม',icon:'grid'},
+  {id:'approvals',label:'รออนุมัติ',icon:'check',perm:'approve',badge:()=>QUOTES.filter(q=>!q.deleted&&canApprove(q)).length||undefined},
   {id:'summary',label:'สรุปยอดขาย/GP',icon:'chart',perm:'margin'},
   {id:'srqueue',label:'คำขอราคา (SR)',icon:'inbox',badge:()=>QUOTES.filter(q=>srAwaitingIntake(q)).length||undefined},
   {id:'new',label:'ทำราคาใหม่',icon:'plus'},
@@ -1464,6 +1528,7 @@ const NAV=[
   {id:'users',label:'จัดการผู้ใช้',icon:'users',perm:'users'},
 ];
 const ICONS={
+  check:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   chart:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/>',
   plus:'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
@@ -1502,7 +1567,7 @@ function renderNav(){
 var ROUTE_CAPS={settings:'manageSetting',users:'manageUsers',summary:'viewCost',
   master:'viewCost',new:'writeQuote',preview:'viewCost',quotes:'viewCost',
   followup:'viewCost',salesupdate:'viewCost',srqueue:'viewCost',salessummary:'viewCost',
-  dashboard:null,denied:null};
+  dashboard:null,denied:null,approvals:'approve'};
 function routeAllowed(r){
   if(!CURRENT)return false;
   if(!isInternalUser(CURRENT))return false;      // Sales ไม่มีสิทธิ์ในแอปนี้ทุก route
@@ -1552,7 +1617,7 @@ function mountApp(){
   initializeData();   // 2-way: pull latest from Google Sheet & merge, flush offline queue
   startLive();        // v4.1: auto-sync ทุก 30 วินาที (Dashboard) + เฝ้า conflict หน้าแก้ไข
 }
-const TITLES={dashboard:'ภาพรวม',salessummary:'สรุปทีมขาย — สำหรับอัปเดตผู้บริหาร',summary:'สรุปยอดขาย & GP',srqueue:'คำขอราคา (SR)',new:'ทำราคาใหม่',quotes:'ใบเสนอราคา (QT)',followup:'ติดตามงาน',salesupdate:'อัพเดตโครงการ (Sales)',master:'ข้อมูลสินค้า & ราคา Default',settings:'ตั้งค่า Default',users:'จัดการผู้ใช้',preview:'ดูใบเสนอราคา',salesdash:'My Projects',salesrequest:'ขอราคาใหม่'};
+const TITLES={approvals:'รออนุมัติราคา',dashboard:'ภาพรวม',salessummary:'สรุปทีมขาย — สำหรับอัปเดตผู้บริหาร',summary:'สรุปยอดขาย & GP',srqueue:'คำขอราคา (SR)',new:'ทำราคาใหม่',quotes:'ใบเสนอราคา (QT)',followup:'ติดตามงาน',salesupdate:'อัพเดตโครงการ (Sales)',master:'ข้อมูลสินค้า & ราคา Default',settings:'ตั้งค่า Default',users:'จัดการผู้ใช้',preview:'ดูใบเสนอราคา',salesdash:'My Projects',salesrequest:'ขอราคาใหม่'};
 const SALES_ONLY_ROUTES=['salesdash','salesrequest','preview'];
 function render(){
   // ด่านสุดท้าย: ไม่ว่าจะมาถึงหน้านี้ด้วยวิธีใด (เมนู / Back / Forward / Refresh / URL ตรง)
@@ -1566,6 +1631,7 @@ function render(){
     c.innerHTML=viewSalesRequest();srRenderLines();srFillForm();}
   else if(route==='srqueue')c.innerHTML=viewSRQueue();
   else if(route==='dashboard')c.innerHTML=viewDashboard();
+  else if(route==='approvals')c.innerHTML=viewApprovals();
   else if(route==='summary')c.innerHTML=perms().margin?viewSummary():emptyState('เฉพาะ Manager','หน้านี้สำหรับ Manager ขึ้นไปเท่านั้น');
   else if(route==='new'){c.innerHTML=viewCosting();initCosting()}
   else if(route==='quotes')c.innerHTML=viewQuotes();
@@ -1828,6 +1894,24 @@ function workloadCard(){
       </tbody></table></div>
       ${worst.some(x=>x.f.estimated)?'<div class="hint" style="margin-top:6px">* ใบรุ่นเก่าไม่มีประวัติเวลาเปลี่ยนสถานะ — นับจากวันที่แก้ไขล่าสุดแทน</div>':''}
     </div></div>`;
+}
+/* v4.4: หน้าแรกของผู้อนุมัติ — รอฉันอนุมัติก่อน แล้วค่อยรอฝ่ายอื่น */
+function viewApprovals(){
+  const all=latestQuotes(QUOTES).filter(q=>!q.deleted&&inApprovalStage(q));
+  const mine=all.filter(canApprove),others=all.filter(q=>!canApprove(q));
+  const byWait=(a,b)=>((followOf(b).waitingDays||0)-(followOf(a).waitingDays||0));
+  const recent=latestQuotes(QUOTES).filter(q=>!q.deleted&&(q.approvals||[]).some(a=>a.role===CURRENT.role&&a.act==='อนุมัติ'))
+    .sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||''))).slice(0,6);
+  return `<div class="card" style="margin-bottom:14px;border-left:4px solid var(--amber)"><div class="card-h"><h2>รอคุณอนุมัติ (${mine.length})</h2>
+      <span class="hint" style="margin-left:8px">ในนาม ${esc(CURRENT.role)} · เรียงตามรอนานสุด</span><div class="spacer"></div><span class="live-pill on">● Live</span></div>
+    <div class="card-b">${mine.length?`<div class="agrid">${mine.sort(byWait).map(approvalCard).join('')}</div>`
+      :'<div class="empty" style="padding:22px"><div style="font-size:28px">✅</div>ไม่มีใบที่รอคุณอนุมัติ</div>'}</div></div>
+  ${others.length?`<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>รออีกฝ่ายอนุมัติ (${others.length})</h2><span class="hint" style="margin-left:8px">คุณอนุมัติแล้ว หรือไม่ใช่ฝั่งของคุณ</span></div>
+    <div class="card-b"><div class="agrid">${others.sort(byWait).map(approvalCard).join('')}</div></div></div>`:''}
+  ${recent.length?`<div class="card"><div class="card-h"><h2>ที่คุณอนุมัติล่าสุด</h2></div><div class="card-b" style="padding:0"><div class="tw" style="border:none"><table><tbody>
+    ${recent.map(q=>`<tr style="cursor:pointer" onclick="openQuote('${q.id}')"><td class="mono" style="font-size:11px">${esc(q.docNo||q.header.ref||'')}</td>
+      <td><b>${esc(q.header.title||q.header.customer||'')}</b><div class="hint">${esc(q.header.customer||'')}</div></td>
+      <td>${ballChip(q)}</td><td class="r mono">${money(quoteTotals(q).total,curOf(q))}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}`;
 }
 function SLA_TXT(k){const f=(QUOTES.map(q=>q._follow).find(x=>x&&x.owner===k));return f&&f.slaDays?f.slaDays:({SOURCING:3,MANAGEMENT:2,RELEASER:1})[k]}
 function kpi(l,v,s,color){const dot=color&&color!=='grid'?`<span class="dot" style="background:var(--${color})"></span>`:'';
@@ -3781,7 +3865,9 @@ function setUserField(i,k,v){
     else if(r&&userRejected(r)){u[k]=old;LS.set('users',USERS);render();}});   // server ปฏิเสธข้อมูล → คืนค่าเดิม (เน็ตหลุด = เก็บคิวไว้ส่งใหม่)
   render();
 }
+let _usersPulledAt=0;
 function viewUsers(){
+  if(Date.now()-_usersPulledAt>20000&&cloudReady()){_usersPulledAt=Date.now();pullUsers().then(n=>{if(n&&route==='users')render()});}
   const tierTag=r=>{const t=ROLE_TIER[r];return t==='SALES'?'orange':t==='INTERNAL'?'blue':t?'green':'red'};
   const rows=USERS.map((u,i)=>{
     const scopeTxt=(u.scope==='all'||!u.scope)?'ทุกกลุ่ม':(Array.isArray(u.scope)?u.scope.length+' กลุ่ม':'—');
@@ -3794,7 +3880,9 @@ function viewUsers(){
         ${u.email?'':'<div class="hint" style="font-size:10px;color:var(--amber)">ยังไม่มีอีเมล — ล็อกอินด้วย Username</div>'}</td>
       <td class="mono" style="font-size:11.5px">${esc(u.id)}</td>
       <td>${roleSelectHTML(u.role,`setUserField(${i},'role',this.value)`)}<div><span class="tag ${tierTag(u.role)}" style="font-size:10px;margin-top:3px">${esc(ROLE_DESC[u.role]||'ไม่รู้จัก → สิทธิ์ต่ำสุด (Sales)')}</span></div></td>
-      <td><label class="row-flex" style="gap:6px;cursor:pointer;font-size:12.5px"><input type="checkbox" style="width:auto" ${off?'':'checked'} onchange="setUserField(${i},'active',this.checked)">${off?'ปิดใช้งาน':'ใช้งาน'}</label></td>
+      <td><label class="row-flex" style="gap:6px;cursor:pointer;font-size:12.5px"><input type="checkbox" style="width:auto" ${off?'':'checked'} onchange="setUserField(${i},'active',this.checked)">${off?'ปิดใช้งาน':'ใช้งาน'}</label>
+        ${u.lockedMinutes?`<div style="margin-top:4px"><span class="tag red" style="font-size:10px">🔒 ล็อก ${u.lockedMinutes} นาที</span>
+          <button class="btn tiny ghost" onclick="unlockUser('${esc(u.id)}')">ปลดล็อก</button></div>`:''}</td>
       <td>${isSalesTier?'<span class="hint">—</span>':`<button class="btn tiny ghost" onclick="openScope('${esc(u.id)}')">${(u.scope==='all'||!u.scope)?'🌐 ทุกกลุ่ม':'🔒 '+scopeTxt}</button>`}</td>
       <td>${isSalesTier?`<button class="btn tiny ghost" onclick="copySalesLink(${i})" title="ลิงก์หน้าของ Sales คนนี้ในแอป Sales">🔗 หน้า Sales</button>`:'<span class="hint">ระบบทำราคา</span>'}</td>
       <td><div class="pill-input" style="padding:2px 4px 2px 8px;width:150px"><input type="password" placeholder="ตั้งรหัสใหม่…" autocomplete="new-password" style="border:none;outline:none;width:100%;background:transparent" onchange="adminSetPassword('${esc(u.id)}',this)"></div>
@@ -3812,6 +3900,12 @@ function viewUsers(){
         <span class="hint">• ผู้ใช้ล็อกอินด้วย <b>อีเมล</b> หรือ Username ได้ทั้งสองแอป &nbsp;• Sales / Sales Manager ใช้แอป Sales &nbsp;• รหัสเริ่มต้น = 1234 (ระบบบังคับเปลี่ยนตอนล็อกอิน)<br>
           • ถ้า Deploy แบบ “Execute as: User accessing” หรือใช้ Google Workspace — ผู้ใช้ที่อีเมลตรงกับคอลัมน์ Email เข้าแอป Sales ด้วยปุ่ม Google ได้โดยไม่ต้องใช้รหัส</span>
         <button class="btn tiny ghost" onclick="pushUsers(true)">⤴ ซิงค์ผู้ใช้ขึ้น Sheet</button></div></div></div>`;
+}
+async function unlockUser(id){
+  const r=await postCloud({action:'unlockUser',id});
+  if(!r.ok){toast('ปลดล็อกไม่สำเร็จ: '+(r.error||'-'),'bad');return}
+  const u=USERS.find(x=>x.id===id);if(u)u.lockedMinutes=0;LS.set('users',USERS);render();
+  toast('ปลดล็อก '+((u&&u.name)||id)+' แล้ว','good');
 }
 function copySalesLink(i){const u=USERS[i];if(u)copyText_(salesAppUrl(u),'คัดลอกลิงก์หน้าของ '+u.name+' แล้ว — ส่งให้เปิดในมือถือได้เลย')}
 function copyText_(t,msg){
@@ -3947,25 +4041,76 @@ function withTimeout(promise,ms){
 }
 async function postCloud(payload){
   const r=await withTimeout(_postCloud(payload),CLOUD_TIMEOUT_MS);
-  if(r&&!r.ok&&r.error==='AUTH_REQUIRED'&&payload.action!=='login')onAuthExpired();
+  if(r&&!r.ok&&r.error==='AUTH_REQUIRED'&&payload.action!=='login'&&payload.action!=='ssoLogin')onAuthExpired(r.data&&r.data.reason);
   return r;
 }
 async function cloudGet(type,arg){
   const r=await withTimeout(_cloudGet(type,arg),CLOUD_TIMEOUT_MS);
-  if(r&&r.ok===false&&r.error==='AUTH_REQUIRED')onAuthExpired();
+  if(r&&r.ok===false&&r.error==='AUTH_REQUIRED')onAuthExpired(r.reason);
+  if(r&&r.me)applyMe(r.me);
   return r;
 }
 /* v4.1: เซสชันหมดอายุ (SESSION_HOURS ใน Code.gs) — เดิมเงียบ แค่จุดเมฆเป็นสีแดง
    ผู้ใช้จึงเห็นข้อมูลเก่าค้างจอโดยไม่รู้ตัว → ตอนนี้แจ้งชัด ๆ ครั้งเดียว แล้วพาไปล็อกอินใหม่
    (รายการที่ค้างในคิวยังอยู่ และจะถูกส่งด้วย token ใหม่หลังล็อกอิน) */
+/* v4.4: เซสชันหมดอายุกลางทาง → ล็อกอินต่อ "ในหน้าเดิม" (ไม่ออกจากหน้า ไม่ล้างงานที่กรอกค้าง)
+   ลองบัญชี Google ให้ก่อนแบบไม่ต้องกด · ไม่ได้ค่อยขอรหัสผ่าน · ต้องเป็นผู้ใช้คนเดิมเท่านั้น */
 let _authWarned=false;
-function onAuthExpired(){
+const AUTH_REASON_TH={SESSION_EXPIRED:'เซสชันหมดอายุแล้ว',ACCOUNT_DISABLED:'บัญชีของคุณถูกปิดใช้งาน',ACCOUNT_REMOVED:'บัญชีของคุณถูกลบออกจากระบบ',NO_SESSION:'ยังไม่ได้เข้าสู่ระบบ'};
+async function onAuthExpired(reason){
   if(_authWarned||!CURRENT)return;
-  _authWarned=true;stopLive();
-  modal(`<div class="modal-h"><h3 style="color:var(--amber)">⏱ เซสชันหมดอายุ</h3><div class="spacer"></div></div>
-  <div class="modal-b"><p style="line-height:1.8;font-size:13.5px">ระบบไม่สามารถดึง/บันทึกข้อมูลจาก Google Sheet ได้ เพราะเซสชันหมดอายุแล้ว<br>
-    <b>ข้อมูลที่ยังไม่ได้ส่งจะถูกเก็บไว้ในคิว</b> และส่งให้อัตโนมัติหลังเข้าสู่ระบบใหม่</p></div>
-  <div class="modal-f"><button class="btn" onclick="closeModal();autosaveDraft();dirty=false;logout()">เข้าสู่ระบบใหม่</button></div>`);
+  _authWarned=true;stopLive();autosaveDraft();
+  if(reason==='ACCOUNT_DISABLED'||reason==='ACCOUNT_REMOVED'){
+    modal(`<div class="modal-h"><h3 style="color:var(--red)">⛔ ${esc(AUTH_REASON_TH[reason])}</h3></div>
+      <div class="modal-b" style="line-height:1.8">ติดต่อผู้ดูแลระบบ (Admin) · งานที่กรอกค้างถูกเก็บเป็นร่างในเครื่องนี้แล้ว</div>
+      <div class="modal-f"><button class="btn" onclick="closeModal();dirty=false;logout()">ตกลง</button></div>`);
+    return;
+  }
+  if(gsRun()&&await reauth('sso',true))return;                              // Google: ต่อให้เงียบ ๆ
+  modal(`<div class="modal-h"><h3 style="color:var(--amber)">⏱ ${esc(AUTH_REASON_TH[reason]||AUTH_REASON_TH.SESSION_EXPIRED)} — กรุณายืนยันตัวตนอีกครั้ง</h3></div>
+  <div class="modal-b"><p style="line-height:1.75;font-size:13.5px">คุณยังอยู่ที่หน้าเดิม <b>งานที่กรอกค้างและรายการที่ยังไม่ได้ส่งยังอยู่ครบ</b> — ยืนยันตัวตนแล้วทำงานต่อได้ทันที</p>
+    <div class="hint" style="margin:8px 0">บัญชี: <b>${esc(CURRENT.name)}</b>${CURRENT.email?' · '+esc(CURRENT.email):''}</div>
+    ${gsRun()?`<button class="btn full sso-btn" style="margin-bottom:10px" onclick="reauth('sso')">เข้าสู่ระบบต่อด้วยบัญชี Google</button>`:''}
+    <div class="field"><label class="lbl">รหัสผ่าน</label><input class="inp" id="ra_pass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')reauth('pass')"></div>
+    <div class="login-err" id="ra_err"></div></div>
+  <div class="modal-f"><button class="btn ghost" onclick="closeModal();dirty=false;logout()">ออกจากระบบ</button>
+    <button class="btn" onclick="reauth('pass')">ทำงานต่อ</button></div>`);
+  setTimeout(()=>{const e=$('#ra_pass');if(e)e.focus()},60);
+}
+async function reauth(mode,silent){
+  let r;
+  if(mode==='sso')r=await postCloud({action:'ssoLogin',agent:'reauth'});
+  else{const pw=($('#ra_pass')||{}).value||'';if(!pw){$('#ra_err').textContent='กรุณากรอกรหัสผ่าน';return false}
+    r=await postCloud({action:'login',user:CURRENT.email||CURRENT.id,passHash:await hashPass(pw),agent:'reauth'});}
+  const d=r&&r.data;
+  if(!(r.ok&&d&&d.token)){
+    if(!silent&&$('#ra_err'))$('#ra_err').textContent=(LOGIN_ERR_TH[d&&d.error]||SSO_ERR_TH[d&&d.error]||('ไม่สำเร็จ ('+((d&&d.error)||r.error||'-')+')'))+(d&&d.email?' — '+d.email:'');
+    return false;
+  }
+  if(d.user.id!==CURRENT.id){                                                  // คนละบัญชี → ห้ามใช้ต่อในหน้าเดิม
+    if(!silent&&$('#ra_err'))$('#ra_err').textContent='บัญชีนี้ ('+(d.user.email||d.user.name)+') ไม่ใช่ '+CURRENT.name+' — กด "ออกจากระบบ" แล้วเข้าใหม่';
+    postCloud({action:'logout',token:d.token});return false;
+  }
+  applySession(d);applyMe(d.user,true);_authWarned=false;
+  if(mode==='pass')CURRENT.passHash=await hashPass($('#ra_pass').value);
+  closeModal();startLive();flushQueue();pollChanges(true);
+  toast('ยืนยันตัวตนแล้ว — ทำงานต่อได้เลย (งานที่ค้างอยู่ครบ)','good');
+  return true;
+}
+/* v4.4: สิทธิ์จาก server เปลี่ยน (Admin ปรับ role) → ใช้ทันที ไม่ต้องรอล็อกอินใหม่ */
+function applyMe(me,quiet){
+  if(!me||!CURRENT&&!quiet)return;
+  SERVER_CAPS=me.caps||SERVER_CAPS;LS.set('caps',SERVER_CAPS);
+  const u=CURRENT||USERS.find(x=>x.id===me.id);if(!u)return;
+  const newRole=normRole(me.role);
+  if(me.email!==undefined)u.email=me.email;
+  if(u.role===newRole)return;
+  const old=u.role;u.role=newRole;LS.set('users',USERS);
+  if(quiet||!CURRENT)return;
+  if(!isInternalUser(u)){toast('สิทธิ์ของคุณถูกเปลี่ยนเป็น '+newRole+' — ใช้งานผ่านแอป Sales','bad');logout();salesAppNotice(u.name);return}
+  $('#uRole').textContent=newRole;renderNav();
+  if(!routeAllowed(route))go(homeRoute(u),true);else render();
+  toast('สิทธิ์ของคุณถูกปรับจาก '+old+' เป็น '+newRole,'good');
 }
 async function _postCloud(payload){
   // FIX v4.1: เดิมเขียน token ลงใน payload ตัวเดียวกับที่อยู่ในคิว → หลังเซสชันหมดอายุ ทุกรายการในคิว
@@ -4046,6 +4191,7 @@ async function pullUsers(){
       if(r.role&&u.role!==normRole(r.role)){u.role=normRole(r.role);changed++;}
       if(scope&&JSON.stringify(u.scope)!==JSON.stringify(scope)){u.scope=scope;changed++;}
       if(r.hasPassword!==undefined&&u.hasPassword!==r.hasPassword){u.hasPassword=r.hasPassword;changed++;}
+      if((u.lockedMinutes||0)!==(r.lockedMinutes||0)){u.lockedMinutes=r.lockedMinutes||0;changed++;}
       if(r.email!==undefined&&(u.email||'')!==r.email){u.email=r.email;changed++;}
       if(r.active!==undefined&&(u.active!==false)!==(r.active!==false)){u.active=r.active!==false;changed++;}
     }
@@ -4203,7 +4349,7 @@ window.addEventListener('offline',()=>{setCloudDot('');updateQueueBadge();});
    ============================================================ */
 // BUSINESS RULE: ความถี่ auto-sync (ปรับได้) — 30 วินาทีเบาพอสำหรับ quota ของ Apps Script
 const LIVE_POLL_MS=30000;
-const LIVE_POLL_ROUTES=['dashboard','salessummary'];   // หน้าที่ polling รายการทั้งหมด
+const LIVE_POLL_ROUTES=['dashboard','salessummary','approvals','srqueue'];   // หน้าที่ polling รายการทั้งหมด
 const LIVE_OVERLAP_MS=90000;      // ขอข้อมูลซ้อนย้อนหลัง 90 วิ กันแถวที่เขียนระหว่างอ่านหลุด (merge ซ้ำได้ปลอดภัย)
 const LEGACY_FULL_PULL_MS=120000; // Code.gs รุ่นเก่า (ไม่มี type=changes) → ดึงทั้งชุดห่างขึ้นเป็น 2 นาที
 let _liveTimer=null,_lastServerTime='',_polling=false,_lastPollAt=0,_lastFullPull=0;
@@ -5337,9 +5483,21 @@ function createQTFromSR(srId){
 }
 
 initLogin();
-const sess=LS.get('session');
 window.__booted=true;   // boot guard: สคริปต์หลักโหลดครบแล้ว
-if(sess){const u=USERS.find(x=>x.id===sess);if(u){CURRENT=u;$('#login').classList.add('hidden');$('#app').classList.remove('hidden');mountApp()}}
+/* v4.4 BOOT — เดิมเปิดหน้ากลับมาจาก session ในเครื่องเลยโดยไม่ถาม server (token อาจหมดอายุ/ถูกปิดบัญชีไปแล้ว)
+   ลำดับใหม่: token เดิมยังใช้ได้? → เข้าเลย · ไม่ได้ → ลอง Google (ไม่ต้องกด) → ไม่ได้ → หน้า login พร้อมบอกอีเมลที่ตรวจพบ */
+(async function boot(){
+  const sess=LS.get('session'),u=sess&&USERS.find(x=>x.id===sess);
+  const enter=()=>{CURRENT=u;$('#login').classList.add('hidden');$('#app').classList.remove('hidden');mountApp()};
+  if(u&&!cloudReady()){enter();return}                                     // ออฟไลน์ล้วน: ทำงานในเครื่องต่อได้
+  if(u&&SESSION_TOKEN){
+    const w=await cloudGet('whoami');
+    if(w&&w.ok&&w.user&&w.user.id===u.id){applyMe(w.user,true);if(isInternalUser(u)){enter();return}}
+    else if(!w){enter();return}                                              // ติดต่อ server ไม่ได้ → ใช้ข้อมูลในเครื่องไปก่อน
+  }
+  clearSession();
+  if(gsRun())await doSso(true);
+})();
 </script>
 </body>
 </html>

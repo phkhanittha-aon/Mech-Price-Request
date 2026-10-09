@@ -13,5 +13,6 @@
 | `e2e.js` | ระบบทำราคาในเบราว์เซอร์ หลายผู้ใช้พร้อมกัน | `NODE_PATH=$(npm root -g) node tests/e2e.js $PWD/Index.html $PWD/Code.gs /tmp` |
 | `e2e_sales.js` | แอป Sales + Sourcing รับงาน + จัดการผู้ใช้ | `NODE_PATH=$(npm root -g) node tests/e2e_sales.js $PWD /tmp` |
 | `audit_roles.js` | เดินทุกเมนูทุก role + วัด layout | `NODE_PATH=$(npm root -g) node tests/audit_roles.js $PWD /tmp` |
+| `layout_audit.js` | Phase 3: เลื่อนซ้ายขวา / ฟอร์มตรงแนว / หัวตารางติด / แผ่นแก้ไขมือถือ ทุกจอ | `NODE_PATH=$(npm root -g) node tests/layout_audit.js $PWD /tmp` |
 
 ต้องมี Node 18+ และ Playwright (Chromium) สำหรับไฟล์ที่ใช้เบราว์เซอร์

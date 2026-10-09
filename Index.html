@@ -103,7 +103,7 @@ a{color:var(--orange-deep);text-decoration:none}
 .cloud-dot.on{background:var(--green)}.cloud-dot.err{background:var(--red)}
 .cloud-dot.sync{background:var(--orange);animation:cloudpulse 1s ease-in-out infinite}
 @keyframes cloudpulse{0%,100%{opacity:.35}50%{opacity:1}}
-.content{padding:26px;max-width:1340px;width:100%}
+.content{padding:26px;max-width:1600px;width:100%;margin:0 auto}
 
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
 .card-h{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
@@ -142,13 +142,13 @@ td.r,th.r{text-align:right}
 .cost-table td.ic .stack .cell-inp{padding:5px 6px}
 .cost-table .cell-sub{font-size:10.5px;padding:0 6px 3px;text-align:right;font-family:'JetBrains Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cost-table th,.cost-table td{padding:8px 6px;overflow:hidden;text-overflow:ellipsis}
-.cost-table thead th{font-size:11px;position:static}
+.cost-table thead th{font-size:11px;position:sticky;top:28px;z-index:3}
 .cost-table td.ic{padding:0;vertical-align:middle}
 .cost-table td.ic .cell-inp{width:100%;padding:8px 6px}
 .cost-table td.ic .pct-wrap{display:block;width:100%}
 .cost-table td.ic .pct-wrap .cell-inp{padding-right:17px}
 .cost-table thead th:first-child,.cost-table tbody td:first-child{position:sticky;left:0;z-index:1;background:var(--surface)}
-.cost-table thead th:first-child{z-index:2;background:var(--surface-2)}
+.cost-table thead th:first-child{z-index:5;background:var(--surface-2)}
 .cost-table tbody tr:hover td:first-child{background:var(--surface-2)}
 .sr-row{display:flex;gap:14px;flex-wrap:wrap}
 @media(max-width:600px){.sr-row{flex-direction:column;gap:10px}.sr-row .field{min-width:0!important}}
@@ -271,6 +271,63 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
   .lines-desktop{display:none}
   .lines-mobile{display:block;padding:10px}
 }
+/* ============================================================ v4.5 Phase 3 — หน้าจอ Sourcing สมดุล
+   - หัวการ์ดตัดบรรทัดได้ (ปุ่ม/แท็กไม่ดันหน้าจอให้เลื่อนซ้ายขวา)
+   - ฟอร์มข้อมูลโครงการ = กริด 4 คอลัมน์ ช่องในแถวเดียวกันสูงเท่ากัน label ตรงแนว คำอธิบายย้ายไปแถวหมายเหตุด้านล่าง
+   - ตารางต้นทุนเลื่อนในกรอบของตัวเองเท่านั้น หัวตารางติดด้านบน คอลัมน์สินค้าติดซ้าย
+   - จอเล็ก: แถวย่อ แตะเพื่อเปิดแผ่นแก้ไขรายการ (bottom sheet)                                   */
+.card-h{flex-wrap:wrap;row-gap:8px}
+.card-h h2{min-width:0;overflow-wrap:anywhere}
+.card-h .ch-hint{order:10;flex:1 1 100%;min-width:0;margin:-4px 0 0}
+.kpis>*{min-width:0}
+@media(max-width:760px){#content .kpis[style*="fr"]{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+.fgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px 16px;align-items:start}
+.fgrid .fc{min-width:0}
+.fgrid .fc.w2{grid-column:span 2}
+.fgrid .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:18px;height:18px}
+.fgrid .inp{height:40px}
+.fgrid .ctl{display:flex;gap:6px;height:40px}
+.fgrid .ctl>.inp{flex:1;min-width:0}
+.fgrid .ctl>.btn{height:40px;padding:0 13px;flex:0 0 auto}
+.fgrid .inp.ro{background:var(--surface-2);display:flex;align-items:center;gap:8px;overflow:hidden;white-space:nowrap}
+.fx-pair{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.fx-pair .fx{position:relative;min-width:0}
+.fx-pair .fx>span{position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;color:var(--muted);pointer-events:none}
+.fx-pair .fx>.inp{padding:0 7px 0 31px;font-size:12.5px;-moz-appearance:textfield;appearance:textfield}
+.fx-pair .fx>.inp::-webkit-inner-spin-button,.fx-pair .fx>.inp::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.fnotes{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 18px;padding-top:2px}
+.fnotes:empty{display:none}
+.fnotes .hint{margin-top:0}
+@media(max-width:1000px){.fgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.fgrid{grid-template-columns:minmax(0,1fr)}.fgrid .fc.w2{grid-column:auto}}
+#lineTW{overflow:visible}
+.lines-desktop{overflow:auto;max-height:max(360px,calc(100vh - 230px));overscroll-behavior-x:contain}
+/* แถวย่อบนจอเล็ก */
+.lrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid var(--line);border-radius:12px;
+  padding:10px 12px;margin:0 0 8px;background:var(--surface);box-shadow:var(--shadow);cursor:pointer;font:inherit;color:inherit}
+.lrow:active{background:var(--surface-2)}
+.lrow .lr-no{font-family:'Sora';font-weight:700;font-size:12px;color:var(--muted);min-width:18px}
+.lrow .lr-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.lrow .lr-main b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrow .lr-main i{font-style:normal;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrow .lr-main em{font-style:normal;font-size:11.5px;font-family:'JetBrains Mono',monospace;color:var(--ink-2)}
+.lrow .lr-side{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:0 0 auto}
+.lrow .lr-side b{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--orange-deep)}
+.lr-gp{font-size:10.5px;font-weight:700;border-radius:7px;padding:1px 6px}
+.lr-gp.green{background:var(--green-soft);color:var(--green)}.lr-gp.amber{background:var(--amber-soft);color:var(--amber)}.lr-gp.red{background:var(--red-soft);color:var(--red)}
+.lrow .lr-go{color:var(--muted);font-size:18px;flex:0 0 auto}
+/* แผ่นแก้ไขรายการ (bottom sheet) */
+.ov.sheet-ov{align-items:flex-end;padding:0}
+.modal.lsheet{max-width:640px;border-radius:18px 18px 0 0;max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+.lsheet .sh-b{overflow:auto;padding:4px 16px 14px;flex:1}
+.lsheet .sh-f{display:flex;gap:8px;align-items:center;padding:10px 16px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--surface)}
+.lsheet .sh-f .spacer{flex:1}
+.lsheet .sh-sec{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.03em;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.lsheet input,.lsheet select{width:100%;padding:9px 10px;border:1px solid var(--line-2);border-radius:9px;background:var(--surface);font-size:14px;height:40px}
+.lsheet input:focus,.lsheet select:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft)}
+.lsheet input:disabled{background:var(--surface-2)}
+.lsheet .num{text-align:right;font-family:'JetBrains Mono';font-variant-numeric:tabular-nums}
+.lsheet .lc-grid .f>label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* 4. Sales dashboard cards */
 .scard{border:1px solid var(--line);border-radius:12px;padding:13px 14px;margin-bottom:11px;background:var(--surface)}
 .scard:last-child{margin-bottom:0}
@@ -319,7 +376,8 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
    ① ข้อมูลสินค้า (เทา) · ② ต้นทุน (ฟ้า) · ③ มาร์จิ้น (เขียว) · ④ ราคาขาย (ส้ม) + เส้นแบ่งโซนแนวตั้ง */
 :root{--z-prod:#efe9df;--z-cost:#e3edf9;--z-gp:#e0f1e7;--z-sell:#fde6cf}
 .cost-table thead tr.zone-row th{font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:none;padding:6px 8px;text-align:left;border-bottom:none}
-.cost-table thead tr.zone-row th:first-child{position:static}
+.cost-table thead tr.zone-row th{position:sticky;top:0;z-index:4;height:28px;padding-top:0;padding-bottom:0;white-space:nowrap}
+.cost-table thead tr.zone-row th:first-child{left:auto;z-index:4}
 .cost-table th.z-prod{background:var(--z-prod);color:var(--ink-2)}
 .cost-table th.z-cost,.cost-table th.z-cost-h{background:var(--z-cost);color:var(--blue)}
 .cost-table th.z-gp,.cost-table th.z-gp-h{background:var(--z-gp);color:var(--green)}
@@ -514,8 +572,8 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='4.4';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
-const BUILD='2026-10-09 · build 4.4 · Google login';
+const APP_VERSION='4.5';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const BUILD='2026-10-09 · build 4.5 · Sourcing layout';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
@@ -2056,6 +2114,7 @@ function viewCosting(){
   const H=editing.header;
   const opts=(arr,v)=>arr.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('');
   const st=statusOf(editing);
+  const salesLocked=quoteApproved(editing)&&!perms().approve;
   return `
   ${draftBanner()}
   <div id="conflictBanner" class="no-print"></div>
@@ -2066,41 +2125,41 @@ function viewCosting(){
       <div class="spacer"></div>
       ${inApprovalStage(editing)?`<span class="row-flex" style="gap:5px">${approvalBadges(editing)}</span>`:''}
       <span class="tag ${STATUS_TAG[st]||'grey'}" title="สถานะเอกสาร">${esc(STATUS_TH[st]||st)}</span></div>
-    <div class="card-b"><div class="grid" style="grid-template-columns:repeat(4,1fr)">
-      <div style="grid-column:span 2"><label class="lbl">ชื่อโครงการ / หัวข้อ</label>
+    <div class="card-b"><div class="fgrid" id="hdrGrid">
+      <div class="fc w2"><label class="lbl">ชื่อโครงการ / หัวข้อ</label>
         <input class="inp" value="${esc(H.title)}" placeholder="เช่น Thaibev - BESS - 1st Round" oninput="hset('title',this.value)"></div>
-      <div><label class="lbl">ลูกค้า</label>
-        <input class="inp" list="customerList" value="${esc(H.customer)}" placeholder="พิมพ์/เลือกชื่อลูกค้า" oninput="hset('customer',this.value)" autocomplete="off">
-        <datalist id="customerList">${customerNames().map(c=>`<option value="${esc(c)}"></option>`).join('')}</datalist>
-        <div class="hint">เลือกจากที่มีอยู่เพื่อให้ชื่อตรงกัน (ช่วยจัดกลุ่มใน Dashboard) หรือพิมพ์ลูกค้าใหม่</div></div>
-      <div><label class="lbl">Sales (เจ้าของงาน)</label>${
-        (quoteApproved(editing)&&!perms().approve)
-        ? `<div class="inp" style="background:var(--surface-2);display:flex;align-items:center;gap:8px">
-             <b>${esc(salesNameOf(editing)||H.sales||'—')}</b><span class="tag grey" style="font-size:10px">🔒 ล็อกหลังอนุมัติ</span></div>
-           <div class="hint">เปลี่ยนเจ้าของงานหลังอนุมัติได้เฉพาะผู้จัดการ (เพื่อกันการเปลี่ยนผู้รับราคาหลังผ่านการอนุมัติแล้ว)</div>`
-        : `<div class="row-flex" style="gap:6px;flex-wrap:nowrap">
-        <select class="inp" style="flex:1;min-width:0" onchange="hsetSales(this.value)">
+      <div class="fc"><label class="lbl">ลูกค้า</label>
+        <input class="inp" list="customerList" value="${esc(H.customer)}" placeholder="พิมพ์/เลือกชื่อลูกค้า" title="เลือกจากที่มีอยู่เพื่อให้ชื่อตรงกัน หรือพิมพ์ลูกค้าใหม่" oninput="hset('customer',this.value)" autocomplete="off">
+        <datalist id="customerList">${customerNames().map(c=>`<option value="${esc(c)}"></option>`).join('')}</datalist></div>
+      <div class="fc"><label class="lbl">Sales (เจ้าของงาน)</label>${
+        salesLocked
+        ? `<div class="inp ro" title="เปลี่ยนเจ้าของงานหลังอนุมัติได้เฉพาะผู้จัดการ"><b style="overflow:hidden;text-overflow:ellipsis">${esc(salesNameOf(editing)||H.sales||'—')}</b><span class="tag grey" style="font-size:10px">🔒 ล็อก</span></div>`
+        : `<div class="ctl">
+        <select class="inp" onchange="hsetSales(this.value)">
           ${salesSelectOptions(H)}
         </select>
-        <button class="btn ghost" style="padding:9px 13px" onclick="addSalesInline()" title="เพิ่มชื่อ Sales ใหม่">+</button></div>${
-          quoteApproved(editing)?'<div class="hint" style="color:var(--amber)">⚠ ใบนี้อนุมัติแล้ว — การเปลี่ยนเจ้าของงานจะถูกบันทึกในประวัติ</div>':''}`
+        <button class="btn ghost" onclick="addSalesInline()" title="เพิ่มชื่อ Sales ใหม่">+</button></div>`
       }</div>
-      <div><label class="lbl">กลุ่มงาน</label><select class="inp" onchange="hsetGroup(this.value)">${opts(GROUP_TYPES,H.groupType)}</select></div>
-      <div><label class="lbl">สกุลเงินเสนอ</label><select class="inp" onchange="hset('currency',this.value);refreshLines()">${opts(['THB','USD','CNY'],H.currency)}</select></div>
-      <div><label class="lbl">USD→THB Rate</label><input class="inp r mono" type="number" step="0.01" value="${(H.rates&&H.rates.USD)||H.exrate}" oninput="hsetRate('USD',this.value)"></div>
-      <div><label class="lbl">CNY→THB Rate</label><input class="inp r mono" type="number" step="0.01" value="${(H.rates&&H.rates.CNY)||(+SETTINGS.rateCNY||FX_FALLBACK.CNY)}" oninput="hsetRate('CNY',this.value)"></div>
-      <div><label class="lbl">Price Term</label><select class="inp" onchange="hset('priceTerm',this.value)">${opts(SETTINGS.priceTerms,H.priceTerm)}</select></div>
-      <div><label class="lbl">Incoterm</label><select class="inp" onchange="hset('incoterm',this.value);refreshLines()">${opts(SETTINGS.incoterms,H.incoterm)}</select></div>
-      <div><label class="lbl">วันที่ขอราคา</label><input class="inp" type="date" value="${H.reqDate}" oninput="hset('reqDate',this.value)"></div>
-      <div><label class="lbl">วันที่เสนอ</label><input class="inp" type="date" value="${H.offerDate}" oninput="hset('offerDate',this.value)"></div>
-      <div><label class="lbl">ยืนราคา (วัน)</label><input class="inp r mono" type="number" value="${H.validity}" oninput="hset('validity',this.value)"></div>
+      <div class="fc"><label class="lbl">กลุ่มงาน</label><select class="inp" onchange="hsetGroup(this.value)">${opts(GROUP_TYPES,H.groupType)}</select></div>
+      <div class="fc"><label class="lbl">วันที่ขอราคา</label><input class="inp" type="date" value="${H.reqDate}" oninput="hset('reqDate',this.value)"></div>
+      <div class="fc"><label class="lbl">วันที่เสนอ</label><input class="inp" type="date" value="${H.offerDate}" oninput="hset('offerDate',this.value)"></div>
+      <div class="fc"><label class="lbl">ยืนราคา (วัน)</label><input class="inp r mono" type="number" value="${H.validity}" oninput="hset('validity',this.value)"></div>
+      <div class="fc"><label class="lbl">สกุลเงินเสนอ</label><select class="inp" onchange="hset('currency',this.value);refreshLines()">${opts(['THB','USD','CNY'],H.currency)}</select></div>
+      <div class="fc"><label class="lbl">Incoterm</label><select class="inp" onchange="hset('incoterm',this.value);refreshLines()">${opts(SETTINGS.incoterms,H.incoterm)}</select></div>
+      <div class="fc"><label class="lbl">Price Term</label><select class="inp" onchange="hset('priceTerm',this.value)">${opts(SETTINGS.priceTerms,H.priceTerm)}</select></div>
+      <div class="fc"><label class="lbl">อัตราแลกเปลี่ยน → THB</label><div class="fx-pair">
+        <div class="fx"><span>USD</span><input class="inp r mono" type="number" step="0.01" title="USD→THB Rate" value="${(H.rates&&H.rates.USD)||H.exrate}" oninput="hsetRate('USD',this.value)"></div>
+        <div class="fx"><span>CNY</span><input class="inp r mono" type="number" step="0.01" title="CNY→THB Rate" value="${(H.rates&&H.rates.CNY)||(+SETTINGS.rateCNY||FX_FALLBACK.CNY)}" oninput="hsetRate('CNY',this.value)"></div></div></div>
+      <div class="fnotes">${salesLocked
+        ? '<div class="hint">🔒 เปลี่ยนเจ้าของงานหลังอนุมัติได้เฉพาะผู้จัดการ (กันการเปลี่ยนผู้รับราคาหลังผ่านการอนุมัติแล้ว)</div>'
+        : (quoteApproved(editing)?'<div class="hint" style="color:var(--amber)">⚠ ใบนี้อนุมัติแล้ว — การเปลี่ยนเจ้าของงานจะถูกบันทึกในประวัติ</div>':'')}</div>
     </div></div>
   </div>
 
   <div class="card" style="margin-bottom:18px">
     <div class="card-h"><h2>รายการสินค้า</h2>
       <span class="zone-legend"><i class="z-prod"></i>สินค้า<i class="z-cost"></i>ต้นทุน<i class="z-gp"></i>มาร์จิ้น<i class="z-sell"></i>ราคาขาย</span>
-      <span class="hint" style="margin-left:4px">%GP = กำไรขั้นต้นบนราคาขาย · แก้ราคาขาย/หน่วย เพื่อคำนวณ %GP ย้อนกลับ</span>
+      <span class="hint ch-hint">%GP = กำไรขั้นต้นบนราคาขาย · แก้ราคาขาย/หน่วย เพื่อคำนวณ %GP ย้อนกลับ</span>
       <div class="spacer"></div>
       <span class="hint" id="draftStamp" style="margin-right:8px"></span>
       <button class="btn sm ghost" onclick="exportCostCSV()" title="ส่งออกตารางต้นทุนเป็น CSV เปิดใน Excel ได้">⤓ CSV</button>
@@ -2110,7 +2169,7 @@ function viewCosting(){
 
   <div class="card" style="margin-bottom:18px">
     <div class="card-h"><h2>ค่าใช้จ่ายรวมทั้งใบ (Global Extra Costs)</h2>
-      <span class="hint" style="margin-left:4px">เช่น ค่าขนส่งรวม / ค่าติดตั้ง — ปันส่วนเข้าแต่ละรายการตามสัดส่วนยอด แล้วบวกเข้ายอดรวม</span>
+      <span class="hint ch-hint">เช่น ค่าขนส่งรวม / ค่าติดตั้ง — ปันส่วนเข้าแต่ละรายการตามสัดส่วนยอด แล้วบวกเข้ายอดรวม</span>
       <div class="spacer"></div><button class="btn sm ghost" onclick="addGlobalExtra()">+ เพิ่มค่าใช้จ่าย</button></div>
     <div class="card-b" id="gExtraBox"></div>
   </div>
@@ -2254,50 +2313,8 @@ function refreshLines(){
       </td></tr>`;
   }).join('');
 
-  /* ---------- mobile cards (3.1) ---------- */
-  const cards=editing.lines.map((L,i)=>{
-    const r=computeLine(L,H);
-    const cat=L.comGroup||comCategory(L.group);
-    return `<div class="lcard" id="mrow_${i}">
-      <div class="lc-h"><span class="lc-no">${i+1}</span>
-        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
-          <input style="font-weight:600" value="${esc(L.code)}" placeholder="รหัสสินค้า" oninput="lset(${i},'code',this.value)">
-          <input style="font-size:13px" value="${esc(L.desc)}" placeholder="รายละเอียดสินค้า" oninput="lset(${i},'desc',this.value)">
-        </div>
-        <button class="lc-del" onclick="delLineConfirm(${i})" title="ลบรายการนี้ (ต้องยืนยัน)">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div>
-      <div class="lc-grid">
-        <div class="f"><label>จำนวน</label><input class="num" type="number" value="${L.qty}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Qty',this)" oninput="lset(${i},'qty',this.value)"></div>
-        <div class="f"><label>หน่วย</label><input value="${esc(L.uom)}" placeholder="หน่วย" oninput="lset(${i},'uom',this.value)"></div>
-        <div class="f"><label>ทุน/หน่วย (${esc(L.costCur||'USD')})</label><input class="num" type="number" step="any" value="${L.up}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Unit Price',this)" oninput="lset(${i},'up',this.value)"></div>
-        <div class="f"><label>%GP</label><input class="num" id="mop_${i}" type="number" step="any" value="${L.opPct}" style="font-weight:700;color:${gpColor(r.gp,cat)}" onfocus="auditFocus(this)" onchange="auditLine(${i},'%GP',this)" oninput="lset(${i},'opPct',this.value)"></div>
-        <div class="f" style="grid-column:span 2"><label>ราคาขาย/หน่วย (${esc(H.currency)}) — แก้ได้เพื่อคิด %GP ย้อนกลับ</label>
-          <input class="num" id="mtu_${i}" type="number" step="any" value="${r.totalUP}" style="font-weight:700;background:var(--surface-2)" onfocus="auditFocus(this)" onchange="auditTotal(${i},this);totalEdit(${i},this.value,this)"></div>
-      </div>
-      <div class="lc-zones"><span class="zc"><i>ต้นทุน/ชิ้น</i><b id="mlc_${i}">${fmt(r.baseCost)}</b></span>
-        <span class="zg"><i>กำไร/ชิ้น</i><b id="mopu_${i}">${fmt(r.op)}</b></span></div>
-      <div class="lc-sum"><span class="lbl2">รวมรายการนี้</span><b id="mlt_${i}">${fmt0(r.lineTotal)}</b></div>
-      <button class="lc-more" id="mmore_${i}" onclick="toggleDet(${i})">▾ รายละเอียดต้นทุน</button>
-      <div class="lc-det" id="mdet_${i}" style="display:none">
-        <div class="lc-grid" style="margin-top:0">
-          <div class="f"><label>หมวดสินค้า</label><select onchange="lset(${i},'group',this.value)">
-            ${[...new Set([L.group,...visibleGroupList()])].filter(Boolean).map(g=>`<option ${L.group===g?'selected':''}>${esc(g)}</option>`).join('')}</select></div>
-          <div class="f"><label>สกุลเงินทุน</label><select onchange="lset(${i},'costCur',this.value)">
-            ${['USD','CNY','THB'].map(c=>`<option ${L.costCur===c?'selected':''}>${c}</option>`).join('')}</select></div>
-          <div class="f"><label>% Duty</label><input class="num" type="number" step="any" value="${L.dutyPct}" ${ddp?'disabled':''} style="${ddp?'opacity:.45':''}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Duty%',this)" oninput="lset(${i},'dutyPct',this.value)">
-            ${ddp?`<div class="lock-note">🔒 ${esc(dutyTip)}</div>`:''}</div>
-          <div class="f"><label>% Clearance</label><input class="num" type="number" step="any" value="${L.clearancePct}" ${!cif?'disabled':''} style="${!cif?'opacity:.45':''}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Clearance%',this)" oninput="lset(${i},'clearancePct',this.value)">
-            ${!cif?`<div class="lock-note">🔒 ${esc(clrTip)}</div>`:''}</div>
-          <div class="f"><label>ค่าขนส่ง/ชิ้น (${esc(H.currency)})</label><input class="num" type="number" step="any" value="${+L.freep||0}" oninput="lset(${i},'freep',this.value)"></div>
-          <div class="f"><label>ทุน/ชิ้น (แปลงแล้ว)</label><input class="num" id="mpc_${i}" value="${fmt(r.pricePC)}" disabled></div>
-          <div class="f"><label>Warranty</label><input value="${esc(L.warranty||'')}" placeholder="เช่น 10 YEAR" oninput="lset(${i},'warranty',this.value)"></div>
-          <div class="f"><label>Lead time</label><input value="${esc(L.lead||'')}" placeholder="เช่น 90 days after PO" oninput="lset(${i},'lead',this.value)"></div>
-          ${(+L.targetUp||0)>0?`<div class="f" style="grid-column:span 2"><label>Target U/P ที่ Sales ขอมา (อ่านอย่างเดียว)</label>
-            <input class="num" value="${fmt(+L.targetUp)}" disabled style="color:var(--blue);background:var(--blue-soft)"></div>`:''}
-        </div>
-      </div>
-    </div>`;
-  }).join('');
+  /* ---------- mobile (v4.5): แถวย่อ แตะเพื่อเปิดแผ่นแก้ไข แทนการยัด 10 คอลัมน์ลงจอ 380px ---------- */
+  const cards=editing.lines.map((L,i)=>lineRowMobile(L,i,H)).join('');
 
   tw.innerHTML=`<div class="lines-desktop"><table class="cost-table"><colgroup>
     <col><col style="width:76px">
@@ -2316,9 +2333,77 @@ function refreshLines(){
     <th class="r zs z-sell-h">ราคาขาย/หน่วย</th><th class="r z-sell-h">รวม</th>
     <th class="zs"></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="lines-mobile">${cards}
-      <div class="hint" style="text-align:center;padding:2px 0 6px">แตะ “รายละเอียดต้นทุน” เพื่อแก้ Duty / Clearance / สกุลเงิน / Warranty / Lead time</div></div>`;
+      <div class="hint" style="text-align:center;padding:2px 0 6px">แตะรายการเพื่อแก้จำนวน / ต้นทุน / %GP / ราคาขาย / รายละเอียด</div></div>`;
   renderSummary();
 }
+function gpChip(r,cat){return `<span class="lr-gp ${gpClass(r.gp,cat)}">GP ${(Math.round(r.gpPct*10)/10)}%</span>`}
+function lineRowMobile(L,i,H){
+  const r=computeLine(L,H),cat=L.comGroup||comCategory(L.group);
+  return `<button type="button" class="lrow" id="mrow_${i}" onclick="openLineSheet(${i})">
+    <span class="lr-no">${i+1}</span>
+    <span class="lr-main"><b>${esc(L.code||'(ไม่มีรหัส)')}</b>${L.desc?`<i>${esc(L.desc)}</i>`:''}
+      <em>${esc(String(L.qty))} ${esc(L.uom||'')} × <span id="mup_${i}">${fmt(r.totalUP)}</span></em></span>
+    <span class="lr-side"><b id="mlt_${i}">${fmt0(r.lineTotal)}</b><span id="mgp_${i}">${gpChip(r,cat)}</span></span>
+    <span class="lr-go">›</span></button>`;
+}
+/* แผ่นแก้ไขรายการบนจอเล็ก — ใช้ lset/totalEdit/audit ชุดเดียวกับตารางเดสก์ท็อป ข้อมูลที่เก็บไม่เปลี่ยน */
+let _sheetLine=null;
+function openLineSheet(i){
+  if(!editing||!editing.lines[i])return;
+  const L=editing.lines[i],H=editing.header,r=computeLine(L,H),cat=L.comGroup||comCategory(L.group);
+  const ddp=(H.incoterm||'')==='DDP at MGS',cif=(H.incoterm||'').slice(0,3).toUpperCase()==='CIF';
+  const n=editing.lines.length;
+  if(_sheetLine!=null&&_sheetLine!==i)refreshLines();   // เลื่อนไปรายการอื่น → อัปเดตแถวย่อของรายการก่อนหน้า
+  _sheetLine=i;
+  $('#modalRoot').innerHTML=`<div class="ov sheet-ov" onclick="if(event.target===this)closeModal()"><div class="modal lsheet" role="dialog" aria-label="แก้ไขรายการ">
+    <div class="modal-h"><h3>รายการที่ ${i+1} / ${n}</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="sh-b">
+      <div class="sh-sec">① สินค้า</div>
+      <div class="lc-grid" style="margin-top:0">
+        <div class="f" style="grid-column:span 2"><label>รหัสสินค้า</label><input style="font-weight:600" value="${esc(L.code)}" placeholder="รหัสสินค้า" oninput="lset(${i},'code',this.value)"></div>
+        <div class="f" style="grid-column:span 2"><label>รายละเอียด</label><input value="${esc(L.desc)}" placeholder="รายละเอียดสินค้า" oninput="lset(${i},'desc',this.value)"></div>
+        <div class="f"><label>จำนวน</label><input class="num" type="number" value="${L.qty}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Qty',this)" oninput="lset(${i},'qty',this.value)"></div>
+        <div class="f"><label>หน่วย</label><input value="${esc(L.uom)}" placeholder="หน่วย" oninput="lset(${i},'uom',this.value)"></div>
+        <div class="f" style="grid-column:span 2"><label>หมวดสินค้า</label><select onchange="lset(${i},'group',this.value)">
+          ${[...new Set([L.group,...visibleGroupList()])].filter(Boolean).map(g=>`<option ${L.group===g?'selected':''}>${esc(g)}</option>`).join('')}</select></div>
+      </div>
+      <div class="sh-sec">② ต้นทุน · ${esc(H.currency)}</div>
+      <div class="lc-grid" style="margin-top:0">
+        <div class="f"><label>ทุน/หน่วย</label><input class="num" type="number" step="any" value="${L.up}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Unit Price',this)" oninput="lset(${i},'up',this.value)"></div>
+        <div class="f"><label>สกุลเงินทุน</label><select onchange="lset(${i},'costCur',this.value)">
+          ${['USD','CNY','THB'].map(c=>`<option ${L.costCur===c?'selected':''}>${c}</option>`).join('')}</select></div>
+        <div class="f"><label>% Duty${ddp?' 🔒':''}</label><input class="num" type="number" step="any" value="${L.dutyPct}" ${ddp?'disabled':''} style="${ddp?'opacity:.45':''}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Duty%',this)" oninput="lset(${i},'dutyPct',this.value)"></div>
+        <div class="f"><label>% Clearance${!cif?' 🔒':''}</label><input class="num" type="number" step="any" value="${L.clearancePct}" ${!cif?'disabled':''} style="${!cif?'opacity:.45':''}" onfocus="auditFocus(this)" onchange="auditLine(${i},'Clearance%',this)" oninput="lset(${i},'clearancePct',this.value)"></div>
+        ${(ddp||!cif)?`<div class="f" style="grid-column:span 2"><div class="lock-note">🔒 ${ddp?esc(lockNote('duty',H)):''}${(ddp&&!cif)?'<br>':''}${!cif?esc(lockNote('clr',H)):''}</div></div>`:''}
+        <div class="f"><label>ค่าขนส่ง/ชิ้น</label><input class="num" type="number" step="any" value="${+L.freep||0}" oninput="lset(${i},'freep',this.value)"></div>
+        <div class="f"><label>ทุน/ชิ้น (แปลงแล้ว)</label><input class="num" id="mpc_${i}" value="${fmt(r.pricePC)}" disabled></div>
+      </div>
+      <div class="lc-zones"><span class="zc"><i>ต้นทุนรวม/ชิ้น (Landed)</i><b id="mlc_${i}">${fmt(r.baseCost)}</b></span>
+        <span class="zg"><i>กำไร/ชิ้น</i><b id="mopu_${i}">${fmt(r.op)}</b></span></div>
+      <div class="sh-sec">③ มาร์จิ้น · ④ ราคาขาย</div>
+      <div class="lc-grid" style="margin-top:0">
+        <div class="f"><label>%GP</label><input class="num" id="mop_${i}" type="number" step="any" value="${L.opPct}" style="font-weight:700;color:${gpColor(r.gp,cat)}" onfocus="auditFocus(this)" onchange="auditLine(${i},'%GP',this)" oninput="lset(${i},'opPct',this.value)"></div>
+        <div class="f"><label>ราคาขาย/หน่วย</label><input class="num" id="mtu_${i}" type="number" step="any" value="${r.totalUP}" style="font-weight:700;background:var(--surface-2)" title="แก้ได้เพื่อคิด %GP ย้อนกลับ" onfocus="auditFocus(this)" onchange="auditTotal(${i},this);totalEdit(${i},this.value,this)"></div>
+        ${(+L.targetUp||0)>0?`<div class="f" style="grid-column:span 2"><label>Target U/P ที่ Sales ขอมา (อ่านอย่างเดียว)</label>
+          <input class="num" value="${fmt(+L.targetUp)}" disabled style="color:var(--blue);background:var(--blue-soft)"></div>`:''}
+      </div>
+      <div class="lc-sum"><span class="lbl2">รวมรายการนี้ (${esc(H.currency)})</span><b id="slt_${i}">${fmt0(r.lineTotal)}</b></div>
+      <div class="sh-sec">รายละเอียด</div>
+      <div class="lc-grid" style="margin-top:0">
+        <div class="f"><label>Warranty</label><input value="${esc(L.warranty||'')}" placeholder="เช่น 10 YEAR" oninput="lset(${i},'warranty',this.value)"></div>
+        <div class="f"><label>Lead time</label><input value="${esc(L.lead||'')}" placeholder="เช่น 90 days after PO" oninput="lset(${i},'lead',this.value)"></div>
+      </div>
+    </div>
+    <div class="sh-f">
+      <button class="lc-del" onclick="delLineConfirm(${i})" title="ลบรายการนี้ (ต้องยืนยัน)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+      <div class="spacer"></div>
+      <button class="btn ghost sm" ${i>0?'':'disabled'} onclick="openLineSheet(${i-1})">‹ ก่อนหน้า</button>
+      <button class="btn ghost sm" ${i<n-1?'':'disabled'} onclick="openLineSheet(${i+1})">ถัดไป ›</button>
+      <button class="btn sm" onclick="closeModal()">เสร็จ</button></div>
+  </div></div>`;
+}
+
 function gpColor(g,cat){return 'var(--'+gpClass(g,cat)+')'}
 function barHTML(r){const seg=[r.pricePC,r.duty,r.clearance,r.op];const tot=seg.reduce((a,b)=>a+b,0)||1;
   return `<i class="c" style="width:${seg[0]/tot*100}%"></i><i class="d" style="width:${seg[1]/tot*100}%"></i><i class="l" style="width:${seg[2]/tot*100}%"></i><i class="o" style="width:${seg[3]/tot*100}%"></i>`}
@@ -2333,7 +2418,8 @@ function recalcRow(i){
   setHTML('lc_'+i,fmt(r.baseCost));setHTML('opu_'+i,fmt(r.op));
   setHTML('mlc_'+i,fmt(r.baseCost));setHTML('mopu_'+i,fmt(r.op));setVal('dlc_'+i,fmt(r.baseCost));
   setHTML('lt_'+i,fmt0(r.lineTotal));
-  setHTML('mlt_'+i,fmt0(r.lineTotal));
+  setHTML('mlt_'+i,fmt0(r.lineTotal));setHTML('slt_'+i,fmt0(r.lineTotal));
+  setHTML('mup_'+i,fmt(r.totalUP));setHTML('mgp_'+i,gpChip(r,cat));
   setVal('mpc_'+i,fmt(r.pricePC));
   ['op_'+i,'mop_'+i].forEach(id=>{const el=document.getElementById(id);
     if(el){el.style.color=gpColor(r.gp,cat); if(document.activeElement!==el)el.value=Math.round(r.gpPct*1000)/1000;}});
@@ -2345,11 +2431,12 @@ function lset(i,k,v){
   if(k==='group'&&editing.lines[i].group&&editing.lines[i].group!==v){
     // BUSINESS RULE: group change triggers defaults confirmation — duty/clearance/GP may differ between groups
     const gd=groupDefaults(v);
+    const reopen=_sheetLine===i;            // v4.5: เปลี่ยนหมวดจากแผ่นแก้ไขบนมือถือ → เปิดแผ่นเดิมกลับมาหลังยืนยัน
     confirm2Modal('เปลี่ยนหมวดสินค้า?',
       `เปลี่ยนจาก <b>${esc(editing.lines[i].group)}</b> → <b>${esc(v)}</b><br>นำค่าเริ่มต้นหมวดใหม่มาใช้ด้วย? (Duty ${gd.duty||0}%, Clr ${gd.clearance||0}%, %GP ${gd.op||10}%)`,
       'ใช้ค่าเริ่มต้น','เปลี่ยนแค่หมวด',
-      ()=>{editing.lines[i].group=v;editing.lines[i].comGroup=comCategory(v);editing.lines[i].dutyPct=gd.duty||0;editing.lines[i].clearancePct=gd.clearance||0;editing.lines[i].opPct=gd.op||10;markDirty();refreshLines();},
-      ()=>{editing.lines[i].group=v;editing.lines[i].comGroup=comCategory(v);markDirty();refreshLines();}
+      ()=>{editing.lines[i].group=v;editing.lines[i].comGroup=comCategory(v);editing.lines[i].dutyPct=gd.duty||0;editing.lines[i].clearancePct=gd.clearance||0;editing.lines[i].opPct=gd.op||10;markDirty();refreshLines();if(reopen)openLineSheet(i);},
+      ()=>{editing.lines[i].group=v;editing.lines[i].comGroup=comCategory(v);markDirty();refreshLines();if(reopen)openLineSheet(i);}
     );
     return;
   }
@@ -4842,6 +4929,7 @@ function runSelfTest(){
 /* ============================================================ MODAL / TOAST / BOOT */
 function modal(html,wide){$('#modalRoot').innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()"><div class="modal ${wide?'wide':''}">${html}</div></div>`}
 function closeModal(){$('#modalRoot').innerHTML='';
+  if(_sheetLine!=null){_sheetLine=null;if(route==='new'&&editing)refreshLines();}   // v4.5: ปิดแผ่นแก้ไขรายการ → วาดแถวย่อใหม่
   if(_renderPending){_renderPending=false;setTimeout(liveRender,0)}}   // v4.1: วาดข้อมูลที่ Live sync เข้ามาระหว่างเปิด modal
 let toastT;
 function toast(msg,kind){const t=$('#toast');t.className='toast '+(kind||'')+' show';t.textContent=msg;

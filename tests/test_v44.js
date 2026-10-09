@@ -76,7 +76,7 @@ ok('?app=index บังคับระบบทำราคา (Sales จะเ
 console.log('== 5) diag ==');
 globalThis.__SSO_EMAIL = 'stranger@gmail.com';
 const dg = ctx.doGet({ parameter: { diag: '1' } }).html.replace(/<[^>]+>/g, ' ');
-ok('?diag=1 แสดงอีเมลที่ตรวจพบ + บอกว่ายังไม่มีในแท็บ Users + เวอร์ชัน', /stranger@gmail\.com/.test(dg) && /ยังไม่มีในแท็บ Users/.test(dg) && /version 4\.4/.test(dg));
+ok('?diag=1 แสดงอีเมลที่ตรวจพบ + บอกว่ายังไม่มีในแท็บ Users + เวอร์ชัน', /stranger@gmail\.com/.test(dg) && /ยังไม่มีในแท็บ Users/.test(dg) && new RegExp('version ' + ctx.APP_VERSION.replace('.', '\\.')).test(dg) && /^4\.\d$/.test(ctx.APP_VERSION));
 globalThis.__SSO_EMAIL = '';
 ok('?diag=1 ตอนอ่านอีเมลไม่ได้ บอกว่าสคริปต์รันในนามใคร (ช่วยตรวจการตั้งค่า Deploy)', /owner@|admin@/.test(ctx.doGet({ parameter: { diag: '1' } }).html));
 console.log(fails ? '\n' + fails + ' FAILED' : '\nALL v4.4 BACKEND TESTS PASSED'); process.exit(fails ? 1 : 0);

@@ -58,7 +58,7 @@ const appShown = p => p.evaluate(() => !document.getElementById('app').classList
   p = await open(b, '/', 'stranger@gmail.com');
   const who = await p.textContent('#loginWho');
   ok('อีเมลไม่มีสิทธิ์ → หน้า login แสดงอีเมลที่ตรวจพบ + วิธีแก้', !(await appShown(p)) && who.includes('stranger@gmail.com') && who.includes('ยังไม่มีสิทธิ์'), who);
-  ok('หน้า login แสดง APP_VERSION + build', (await p.textContent('#buildStamp')).includes('v4.4'));
+  ok('หน้า login แสดง APP_VERSION + build', /v4\.[4-9]/.test(await p.textContent('#buildStamp')));
   await p.screenshot({ path: OUT + '/p2_login_unknown_email.png' });
   await p.fill('#loginUser', 'sourcing1'); await p.fill('#loginPass', 'pw123456'); await p.click('button:has-text("เข้าสู่ระบบ →")'); await p.waitForTimeout(1500);
   ok('เข้าด้วยชื่อผู้ใช้ + รหัสผ่านแทนได้', await appShown(p) && await p.evaluate(() => CURRENT.id === 'sourcing1'));

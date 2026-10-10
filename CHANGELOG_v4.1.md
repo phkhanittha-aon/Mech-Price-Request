@@ -371,3 +371,66 @@
   รัน: `node tests/test_v46.js $PWD`
 - `tests/e2e_v46.js` — ช่องเงิน, margin สด, “อื่น ๆ (ระบุ)”, หน้าตั้งค่า MasterData, ไฮไลต์คิว SR, ฟอร์ม Sales
   รัน: `NODE_PATH=$(npm root -g) node tests/e2e_v46.js $PWD /tmp/out` (ห้าม deploy ไฟล์เทสต์)
+
+---
+
+# v4.7 — Phase 5: ชั้นแจ้งเตือน Lark (dry-run — ยังไม่ส่งเข้ากลุ่มจริง)
+
+รายละเอียดเต็ม (ตาราง event, โครงสร้าง, การตั้งค่า, ขั้นตอนเปิดใช้จริง): [`docs/LARK_EVENTS.md`](docs/LARK_EVENTS.md)
+ตัวอย่าง payload การ์ดจริงทุก event: [`docs/lark_payload_samples.json`](docs/lark_payload_samples.json)
+
+## สิ่งที่เพิ่ม
+- **ไฟล์ใหม่ `Lark.gs`** (ไฟล์ .gs ที่ 2 ในโปรเจกต์เดียวกัน) — แยกชั้น สร้างข้อความ (`larkBuild_`, pure) ↔ เข้าคิว (`larkEnqueue_`) ↔ ส่ง (`larkFlush`)
+- 7 event ในตารางเดียว: SR ใหม่ · ส่งขออนุมัติ · อนุมัติครบ · ไม่อนุมัติ/ส่งกลับ · ปล่อยราคา · เกิน SLA · สรุปงานค้างประจำวัน
+- Bot API + `tenant_access_token` สำหรับการ์ด (มีปุ่มเปิดเอกสารตรง) · webhook ใช้ส่งข้อความธรรมดาเท่านั้น (มีลายเซ็น)
+- Credential ใน Script Properties · ตรวจตอน `setup()` / หน้า `?diag=1` / ก่อนส่งทุกรอบ (ไม่แสดง secret)
+- กันสแปม: ไม่ส่ง event เดิมซ้ำในช่วงเวลาที่กำหนด · งานเกิน SLA หลายงาน = การ์ดเดียวต่อกลุ่ม · สรุปงานค้าง 1 การ์ด/กลุ่ม/วัน
+- ส่งไม่สำเร็จไม่กระทบธุรกรรมหลัก: ธุรกรรมแค่เข้าคิว (ไม่ยิง HTTP) · ส่งด้วย trigger · ลองใหม่ 1/5/15/60/180 นาที แล้ว FAILED + บันทึก Log
+- แท็บใหม่ `NotifyQueue` (ประวัติทุกข้อความ: จะส่ง/ส่งแล้ว/ส่งไม่ได้ + เหตุผล) — แท็บเดิมไม่เปลี่ยน
+- ปุ่มในการ์ด: ระบบทำราคา `?app=index&doc=<id>` / แอป Sales `?app=sales&doc=<id>` → ล็อกอินแล้วเปิดเอกสารนั้นทันที (ยังตรวจสิทธิ์ตามปกติ)
+- เครื่องมือใน Editor: `larkDryRunDemo()` (พิมพ์ทุกการ์ด ไม่ส่ง ไม่เขียนชีท) · `larkCheckConfig()` · `larkQueueReport()` · `larkInstallTriggers()`
+
+## สิ่งที่ไม่เปลี่ยน (ตรวจแล้ว)
+- blob 3 ตัว byte-for-byte · key localStorage เดิม · header แท็บเดิมทุกแท็บ
+- `Code.gs` แก้เฉพาะ: บรรทัดเรียก `larkHook_` หลังบันทึกสำเร็จ (save / saveSR / approve / release), แท็บ NotifyQueue ใน `HEADERS`, `setup()` และ `?diag=1`
+  · ไม่มีไฟล์ `Lark.gs` = ระบบหลักทำงานได้ปกติ (ไม่มีแจ้งเตือน)
+
+## ติดตั้ง
+1. Apps Script Editor → ไฟล์ **+ → Script** → ตั้งชื่อ `Lark` → วางเนื้อหา `Lark.gs` ทั้งไฟล์
+2. วาง `Code.gs`, `Index.html`, `Sales.html` ทับของเดิม
+3. **รัน `setup()`** → สร้างแท็บ `NotifyQueue` + บันทึกผลตรวจการตั้งค่า Lark ใน Log
+4. Project Settings → Script properties → เพิ่ม `LARK_MODE` = `dryrun` (ไม่ตั้งก็เป็น dryrun)
+5. Deploy → **New version** → ตรวจหน้า Login ขึ้น `v4.7 · build 4.7 · Lark dry-run` และ `?diag=1` มีแถว “Lark (Lark.gs v4.7)” โหมด dryrun
+6. รัน `larkDryRunDemo()` ดูตัวอย่างการ์ดใน Execution log
+7. (ทางเลือก) รัน `larkInstallTriggers()` แล้วใช้งาน 1–2 วัน → ตรวจแท็บ `NotifyQueue` (ครั้งแรกจะขออนุญาต “เชื่อมต่อบริการภายนอก” เพราะโค้ดมี UrlFetchApp — ในโหมด dryrun ไม่มีการเรียกจริง)
+
+## UAT checklist (dry-run)
+- [ ] Sales ส่ง SR ใหม่ → แท็บ NotifyQueue มีแถว `SR_SUBMITTED` · Target `SOURCING`
+- [ ] SR ที่บันทึกเป็นร่าง → ไม่มีแถวใหม่
+- [ ] Sourcing ส่งขออนุมัติ → `QT_SUBMITTED` · `APPROVERS` · ในการ์ดมี %GP แต่ไม่มียอดต้นทุน
+- [ ] กดส่งขออนุมัติซ้ำทันที → ไม่มีแถวซ้ำ
+- [ ] อนุมัติฝ่ายแรก → ไม่มีแถว · อนุมัติครบ → `QT_APPROVED` 2 แถว (SOURCING + RELEASE)
+- [ ] ส่งกลับแก้ราคา → `QT_RETURNED`
+- [ ] ปล่อยราคา → `PRICE_RELEASED` · `SALES` · การ์ดไม่มี GP/ต้นทุน
+- [ ] หลัง trigger `larkFlush` ทำงาน → แถวเปลี่ยนเป็น `DRYRUN` (ไม่มีข้อความเข้ากลุ่ม Lark จริง)
+- [ ] คัดลอกลิงก์ปุ่มจาก Payload ไปเปิด → ล็อกอินแล้วเปิดเอกสารนั้นทันที · Sales คนอื่นเปิดลิงก์เดียวกันไม่เห็นราคา
+- [ ] งานที่ค้างเกินกำหนด → ภายใน 1 ชม. มี `SLA_BREACH` การ์ดเดียวต่อกลุ่ม · ชั่วโมงถัดไปไม่ซ้ำ
+- [ ] เช้าวันทำการ → `DAILY_DIGEST` 1 แถวต่อกลุ่มที่มีงานค้าง
+- [ ] `?diag=1` แสดงโหมด/ปัญหาการตั้งค่า โดยไม่มี secret
+
+## Watch-outs
+- แจ้ง “ไม่อนุมัติ” อิงการเปลี่ยนสถานะ รออนุมัติ → กำลังจัดทำราคา (ระบบไม่มีปุ่ม “ไม่อนุมัติ” แยก) — ถ้าต้องการเหตุผลประกอบในการ์ด ต้องเพิ่มช่องเหตุผลในหน้าจอ (งานแยก)
+- ปุ่มเปิดเอกสารใน Lark mobile จะเปิดเบราว์เซอร์ในแอป Lark — ต้องล็อกอิน Google บัญชีเดียวกับที่ใช้ระบบ
+- กลุ่มผู้อนุมัติเห็น %GP ในการ์ด → สมาชิกกลุ่มนั้นต้องเป็นผู้จัดการเท่านั้น
+- trigger 3 ตัวใช้โควตา Apps Script เล็กน้อย (≈ 300 ครั้ง/วัน) · แท็บ NotifyQueue เก็บล่าสุด 3,000 แถว
+- เวลาเปิด live: แถว `DRYRUN` เก่าจะไม่ถูกส่งย้อนหลัง (เริ่มนับจากเหตุการณ์ใหม่)
+
+## Rollback
+- ตั้ง `LARK_MODE` = `off` → หยุดทุกอย่างทันที ไม่ต้อง deploy
+- ถอนทั้งหมด: ลบ trigger (Triggers ในเมนูซ้าย) → ลบไฟล์ `Lark` → วาง 3 ไฟล์ v4.6 กลับ → Deploy New version (แท็บ NotifyQueue ปล่อยไว้หรือลบได้)
+
+## เทสต์
+- `tests/test_v47.js` — event table / ตรวจการตั้งค่า / ทุกจุดเชื่อม / กันซ้ำ / Lark พังแล้วการบันทึกยังผ่าน / dry-run ไม่มี HTTP /
+  live จำลอง (token 1 ครั้ง, fetchAll, uuid, RETRY → FAILED, SKIPPED) / webhook + ลายเซ็น / SLA รวมการ์ด / สรุปรายวัน / price gate
+  รัน: `node tests/test_v47.js $PWD docs` (อัปเดต `docs/lark_payload_samples.json` ด้วย)
+- `tests/e2e_v47.js` — ลิงก์ `?doc=` ในทั้งสองแอป + คนไม่มีสิทธิ์เปิดลิงก์แล้วไม่เห็นราคา

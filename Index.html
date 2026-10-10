@@ -584,8 +584,8 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='4.6';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
-const BUILD='2026-10-10 · build 4.6 · Money & MasterData';
+const APP_VERSION='4.7';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const BUILD='2026-10-10 · build 4.7 · Lark dry-run';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
@@ -1847,6 +1847,21 @@ function mountApp(){
   auditCatalog();     // check catalog for duplicates/missing fields at boot
   initializeData();   // 2-way: pull latest from Google Sheet & merge, flush offline queue
   startLive();        // v4.1: auto-sync ทุก 30 วินาที (Dashboard) + เฝ้า conflict หน้าแก้ไข
+}
+/* v4.7: ลิงก์จากการ์ดแจ้งเตือน Lark (…/exec?app=index&doc=<id>) → ล็อกอินแล้วเปิดเอกสารนั้นให้ทันที (ยังผ่านการตรวจสิทธิ์ตามปกติ) */
+let PENDING_DOC='';
+(function readDocParam(){
+  try{
+    if(window.google&&google.script&&google.script.url)google.script.url.getLocation(l=>{PENDING_DOC=String((l&&l.parameter&&l.parameter.doc)||'')});
+    else PENDING_DOC=new URLSearchParams(location.search).get('doc')||'';
+  }catch(e){PENDING_DOC=''}
+})();
+function openPendingDoc(){
+  if(!PENDING_DOC||!CURRENT)return;
+  const id=PENDING_DOC,q=QUOTES.find(x=>x.id===id&&!x.deleted);
+  if(!q)return;                                          // ยังไม่ได้ข้อมูล → รอบซิงค์ถัดไปลองใหม่
+  PENDING_DOC='';
+  if(routeAllowed('preview'))openQuote(id);else toast('บัญชีของคุณเปิดเอกสารนี้ไม่ได้','bad');
 }
 const TITLES={approvals:'รออนุมัติราคา',dashboard:'ภาพรวม',salessummary:'สรุปทีมขาย — สำหรับอัปเดตผู้บริหาร',summary:'สรุปยอดขาย & GP',srqueue:'คำขอราคา (SR)',new:'ทำราคาใหม่',quotes:'ใบเสนอราคา (QT)',followup:'ติดตามงาน',salesupdate:'อัพเดตโครงการ (Sales)',master:'ข้อมูลสินค้า & ราคา Default',settings:'ตั้งค่า Default',users:'จัดการผู้ใช้',preview:'ดูใบเสนอราคา',salesdash:'My Projects',salesrequest:'ขอราคาใหม่'};
 const SALES_ONLY_ROUTES=['salesdash','salesrequest','preview'];
@@ -4716,6 +4731,7 @@ async function initializeData(){
     if(added+merged>0){renderNav();liveRender();toast('ดึงจาก Google Sheet: ใหม่ '+added+' · อัปเดต '+merged,'good');}
     setCloudDot(data&&data.ok!==false?'on':'err');setLiveStamp();
     result={ok:!!data&&data.ok!==false,added,merged};
+    openPendingDoc();                                    // v4.7: เปิดเอกสารจากปุ่มในการ์ด Lark
   }catch(e){setCloudDot('err');/* keep local data, silent */}
   updateQueueBadge();
   flushQueue();

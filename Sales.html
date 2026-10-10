@@ -256,8 +256,8 @@ table.pt .r{text-align:right}
        Sourcing / Manager (GM, Admin, Procurement Mgr, BD Mgr) → เห็นทุกคน + ขอราคาแทน Sales ได้
    - แอปนี้ไม่เคยได้รับต้นทุน / %GP รายบรรทัด (server ส่งเฉพาะ SalesDetail)
    ============================================================ */
-const APP_VERSION='4.6';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Index.html
-const BUILD='2026-10-10 · Sales build 4.6';
+const APP_VERSION='4.7';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Index.html
+const BUILD='2026-10-10 · Sales build 4.7';
 const CLOUD_URL='https://script.google.com/macros/s/AKfycby6ZckOc1mv5eI8PDzcgscWCBqYyOWCgXTohIaqczJuIbKIQ597C8zQ_frMHpZhLHZV/exec';
 const HASH_SALT='mgs-internal-2025';                 // ต้องตรงกับ Index.html
 const TIMEOUT_MS=15000, POLL_MS=30000, OVERLAP_MS=90000;
@@ -493,7 +493,12 @@ async function boot(){
   S.users=(us&&us.users)||[];S.settings=(st&&st.ok)?st:{};
   S.products=buildProducts((pr&&pr.products)||[]);
   await loadAll();
-  readRoute(()=>{render();startPoll()});
+  readRoute(()=>{render();startPoll();openPendingDoc()});
+}
+/* v4.7: เปิดเอกสารจากปุ่มในการ์ด Lark — เปิดได้เฉพาะงานที่ server ส่งมาให้ผู้ใช้คนนี้เห็นอยู่แล้ว */
+function openPendingDoc(){
+  if(!S.pendingDoc)return;const id=S.pendingDoc;S.pendingDoc='';
+  if(S.rows[id])openDetail(id);else toast('ไม่พบเอกสารนี้ในงานของคุณ (อาจยังไม่ได้ปล่อยราคาให้คุณ)','bad');
 }
 function buildProducts(sheetItems){
   const m={};
@@ -600,6 +605,7 @@ function rowsOf(personId){
 function parseRoute(h,params){
   h=String(h||'').replace(/^#?\/?/,'');
   const [page,id]=h.split('/');
+  if(params&&params.doc)S.pendingDoc=String(params.doc);   // v4.7: ปุ่มในการ์ด Lark → เปิดเอกสารนั้นหลังโหลดข้อมูล
   if(params&&params.u){                                   // ?app=sales&u=<email หรือ id>
     const key=String(params.u).toLowerCase();
     const u=S.users.find(x=>x.id.toLowerCase()===key||String(x.email||'').toLowerCase()===key);

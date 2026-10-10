@@ -20,7 +20,10 @@ function makeRuntime(codePath) {
   Sheet.prototype.deleteRow = function (r) { this.rows.splice(r - 1, 1); };
   Sheet.prototype.deleteRows = function (r, n) { this.rows.splice(r - 1, n); };
   Sheet.prototype.appendRow = function (a) { this.rows.push(a.slice()); };
-  const cacheStore = {};
+  const cacheStore = {}, props = {}, fetchLog = [], triggers = [];
+  // ตอบแทน Lark API: ค่าเริ่มต้น = สำเร็จ · เทสต์เปลี่ยนพฤติกรรมได้ผ่าน globalThis.__LARK_REPLY(url, opts) → {code, body}
+  const fakeResp = (url, o) => { const r = (globalThis.__LARK_REPLY || (u => /tenant_access_token/.test(u) ? { code: 200, body: { code: 0, tenant_access_token: 't-xyz', expire: 7200 } } : { code: 200, body: { code: 0, msg: 'success' } }))(url, o);
+    return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body) }; };
   const cache = { get: k => (k in cacheStore ? cacheStore[k] : null), put: (k, v) => { cacheStore[k] = String(v); }, remove: k => { delete cacheStore[k]; },
     getAll: ks => { const o = {}; ks.forEach(k => { if (k in cacheStore) o[k] = cacheStore[k]; }); return o; } };
   const ss = { getSheetByName: n => sheets[n] || null, insertSheet: n => (sheets[n] = new Sheet(n)), getId: () => 'x', toast() {} };
@@ -32,7 +35,19 @@ function makeRuntime(codePath) {
       // formatDate ตามเวลาไทย (UTC+7) เหมือน Apps Script ที่ตั้ง TZ = Asia/Bangkok
       formatDate: (d, tz, f) => { const t = new Date(d.getTime() + 7 * 3600000).toISOString(); return f === 'yyMM' ? t.slice(2, 4) + t.slice(5, 7) : t.slice(0, 10); },
       DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
-      computeDigest: (alg, str) => Array.from(crypto.createHash('sha256').update(String(str), 'utf8').digest()).map(b => b > 127 ? b - 256 : b) },
+      computeDigest: (alg, str) => Array.from(crypto.createHash('sha256').update(String(str), 'utf8').digest()).map(b => b > 127 ? b - 256 : b),
+      computeHmacSha256Signature: (value, key) => Array.from(crypto.createHmac('sha256', String(key)).update(String(value), 'utf8').digest()).map(b => b > 127 ? b - 256 : b),
+      base64Encode: bytes => Buffer.from(bytes.map(b => (b + 256) % 256)).toString('base64') },
+    // v4.7 Lark: Script Properties / UrlFetchApp (บันทึกทุกคำขอ — เทสต์ dry-run ต้องไม่มีคำขอเลย) / ScriptApp
+    PropertiesService: { getScriptProperties: () => ({ getProperties: () => Object.assign({}, props), getProperty: k => (k in props ? props[k] : null),
+      setProperty: (k, v) => { props[k] = String(v); }, deleteProperty: k => { delete props[k]; } }) },
+    UrlFetchApp: {
+      fetch: (url, o) => { fetchLog.push({ url, o }); return fakeResp(url, o); },
+      fetchAll: reqs => reqs.map(r => { fetchLog.push({ url: r.url, o: r }); return fakeResp(r.url, r); }) },
+    ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/TEST/exec' }), getProjectTriggers: () => triggers.slice(),
+      deleteTrigger: t => { const i = triggers.indexOf(t); if (i >= 0) triggers.splice(i, 1); },
+      newTrigger: fn => { const b = { timeBased: () => b, everyMinutes: () => b, everyHours: () => b, atHour: () => b, nearMinute: () => b, everyDays: () => b, inTimezone: () => b,
+        create: () => { const t = { getHandlerFunction: () => fn }; triggers.push(t); return t; } }; return b; } },
     CacheService: { getScriptCache: () => cache },
     Logger: { log() {} }, Session: { getActiveUser: () => ({ getEmail: () => (globalThis.__SSO_EMAIL || '') }),
                getEffectiveUser: () => ({ getEmail: () => (globalThis.__EFFECTIVE_EMAIL || 'owner@mglobalsourcing.net') }) },
@@ -45,8 +60,11 @@ function makeRuntime(codePath) {
   };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(codePath, 'utf8'), ctx);
+  // v4.7: ไฟล์ .gs อื่นในโปรเจกต์เดียวกัน (Lark.gs) — Apps Script โหลดทุกไฟล์เข้า scope เดียวกัน
+  const lark = require('path').join(require('path').dirname(codePath), 'Lark.gs');
+  if (fs.existsSync(lark) && !globalThis.__NO_LARK) vm.runInContext(fs.readFileSync(lark, 'utf8'), ctx);
   ctx.setup();
-  return { ctx, sheets };
+  return { ctx, sheets, props, fetchLog, triggers };
 }
 module.exports = { makeRuntime };
 // หมายเหตุ: ไฟล์ในโฟลเดอร์ tests/ ใช้ทดสอบบนเครื่องเท่านั้น — ห้ามคัดลอกขึ้น Apps Script

@@ -42,7 +42,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '4.6';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '4.7';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -53,7 +53,7 @@ var SESSION_HOURS = 12;
 
 var SH = {
   QUOTES:'Quotations', PRODUCTS:'Products', SETTINGS:'Settings',
-  USERS:'Users', LOG:'Log', SESSIONS:'Sessions', MASTER:'MasterData'
+  USERS:'Users', LOG:'Log', SESSIONS:'Sessions', MASTER:'MasterData', NOTIFY:'NotifyQueue'
 };
 
 var HEADERS = {
@@ -68,7 +68,9 @@ var HEADERS = {
   Users:      ['Id','Name','Role','Scope','PassHash','Updated','Email','Active'],
   Log:        ['Time','Action','Id','By','Note'],
   Sessions:   ['Token','UserId','Role','Name','Issued','ExpiresMs','Expires','Agent'],
-  MasterData: ['List','Value','IsDefault','Sort','Active','Updated','By']      // v4.6: แท็บใหม่ (ไม่แตะแท็บเดิม)
+  MasterData: ['List','Value','IsDefault','Sort','Active','Updated','By'],     // v4.6: แท็บใหม่ (ไม่แตะแท็บเดิม)
+  // v4.7: คิวแจ้งเตือน Lark (ไฟล์ Lark.gs) — ทุกข้อความที่จะส่ง/ส่งแล้ว/ส่งไม่ได้ อยู่ที่นี่ ตรวจย้อนหลังได้
+  NotifyQueue:['Id','Event','DocId','DedupKey','Target','Title','Payload','Status','Tries','NextAt','CreatedAt','SentAt','LastError']
 };
 
 /* ============================================================ MASTER DATA (v4.6 Phase 4)
@@ -247,6 +249,15 @@ function diagHtml_() {
       add('ไฟล์ HTML "' + f[0] + '"', false, 'ไม่พบไฟล์ชื่อ <b>' + f[0] + '</b> (ต้องตั้งชื่อตรงตัวพิมพ์ ไม่ต้องใส่ .html) — ' + String(e));
     }
   });
+  if (typeof larkValidateConfig_ === 'function') {
+    try {
+      var lc = larkValidateConfig_();
+      add('Lark (Lark.gs v' + LARK_VERSION + ')', lc.problems.length === 0,
+        'โหมด <b>' + lc.mode + '</b>' + (lc.mode === 'dryrun' ? ' (ไม่ส่งจริง — ดูข้อความในแท็บ NotifyQueue)' : '') + ' · ช่องทาง ' + lc.via +
+        lc.problems.map(function (x) { return '<br><b style="color:#bb3b2f">✗ ' + x + '</b>'; }).join('') +
+        lc.warnings.map(function (x) { return '<br>⚠ ' + x; }).join(''));
+    } catch (e) { add('Lark', false, String(e)); }
+  } else add('Lark', true, 'ยังไม่ได้เพิ่มไฟล์ Lark.gs (ระบบหลักทำงานได้ปกติ ไม่มีแจ้งเตือน)');
   try {
     var uh = headerIndex_(sheet_(SH.USERS));
     add('แท็บ Users', !!(uh.Email && uh.Active), uh.Email ? 'มีคอลัมน์ Email / Active' : 'ยังไม่มีคอลัมน์ Email → รัน setup() หนึ่งครั้ง');
@@ -602,6 +613,7 @@ function saveQuote_(p, sess) {
                serverStatus:String(cell_(cur, idx, 'Status') || '') };
     }
   }
+  var prevStatus = row ? String(sh.getRange(row, idx['Status']).getValue() || '') : '';   // v4.7: ใช้ตัดสินว่าต้องแจ้งเตือนไหม
   var stamp = nowISO_();
   var detail = safeDetail_(p.detail);
   var salesText = '';
@@ -625,9 +637,10 @@ function saveQuote_(p, sess) {
     Detail:detail.text
   };
   if (salesText) vals.SalesDetail = salesText;
-  writeRow_(sh, idx, row, vals);
+  var savedRow = writeRow_(sh, idx, row, vals);
   logRow_('save', p.docNo || p.ref || '', p.id, sess.name, detail.note + (p.force ? ' (force)' : ''));
-  return { ok:true, id:p.id, trimmed:detail.trimmed, updatedAt:stamp, follow:followForRow_(sh, idx, findRow_(sh, idx, 'Id', p.id)) };
+  larkHook_(sh, idx, savedRow, prevStatus, vals.Status, sess);
+  return { ok:true, id:p.id, trimmed:detail.trimmed, updatedAt:stamp, follow:followForRow_(sh, idx, savedRow) };
 }
 
 /** Sales สร้าง/แก้คำขอราคา (SR) ได้ — server บังคับเจ้าของงานและตัดฟิลด์ต้นทุนทิ้งเสมอ */
@@ -695,7 +708,7 @@ function saveSR_(p, sess) {
   var salesCopy = JSON.parse(JSON.stringify(doc)); delete salesCopy.auditLogs;
   var sd = safeDetail_(JSON.stringify(stripCost_(salesCopy)));
 
-  writeRow_(sh, idx, row, {
+  var srRow = writeRow_(sh, idx, row, {
     Id:p.id, DocType:'SR', DocNo:doc.docNo || '', Ref:(doc.header && doc.header.ref) || '',
     Title:(doc.header && doc.header.title) || '', Customer:(doc.header && doc.header.customer) || '',
     Sales:(doc.header && doc.header.sales) || '', SalesUserId:(doc.header && doc.header.salesUserId) || '',
@@ -707,7 +720,8 @@ function saveSR_(p, sess) {
     Detail:d.text, SalesDetail:sd.text
   });
   logRow_('saveSR', doc.docNo || '', p.id, sess.name, '');
-  return { ok:true, id:p.id, docNo:doc.docNo, updatedAt:stamp, follow:followForRow_(sh, idx, findRow_(sh, idx, 'Id', p.id)) };
+  larkHook_(sh, idx, srRow, prev ? (prev.status || '') : '', doc.status || 'Submitted', sess);
+  return { ok:true, id:p.id, docNo:doc.docNo, updatedAt:stamp, follow:followForRow_(sh, idx, srRow) };
 }
 
 /** เลขเอกสารถัดไป เช่น SR-2610-007 (อ่านจากคอลัมน์ DocNo ทั้งชีท — เรียกใต้ ScriptLock เท่านั้น) */
@@ -788,6 +802,7 @@ function release_(p, sess) {
   writeRow_(sh, idx, row, { Status:'Pending', FollowStatus:'Sent', ReleasedTo:rel.join('|'),
                             Updated:todayStr_(), UpdatedAt:stamp, By:sess.name });
   logRow_('release', String(cell_(cur, idx, 'DocNo') || ''), p.id, sess.name, owner);
+  larkHook_(sh, idx, row, stNow, 'Pending', sess, { event:'PRICE_RELEASED' });
   var out = { ok:true, id:p.id, releasedTo:rel, updatedAt:stamp, follow:followForRow_(sh, idx, row) };
   if (seesFullData_(sess)) out.detail = detailText;      // Sales (NON) ไม่ได้รับ Detail ตัวเต็มเด็ดขาด
   return out;
@@ -816,6 +831,14 @@ function patchDetailCells_(sh, idx, row, patch, audit, stamp) {
     if (col === 'Detail') detailOut = text;
   });
   return detailOut;
+}
+
+/** v4.7: แจ้งเตือน Lark เมื่อสถานะเปลี่ยน — อยู่ในไฟล์ Lark.gs (ไม่มีไฟล์นั้น = ข้ามเงียบ ๆ)
+ *  เรียกหลังเขียนแถวสำเร็จแล้วเท่านั้น · แค่เข้าคิว ไม่ยิง HTTP ในธุรกรรมหลัก · ผิดพลาดอย่างไรก็ไม่ทำให้การบันทึกล้ม */
+function larkHook_(sh, idx, row, prevStatus, newStatus, sess, extra) {
+  try { if (typeof larkOnStatus_ === 'function' && row) return larkOnStatus_(sh, idx, row, prevStatus, newStatus, sess, extra); }
+  catch (e) { try { logRow_('lark-hook-error', '', '', '-', String(e).slice(0, 300)); } catch (e2) {} }
+  return null;
 }
 
 /** บันทึกเวลาเปลี่ยนสถานะ (ใช้นับวัน SLA แยกช่วง) — คีย์ใหม่แบบ optional ข้อมูลเก่าที่ไม่มีก็ยังอ่านได้ */
@@ -869,6 +892,7 @@ function approve_(p, sess) {
   if (complete) vals.NeedsApproval = '';
   writeRow_(sh, idx, row, vals);
   logRow_('approve', String(cell_(cur, idx, 'DocNo') || ''), p.id, sess.name, role + ' → ' + newStatus);
+  larkHook_(sh, idx, row, status, newStatus, sess);
   return { ok:true, id:p.id, status:newStatus, approvalRoles:roles, missing:missing,
            complete:complete, updatedAt:stamp, detail:detailText, follow:followForRow_(sh, idx, row) };
 }
@@ -1606,7 +1630,10 @@ function saveMaster_(p, sess) {
 }
 
 function setup() {
-  [SH.QUOTES, SH.PRODUCTS, SH.SETTINGS, SH.USERS, SH.LOG, SH.SESSIONS, SH.MASTER].forEach(function (n) { sheet_(n); });
+  [SH.QUOTES, SH.PRODUCTS, SH.SETTINGS, SH.USERS, SH.LOG, SH.SESSIONS, SH.MASTER, SH.NOTIFY].forEach(function (n) { sheet_(n); });
+  if (typeof larkValidateConfig_ === 'function') {          // v4.7: ตรวจการตั้งค่า Lark ตอนเริ่มระบบ (ไม่แสดง secret)
+    try { var lc = larkValidateConfig_(); logRow_('lark-config', '', '', '-', 'mode ' + lc.mode + ' · ' + (lc.problems.concat(lc.warnings).join(' / ') || 'ok').slice(0, 400)); } catch (e) {}
+  }
   try { getMaster_(); } catch (e) {}      // v4.6: สร้างตัวเลือกตั้งต้นในแท็บ MasterData (ครั้งแรกเท่านั้น)
   migratePasswordHashes();   // v4.3: แปลง hash รหัสผ่านเดิมเป็น v2 (รันซ้ำได้ ไม่กระทบค่าที่แปลงแล้ว)
   logRow_('setup', '', '', Session.getActiveUser().getEmail() || '-', 'schema v4.2 (RBAC + Live Sync + Email login)');

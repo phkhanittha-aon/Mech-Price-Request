@@ -11,6 +11,10 @@
 | `e2e_v46.js` | Phase 4 ในเบราว์เซอร์: ช่องเงิน, margin สด, “อื่น ๆ (ระบุ)”, ตั้งค่า Dropdown, ไฮไลต์ 3 ระดับ | `NODE_PATH=$(npm root -g) node tests/e2e_v46.js $PWD /tmp` |
 | `test_v47.js` | Phase 5 Lark: event table, config, hooks, dedup, dry-run ไม่มี HTTP, live จำลอง/retry, webhook, SLA, digest, price gate | `node tests/test_v47.js $PWD docs` |
 | `e2e_v47.js` | ลิงก์ `?doc=` จากการ์ด Lark ในทั้งสองแอป | `NODE_PATH=$(npm root -g) node tests/e2e_v47.js $PWD` |
+| `run_all.sh` | **Phase 6: รันทุกชุด + สรุปตามหัวข้อตรวจสอบ** | `bash tests/run_all.sh [โฟลเดอร์ log]` |
+| `smoke_roles.js` | ทุก role: สิทธิ์, สแกน response ฝั่ง Sales, SR→QT, อนุมัติ, ปล่อยราคา, follow-up | `node tests/smoke_roles.js $PWD` |
+| `compat_production.js` | localStorage + ชีทจาก production (`ec8c4ea`) → เวอร์ชันใหม่ | `NODE_PATH=$(npm root -g) node tests/compat_production.js $PWD` |
+| `blob_hash.js` | SHA-256 ของ CATALOG / LOGO / EXCEL_LEGACY_LINES ก่อน/หลัง | `node tests/blob_hash.js $PWD` |
 | `gas_shim.js` | จำลอง google.script.run ในเบราว์เซอร์ (ใช้กับ e2e_login) | — |
 | `e2e_login.js` | Login ทั้งสองเส้นทาง + ยืนยันตัวตนต่อโดยไม่เสียงาน | `NODE_PATH=$(npm root -g) node tests/e2e_login.js $PWD /tmp` |
 | `fx_test.js` | ตาราง FX ก่อน/หลัง + เคส CNY | `NODE_PATH=$(npm root -g) node tests/fx_test.js` |

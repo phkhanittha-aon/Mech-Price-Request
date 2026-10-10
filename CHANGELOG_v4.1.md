@@ -434,3 +434,46 @@
   live จำลอง (token 1 ครั้ง, fetchAll, uuid, RETRY → FAILED, SKIPPED) / webhook + ลายเซ็น / SLA รวมการ์ด / สรุปรายวัน / price gate
   รัน: `node tests/test_v47.js $PWD docs` (อัปเดต `docs/lark_payload_samples.json` ด้วย)
 - `tests/e2e_v47.js` — ลิงก์ `?doc=` ในทั้งสองแอป + คนไม่มีสิทธิ์เปิดลิงก์แล้วไม่เห็นราคา
+
+---
+
+# v4.8 — Phase 6: ตรวจสอบทั้งระบบ + แก้บั๊ก %GP เดิมของ production
+
+รายงานเต็ม (ผลตามหัวข้อ, blob hash, สิ่งที่พบ, impact, UAT ราย role, watch-outs, rollback, deploy): [`docs/PHASE6_REPORT.md`](docs/PHASE6_REPORT.md)
+
+## สิ่งที่พบและแก้
+- 🔴 **CRITICAL (บั๊กเดิมของ production v2.1):** ใบรุ่น %GP ไม่มีธง `_pm` → ทุกครั้งที่โหลดใหม่ถูกตีความเป็น markup แล้วลดราคาเงียบ ๆ (GP 18% → 15.254%, −3.2%) → แก้ใน `migrateQuotePricing` + ติดธงตั้งแต่สร้างใบ · เพิ่ม `auditPricingDrift()` (อ่านอย่างเดียว) ช่วยหาใบที่ถูกลดไปแล้ว
+- 🟠 **MEDIUM (regression จาก v4.6):** รายการที่ผู้ใช้เพิ่มเองในเครื่อง (Price Term ฯลฯ) หายจาก dropdown → ส่งเข้า MasterData ครั้งเดียวอัตโนมัติ
+- 🟢 LOW: ปัดเศษตอนแปลงใบ markup รุ่นเก่ามาก (0.33 บาท/118,000 — ของเดิม ยอมรับไว้) · ตัวรันเทสต์ถือว่าตกเมื่อหน้าจอมี JavaScript error
+
+## เทสต์ใหม่ (ห้าม deploy)
+- `tests/run_all.sh` — รันทั้งหมด สรุปตามหัวข้อ Phase 6 (exit code ≠ 0 ถ้ามีชุดไหนตก)
+- `tests/smoke_roles.js` — ทุก role: caps/routing, ตารางอนุญาต/ปฏิเสธ 10 action × 9 ผู้ใช้, สแกน response ฝั่ง Sales ทุกตัว, SR→QT, อนุมัติ 2 ฝ่าย/GM, ปล่อยราคา, follow-up, auditPricingDrift
+- `tests/compat_production.js` — เปิด Index.html ของ production จริงสร้างข้อมูล → เปิด v4.8 บน localStorage + ชีทชุดเดิม (ยอดต้องเท่าเดิม, คิวออฟไลน์ถูกส่ง, ร่างกู้ได้, ไม่มี key หาย, ออฟไลน์ยังใช้ได้)
+- `tests/blob_hash.js` — SHA-256 ของ blob ก่อน/หลัง (พิมพ์ทั้งสองค่า)
+
+## ติดตั้ง
+วาง `Code.gs` / `Index.html` / `Sales.html` (+ `Lark.gs` ถ้ายังไม่มี) → รัน `setup()` → Deploy **New version** → หน้า Login ขึ้น `v4.8 · 2026-10-10 · build 4.8 · Verified + GP fix` → รัน `auditPricingDrift()` → แจ้งทุกคน reload หน้า
+
+## ผลรันล่าสุด (`bash tests/run_all.sh`)
+```
+PASS  1 Smoke ทุก role / สิทธิ์ / projection smoke_roles                  39 ok   0 fail  1s
+PASS  1 Smoke ทุก role / สิทธิ์ / projection test_backend                 56 ok   0 fail  0s
+PASS  1 Smoke ทุก role / สิทธิ์ / projection audit_roles(browser)          0 ok   0 fail  52s
+PASS  1 Smoke ทุก role / สิทธิ์ / projection e2e (หลายผู้ใช้)   28 ok   0 fail  53s
+PASS  1 Smoke ทุก role / สิทธิ์ / projection e2e_sales                    21 ok   0 fail  22s
+PASS  2 Follow-up (งานค้างอยู่ที่ใคร) test_v43                     64 ok   0 fail  1s
+PASS  3 Login สองเส้นทาง test_v42                     36 ok   0 fail  0s
+PASS  3 Login สองเส้นทาง test_v44                     27 ok   0 fail  0s
+PASS  3 Login สองเส้นทาง e2e_login(browser)           20 ok   0 fail  33s
+PASS  4 FX before/after (รวม CNY)  fx_test                       4 ok   0 fail  2s
+PASS  4+5 FX / ตัวเงิน / MasterData test_v46                    104 ok   0 fail  0s
+PASS  5 ตัวเงิน (หน้าจอจริง) e2e_v46(browser)             28 ok   0 fail  13s
+PASS  6 Blob hash ก่อน/หลัง blob_hash                     0 ok   0 fail  0s
+PASS  7 localStorage + ชีทจาก production compat_production            23 ok   0 fail  12s
+PASS  · Lark (dry-run)                  test_v47                     59 ok   0 fail  0s
+PASS  · Lark ลิงก์เปิดเอกสาร e2e_v47(browser)              4 ok   0 fail  12s
+PASS  · Layout ทุกหน้า ทุกจอ layout_audit                  0 ok   0 fail  76s
+สรุป: 17 ชุดเทสต์ · ผ่าน 17 ชุด · ตก 0 ชุด · assertion ผ่าน 513 ข้อ · ตก 0 ข้อ
+ALL PHASE 6 CHECKS PASSED
+```

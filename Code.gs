@@ -42,7 +42,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '4.7';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '4.8';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -1653,6 +1653,39 @@ function healthCheck() {
   Logger.log('Quotations: %s แถว (ลบแล้ว %s)', rows, del);
   Logger.log('ยังไม่มี SalesDetail: %s ใบ → กด "สร้างข้อมูลสำหรับ Sales" ในระบบหลัก', noSales);
   Logger.log('Session ที่ยังไม่หมดอายุ: %s', Math.max(sheet_(SH.SESSIONS).getLastRow() - 1, 0));
+}
+
+/**
+ * v4.8 (Phase 6) — ตรวจใบเสนอราคาที่ "น่าจะ" ถูกบั๊กเดิมของ production v2.1 ลดราคาไปแล้ว — อ่านอย่างเดียว ไม่แก้ข้อมูล
+ * บั๊ก: ใบรุ่น %GP ที่ไม่มีธง _pm ถูกแปลง %GP เป็น markup ซ้ำทุกครั้งที่โหลดใหม่ (GP 18% → 15.254%) แล้วถูกบันทึกทับเมื่อมีคนกดบันทึก
+ * วิธีเดา: %GP ในบรรทัดไม่ใช่เลขกลม (ไม่ลง 0.5) แต่ถ้าแปลงย้อนกลับ x/(100−x) แล้วได้เลขกลม → น่าจะเป็นค่าที่ถูกแปลงมา
+ * รันจาก Editor → ดูผลใน Execution log · ให้ Sourcing/ผู้จัดการตรวจและแก้ %GP เองในหน้าใบเสนอราคา
+ * @return {Array<{docNo:string,id:string,status:string,lines:Array}>}
+ */
+function auditPricingDrift() {
+  var sh = sheet_(SH.QUOTES), last = sh.getLastRow(), out = [], atRisk = 0;
+  if (last < 2) { Logger.log('ไม่มีใบเสนอราคา'); return out; }
+  var idx = headerIndex_(sh), data = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+  var round05 = function (v) { return Math.abs(v * 2 - Math.round(v * 2)) < 0.004; };
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i];
+    if (String(cell_(r, idx, 'DocType') || 'QT') === 'SR' || String(cell_(r, idx, 'Deleted')).toUpperCase() === 'TRUE') continue;
+    var d; try { d = JSON.parse(String(cell_(r, idx, 'Detail') || '{}')); } catch (e) { continue; }
+    if (d._sv === 3 && d._pm !== 2) { atRisk++; continue; }     // ยังไม่โดนแปลง — v4.8 อ่านถูกแล้ว ไม่ต้องทำอะไร
+    if (d._pm !== 2) continue;
+    var hits = (d.lines || []).map(function (L) {
+      var x = Number(L.opPct); if (!isFinite(x) || x <= 0 || x >= 99 || round05(x)) return null;
+      var m = x / (100 - x) * 100;                                // ค่าก่อนถูกแปลง (ถ้าใช่)
+      return round05(m) ? { code:L.code || L.desc || '', gpNow:x, gpLikely:Math.round(m * 2) / 2 } : null;
+    }).filter(function (h) { return h; });
+    if (hits.length) out.push({ docNo:String(cell_(r, idx, 'DocNo') || ''), id:String(cell_(r, idx, 'Id')), status:String(cell_(r, idx, 'Status') || ''), lines:hits });
+  }
+  Logger.log('ใบที่ยังไม่ถูกแปลง (ปลอดภัยหลังอัปเดต v4.8): %s ใบ', atRisk);
+  Logger.log('ใบที่น่าจะถูกลด %GP ไปแล้ว: %s ใบ', out.length);
+  out.forEach(function (o) {
+    Logger.log('%s (%s) — %s', o.docNo, o.status, o.lines.map(function (h) { return h.code + ': %GP ตอนนี้ ' + h.gpNow + '% (น่าจะตั้งใจ ' + h.gpLikely + '%)'; }).join(' · '));
+  });
+  return out;
 }
 
 function revokeAllSessions() {

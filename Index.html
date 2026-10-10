@@ -584,8 +584,8 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='4.7';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
-const BUILD='2026-10-10 · build 4.7 · Lark dry-run';
+const APP_VERSION='4.8';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const BUILD='2026-10-10 · build 4.8 · Verified + GP fix';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
@@ -1048,6 +1048,19 @@ async function optAdd(k,v,quiet){
 /* ช่องพิมพ์ + datalist (หน่วยนับ / ประเภทค่าใช้จ่าย): พิมพ์ค่าใหม่ = จำเข้ารายการให้อัตโนมัติ */
 function optLearn(k,v){v=String(v||'').trim();if(!v||!canAddOpt(k))return;
   if(optList(k).some(x=>x.toLowerCase()===v.toLowerCase()))return;optAdd(k,v,true);}
+/* v4.8 (Phase 6): ค่าที่ผู้ใช้เคยเพิ่มเองในเครื่อง (production เก็บใน SETTINGS ของเครื่องนั้น ไม่ขึ้น server) → ส่งเข้า MasterData ครั้งเดียว
+   ไม่ให้หายจาก dropdown หลังอัปเดต · ส่งเฉพาะค่าที่ไม่ใช่ค่าตั้งต้นของระบบ · ค่าที่ Admin ซ่อนไว้ server ตอบ VALUE_HIDDEN → ไม่แสดงกลับ */
+let _localListsTried={};
+async function migrateLocalLists(){
+  if(!MASTER||!cloudReady()||!CURRENT)return;
+  for(const k of Object.keys(OPT_SETTINGS_KEY)){
+    if(!canAddOpt(k))continue;
+    const local=Array.isArray(SETTINGS[OPT_SETTINGS_KEY[k]])?SETTINGS[OPT_SETTINGS_KEY[k]]:[];
+    const known=new Set(optList(k).concat(CFG.lists[k]||[]).map(x=>String(x).toLowerCase()));
+    const todo=local.map(x=>String(x||'').trim()).filter(x=>x&&!known.has(x.toLowerCase())&&!_localListsTried[k+'|'+x]);
+    for(const v of todo){_localListsTried[k+'|'+v]=1;await optAdd(k,v,true);}   // ทีละค่า (มีไม่กี่ค่า) · เงียบ ไม่เด้ง toast
+  }
+}
 function optDatalist(k,id){return `<datalist id="${id}">${optList(k).map(o=>`<option value="${esc(o)}"></option>`).join('')}</datalist>`}
 /* ---- ข้อความ error ที่บอกว่าต้องทำอะไรต่อ (ไม่บอกว่าโค้ดพังตรงไหน) ---- */
 const ERR_TH={
@@ -1176,7 +1189,12 @@ function migrateQuote(q){
 function migrateQuotePricing(q){
   if(q._pm===2) return q;
   const H=q.header||{}; const ex=+H.exrate||0; let exSum=0;
-  (q.lines||[]).forEach(L=>{
+  /* v4.8 FIX (พบใน Phase 6 — บั๊กเดิมของ production v2.1): ใบที่สร้างจากฟอร์มรุ่น %GP มี _sv:3 ตั้งแต่เกิด แต่ไม่เคยติดธง _pm
+     → ทุกครั้งที่โหลดใหม่ (reload / อีกเครื่องดึงจากชีท) ถูกตีความ %GP เป็น markup แล้วแปลงซ้ำ ราคาขายลดลงเงียบ ๆ (GP 18% → 15.254%)
+     ใบ markup รุ่นเก่าจริงจะได้ _sv:3 ในรอบเดียวกับที่ได้ _pm:2 เสมอ (migrateQuote: pricing ก่อน status)
+     ดังนั้น _sv:3 ที่ยังไม่มี _pm = ใบรุ่น %GP อยู่แล้ว → ห้ามแปลงตัวเลข แค่ติดธง */
+  const legacyMarkup=q._sv!==3;
+  if(legacyMarkup)(q.lines||[]).forEach(L=>{
     const rate=(L.costCur===H.currency)?1:ex, pricePC=(+L.up||0)*rate;
     let dutyPct=(+L.dutyPct||0); if((H.incoterm||'')==='DDP at MGS')dutyPct=0;
     const duty=(dutyPct/100)*pricePC;
@@ -2259,7 +2277,7 @@ function viewSummary(){
 function blankQuote(){
   const gt=CFG.defaults.groupType;
   const docNo=genDocNo('QT',REF_PREFIX[gt]||'IN');
-  return {id:uid(),_v:2,_sv:3,docType:'QT',docNo,status:QT_DEFAULT_STATUS,srId:null,approvalRoles:[],
+  return {id:uid(),_v:2,_pm:2,_sv:3,docType:'QT',docNo,status:QT_DEFAULT_STATUS,srId:null,approvalRoles:[],
     createdBy:CURRENT.id,createdByName:CURRENT.name,created:todayISO(),updated:todayISO(),
     updatedAt:new Date().toISOString(),rev:1,
     stage:'Draft',followStatus:'Pending',round:1,parentId:null,approvals:[],releasedTo:[],
@@ -2272,7 +2290,7 @@ function blankQuote(){
 function blankSR(salesName){
   const docNo=genDocNo('SR');
   const salesUser=USERS.find(u=>u.role==='Sales'&&(u.name===(salesName||CURRENT.name)));
-  return {id:uid(),_v:2,docType:'SR',docNo,status:'Draft',quoteIds:[],assignedTo:null,
+  return {id:uid(),_v:2,_pm:2,docType:'SR',docNo,status:'Draft',quoteIds:[],assignedTo:null,
     createdBy:CURRENT.id,createdByName:CURRENT.name,created:todayISO(),updated:todayISO(),
     updatedAt:new Date().toISOString(),rev:1,
     stage:'Draft',followStatus:'Requested',round:1,parentId:null,approvals:[],releasedTo:[],
@@ -4713,7 +4731,7 @@ async function initializeData(){
   // pull settings first so newer commission/defaults from another device take effect before quotes render
   try{await pullUsers();}catch(e){/* non-fatal */}
   try{const sd=await cloudGet('settings');
-    if(sd&&sd.master)MASTER=sd.master;                   // v4.6: ตัวเลือก dropdown จากแท็บ MasterData
+    if(sd&&sd.master){MASTER=sd.master;migrateLocalLists();}   // v4.6: ตัวเลือก dropdown จากแท็บ MasterData (+ v4.8 ค่าที่เคยเพิ่มเองในเครื่อง)
     if(sd&&sd.settingsRev&&+sd.settingsRev>(SETTINGS.settingsRev||0)){
       const merged=Object.assign({},SETTINGS,sd,{cloudUrl:SETTINGS.cloudUrl});
       SETTINGS=merged;LS.set('settings',SETTINGS);}}catch(e){/* non-fatal */}
@@ -5760,7 +5778,7 @@ function createQTFromSR(srId){
   const gt=sr.header.groupType||'Inverter';
   const docNo=genDocNo('QT',REF_PREFIX[gt]||'IN');
   const qt={
-    id:uid(),_v:2,_sv:3,docType:'QT',docNo,status:QT_DEFAULT_STATUS,srId,approvalRoles:[],
+    id:uid(),_v:2,_pm:2,_sv:3,docType:'QT',docNo,status:QT_DEFAULT_STATUS,srId,approvalRoles:[],
     createdBy:CURRENT.id,createdByName:CURRENT.name,
     created:todayISO(),updated:todayISO(),updatedAt:new Date().toISOString(),rev:1,
     stage:'Draft',followStatus:'Pending',round:1,parentId:null,approvals:[],

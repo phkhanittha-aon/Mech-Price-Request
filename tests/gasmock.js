@@ -26,7 +26,8 @@ function makeRuntime(codePath) {
   const ss = { getSheetByName: n => sheets[n] || null, insertSheet: n => (sheets[n] = new Sheet(n)), getId: () => 'x', toast() {} };
   const ctx = {
     SpreadsheetApp: { getActive: () => ss, openById: () => ss },
-    LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+    // ล็อกเดียวต่อ execution (เหมือน Apps Script): hasLock บอกว่าถืออยู่แล้วหรือยัง
+    LockService: (() => { let held = false; const L = { waitLock() { held = true; }, tryLock() { held = true; return true; }, hasLock() { return held; }, releaseLock() { held = false; } }; return { getScriptLock: () => L }; })(),
     Utilities: { getUuid: () => crypto.randomUUID(),
       // formatDate ตามเวลาไทย (UTC+7) เหมือน Apps Script ที่ตั้ง TZ = Asia/Bangkok
       formatDate: (d, tz, f) => { const t = new Date(d.getTime() + 7 * 3600000).toISOString(); return f === 'yyMM' ? t.slice(2, 4) + t.slice(5, 7) : t.slice(0, 10); },

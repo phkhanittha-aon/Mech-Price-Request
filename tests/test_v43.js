@@ -54,7 +54,7 @@ ok('ศุกร์ → อังคาร = 2 วันทำการ', ctx.bu
 const sub3 = ctx.followState_(Object.assign({}, base, { status: 'Submitted', statusChangedAt: new Date(Date.parse('2026-10-06T03:00:00Z')).toISOString() }), cfg, fri);   // อังคาร→ศุกร์ = 3
 ok('รออนุมัติ 3 วันทำการ (SLA 2) → เกินกำหนด', sub3.waitingDays === 3 && sub3.level === 'over' && sub3.slaBreached, sub3);
 const sub2 = ctx.followState_(Object.assign({}, base, { status: 'Submitted', statusChangedAt: '2026-10-07T03:00:00.000Z' }), cfg, fri);
-ok('รออนุมัติ 2 วันทำการ (SLA 2) → ครบกำหนดวันนี้ (watch)', sub2.waitingDays === 2 && sub2.level === 'watch', sub2);
+ok('รออนุมัติ 2 วันทำการ (SLA 2) → เฝ้าระวัง (watch)', sub2.waitingDays === 2 && sub2.level === 'watch', sub2);
 const log = [{ s: 'In Progress', at: '2026-10-01T03:00:00.000Z' }, { s: 'Submitted', at: '2026-10-05T03:00:00.000Z' }, { s: 'Approved', at: '2026-10-07T03:00:00.000Z' }];
 const withLog = ctx.followState_(Object.assign({}, base, { status: 'Approved', statusLog: log, statusChangedAt: '2026-10-07T03:00:00.000Z' }), cfg, fri);
 ok('stageDays แยกช่วง: sourcing 2 · approval 2 · release 2', withLog.stageDays.sourcing === 2 && withLog.stageDays.approval === 2 && withLog.stageDays.release === 2, withLog.stageDays);

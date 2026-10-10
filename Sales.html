@@ -107,8 +107,14 @@ main{max-width:1180px;margin:0 auto;padding:18px 16px 96px}
 /* job cards */
 .jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));gap:12px}
 .job{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 14px;display:flex;flex-direction:column;gap:8px}
-.job.alert{border-color:var(--red);box-shadow:inset 3px 0 0 var(--red)}
-.job.late{box-shadow:inset 3px 0 0 var(--amber)}
+.job.alert{border-color:var(--red);box-shadow:inset 3px 0 0 var(--red)}   /* เดิม */
+/* v4.6 ระดับความเร่งด่วน 3 ระดับ (เหมือนระบบทำราคา): พื้นอ่อน + แถบซ้ายเข้ม + ไอคอน/ตัวหนา ไม่ใช้สีอย่างเดียว */
+:root{--lv-over-bg:#fdefed;--lv-over-bar:#b42318;--lv-over-ink:#8f1d12;--lv-watch-bg:#fdf6e6;--lv-watch-bar:#b45309;--lv-watch-ink:#7a3a05}
+.job.lv-over{background:var(--lv-over-bg);border-color:#f0c4be;box-shadow:inset 4px 0 0 var(--lv-over-bar)}
+.job.lv-watch{background:var(--lv-watch-bg);border-color:#f0dcb4;box-shadow:inset 4px 0 0 var(--lv-watch-bar)}
+.lvb{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;border-radius:7px;padding:1px 7px;border:1.5px solid;background:#fff;white-space:nowrap}
+.lvb.over{color:var(--lv-over-ink);border-color:var(--lv-over-bar)}.lvb.watch{color:var(--lv-watch-ink);border-color:var(--lv-watch-bar)}
+.lv-over-t{color:var(--lv-over-ink);font-weight:700}.lv-watch-t{color:var(--lv-watch-ink);font-weight:700}
 .job.flash{animation:flash 2.4s ease-out}
 @keyframes flash{0%{box-shadow:0 0 0 3px var(--orange)}100%{box-shadow:0 0 0 0 transparent}}
 .job-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
@@ -250,16 +256,36 @@ table.pt .r{text-align:right}
        Sourcing / Manager (GM, Admin, Procurement Mgr, BD Mgr) → เห็นทุกคน + ขอราคาแทน Sales ได้
    - แอปนี้ไม่เคยได้รับต้นทุน / %GP รายบรรทัด (server ส่งเฉพาะ SalesDetail)
    ============================================================ */
-const APP_VERSION='4.5';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Index.html
-const BUILD='2026-10-09 · Sales build 4.5';
+const APP_VERSION='4.6';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Index.html
+const BUILD='2026-10-10 · Sales build 4.6';
 const CLOUD_URL='https://script.google.com/macros/s/AKfycby6ZckOc1mv5eI8PDzcgscWCBqYyOWCgXTohIaqczJuIbKIQ597C8zQ_frMHpZhLHZV/exec';
 const HASH_SALT='mgs-internal-2025';                 // ต้องตรงกับ Index.html
 const TIMEOUT_MS=15000, POLL_MS=30000, OVERLAP_MS=90000;
+/* v4.6: เกณฑ์ทั้งหมดของแอปนี้อยู่ที่นี่ — วัน SLA / ระดับเร่งด่วนคำนวณที่ server (FOLLOW_CFG ใน Code.gs) */
+const LEVEL={over:{th:'เกินกำหนด',icon:'⛔'},watch:{th:'เฝ้าระวัง',icon:'⚠'}};
+const GP_TH={good:20,warn:12};                       // สีป้าย %GP ที่ผู้จัดการเห็นในแอปนี้ (ตารางคอมมิชชั่นไม่ถูกส่งมาแอปนี้)
+/* ข้อความ error ที่บอกว่าต้องทำอะไรต่อ (ไม่บอกว่าโค้ดพังตรงไหน) — คำเดียวกับระบบทำราคา */
+const ERR_TH={ACCESS_DENIED:'บัญชีของคุณไม่มีสิทธิ์ทำรายการนี้ — ติดต่อผู้จัดการถ้าคิดว่าควรทำได้',
+  AUTH_REQUIRED:'เซสชันหมดอายุ — ยืนยันตัวตนอีกครั้งแล้วลองใหม่ (งานที่กรอกค้างยังอยู่)',
+  CONFLICT:'มีคนแก้รายการนี้พร้อมกัน — กดรีเฟรชเพื่อดูข้อมูลล่าสุดแล้วลองใหม่',
+  NOT_APPROVED:'ใบนี้ไม่ได้อยู่ในสถานะอนุมัติแล้ว (มีคนเปลี่ยนสถานะไปก่อน) — ดูสถานะล่าสุดบนหน้านี้',
+  NO_SALES_COPY:'ใบนี้ยังไม่มีราคาฉบับ Sales — แจ้ง Sourcing ให้เปิดใบแล้วกดบันทึกอีกครั้ง',
+  SR_LOCKED:'คำขอนี้ถูก Sourcing รับงานไปแล้ว แก้ไข/ลบไม่ได้ — ถ้าต้องเปลี่ยน ให้แจ้ง Sourcing',
+  BAD_VALUE:'ค่าที่พิมพ์ใช้ไม่ได้ — ตรวจตัวสะกดแล้วลองใหม่',NOT_FOUND:'ไม่พบรายการนี้แล้ว (อาจถูกลบ) — กดรีเฟรช'};
+function errText(res){
+  const code=res&&(res.error||res.code);
+  if(code&&ERR_TH[code])return ERR_TH[code];
+  if(!res||/timeout|network|fetch/i.test(String(code)))return 'เชื่อมต่อระบบไม่ได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่';
+  if(/busy/i.test(String(code)))return 'ระบบกำลังบันทึกงานของคนอื่นอยู่ — รอสักครู่แล้วกดอีกครั้ง';
+  return 'ทำรายการไม่สำเร็จ — ลองอีกครั้ง ถ้ายังไม่ได้ให้แคปหน้าจอส่ง Admin'+(code?' (รหัส: '+String(code).slice(0,60)+')':'');
+}
 const SALES_UPDATE_DAYS=7;                           // BUSINESS RULE: งานที่ราคาถึงมือ Sales ต้องอัปเดตอย่างน้อยทุก 7 วัน
 const GROUP_TYPES=['Inverter','Mounting','DC Cable','EV Charger','ESS','Residential'];
 const DEF_LISTS={priceTerms:['Special price','MOU price','Standard Price'],
   incoterms:['CIF at MGS','DDP at MGS','DDU at MGS','EXWORKS','FOB','CIF at port','DAP (Air)','DPP at site'],
-  units:['pcs','set','M','Unit','kW','MW','MWH']};
+  units:['pcs','set','M','Unit','kW','MW','MWH'],validity:['30','7','15','45','60','90']};
+/* v4.6: ค่าเริ่มต้นของคำขอใหม่ — ใช้ค่าจากแท็บ MasterData ก่อน (Admin ตั้งได้) ถ้าโหลดไม่ได้ใช้ค่านี้ */
+const DEF_FORM={currency:'THB',priceTerm:'Special price',incoterm:'CIF at MGS',validity:30,uom:'pcs',groupType:'Inverter'};
 const CUST_STAGES=['เพิ่งส่งราคาให้ลูกค้า','ลูกค้ากำลังเทียบราคา','อยู่ระหว่างต่อรองราคา','รออนุมัติภายในของลูกค้า','ใกล้ปิดการขาย','ลูกค้าเลื่อนโครงการ','คู่แข่งได้งาน'];
 const NEXT_STEPS=['โทรติดตาม','นัดเข้าพบลูกค้า','ส่งข้อมูลเพิ่มเติม','ขอปรับราคาจาก Sourcing','รอ PO','ปิดการขาย','ยุติการติดตาม'];
 const ROLE_TH={'GM':'ผู้บริหาร (GM)','Admin':'ผู้ดูแลระบบ','Procurement Mgr':'ผู้จัดการ Procurement','BD Mgr':'ผู้จัดการ BD',
@@ -270,11 +296,58 @@ const LOGO=/*LOGO*/"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANwAAACcCAYAAA
 
 const $=s=>document.querySelector(s);
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt=(n,d=2)=>(n==null||isNaN(n))?'—':Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
-const fmt0=n=>fmt(n,0);
+/* ============================================================ MGS.fmt / MGS.parse (v4.6 Phase 4)
+   ตัวจัดรูปแบบตัวเลข/ตัวเงิน "ตัวเดียวทั้งระบบ" — สำเนาเดียวกับใน Index.html ทุกตัวอักษร (ไฟล์ HTML ของ Apps Script แชร์ script กันไม่ได้)
+   tests/test_v46.js ตรวจว่าสองไฟล์ยังเหมือนกัน · fmt() / money() ด้านล่างเป็นชื่อเดิมที่ชี้มาที่นี่
+   - แสดงผล: คั่นหลักพัน + ทศนิยม 2 ตำแหน่ง + สกุลเงินกำกับ (สัญลักษณ์ ฿ / US$ / CN¥ หรือรหัสสกุลเงินที่หัวคอลัมน์)
+   - รับค่า: มี/ไม่มีลูกน้ำ ช่องว่าง สัญลักษณ์สกุลเงิน ค่าว่าง ตัวเลขที่เป็นข้อความ (1,234.50 / ฿ 1 234 / (12) = -12)
+     อ่านไม่ได้ → คืนค่า default ที่ส่งมา ไม่เดา (ห้ามใช้ parseFloat ดิบ — "1,234" จะกลายเป็น 1)            */
+const MGS=window.MGS=window.MGS||{};
+MGS.CUR_SYM={THB:'฿',USD:'US$',CNY:'CN¥'};
+MGS.parse={
+  num(v,d){
+    const dv=d===undefined?0:d;
+    if(typeof v==='number')return isFinite(v)?v:dv;
+    if(v==null||typeof v==='boolean')return dv;
+    let s=String(v).trim();if(!s)return dv;
+    let neg=false;
+    if(/^\(.*\)$/.test(s)){neg=true;s=s.slice(1,-1);}
+    s=s.replace(/US\$|CN¥|THB|USD|CNY|บาท|[฿$¥]/gi,'').trim().replace(/[\s\u00a0\u202f']+/g,',');
+    // ลูกน้ำ/ช่องว่างต้องเป็นตัวคั่นหลักพันจริง (1,234 / 1 234 567) — "36,5" ไม่ใช่ 365 (กันอัตราแลกเปลี่ยนผิด 10 เท่า)
+    if(s.indexOf(',')>=0){if(!/^[+-]?\d{1,3}(,\d{3})+(\.\d*)?$/.test(s))return dv;s=s.replace(/,/g,'');}
+    if(!/^[+-]?(\d+(\.\d*)?|\.\d+)$/.test(s))return dv;
+    const n=Number(s);if(!isFinite(n))return dv;
+    return neg?-n:n;
+  }
+};
+MGS.fmt={
+  num(n,dec){const v=MGS.parse.num(n,null);if(v==null)return '—';const d=dec==null?2:dec;
+    return v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});},
+  /* ยอดเงินพร้อมสกุล: money(1234,'USD') → "US$1,234.00" · {code:true} → "1,234.00 USD" */
+  money(n,cur,o){o=o||{};const c=cur||'THB',v=MGS.fmt.num(n,o.dec==null?2:o.dec);if(v==='—')return v;
+    return o.code?v+' '+c:(MGS.CUR_SYM[c]||(c+' '))+v;},
+  /* จำนวนสินค้า: ไม่บังคับทศนิยม (12 / 2.5) */
+  qty(n){const v=MGS.parse.num(n,null);return v==null?'—':v.toLocaleString('en-US',{maximumFractionDigits:3});},
+  /* ค่าในช่องกรอกเงินตอนไม่ได้โฟกัส: ว่าง = ว่าง */
+  input(n){const v=MGS.parse.num(n,null);return v==null?'':MGS.fmt.num(v,2);}
+};
+/* ช่องกรอกเงิน — ใส่ ${MGS.moneyAttrs(ค่า)} แทน type="number"
+   โฟกัส = แสดงค่าจริงให้แก้ง่าย · ออกจากช่อง = จัดรูปแบบ 1,234.00 · handler เดิม (oninput/onchange) อ่านค่าผ่าน MGS.parse.num */
+MGS.moneyAttrs=v=>{const n=MGS.parse.num(v,null);
+  return `type="text" inputmode="decimal" autocomplete="off" data-money data-raw="${n==null?'':n}" value="${MGS.fmt.input(n)}"`;};
+MGS.setMoney=(el,v)=>{if(!el||document.activeElement===el)return;const n=MGS.parse.num(v,null);
+  el.dataset.raw=n==null?'':String(n);el.value=MGS.fmt.input(n);};
+(function(){
+  const isM=el=>el&&el.matches&&el.matches('input[data-money]');
+  document.addEventListener('focusin',e=>{const el=e.target;if(!isM(el))return;el.value=el.dataset.raw||'';try{el.select()}catch(_){}});
+  document.addEventListener('input',e=>{const el=e.target;if(!isM(el))return;const n=MGS.parse.num(el.value,null);el.dataset.raw=n==null?'':String(n);},true);
+  document.addEventListener('focusout',e=>{const el=e.target;if(!isM(el))return;const n=MGS.parse.num(el.value,null);
+    el.dataset.raw=n==null?'':String(n);el.value=MGS.fmt.input(n);});
+})();
+const fmt=(n,d=2)=>MGS.fmt.num(n,d);
 /* v4.3: ทุกยอดเงินแสดงสกุลเงินของใบ (เดิมแสดง ฿ ทุกใบ แม้ใบเสนอเป็น USD) · ยอดรวมข้ามใบใช้ valueTHB จาก server */
-const CUR_SYM={THB:'฿',USD:'US$',CNY:'CN¥'};
-const money=(n,cur,dec)=>{const v=fmt(n,dec==null?0:dec);return v==='—'?v:(CUR_SYM[cur||'THB']||((cur||'')+' '))+v};
+const CUR_SYM=MGS.CUR_SYM;
+const money=(n,cur,dec)=>MGS.fmt.money(n,cur,{dec});
 const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const LS={get:(k,d)=>{try{const v=localStorage.getItem('mgs_sales_'+k);return v?JSON.parse(v):d}catch(e){return d}},
@@ -434,7 +507,7 @@ function addRow(row){
 }
 async function loadAll(){
   const d=await apiGet('salesview');
-  if(!d||!d.ok){toast('โหลดข้อมูลไม่สำเร็จ: '+((d&&d.error)||'-'),'bad');return false}
+  if(!d||!d.ok){toast('โหลดข้อมูลไม่สำเร็จ — '+errText(d),'bad');return false}
   S.rows={};(d.quotations||[]).forEach(addRow);S.serverTime=d.serverTime||'';setLive();
   return true;
 }
@@ -609,7 +682,7 @@ function viewPerson(pid){
   <div class="toolbar">
     <input class="inp search" placeholder="🔍 ค้นหา ลูกค้า / โครงการ / เลขเอกสาร" value="${esc(S.search)}" oninput="S.search=this.value;rerenderList('${esc(pid)}')">
     <select class="inp" style="width:auto" onchange="S.filter=this.value;render()">${FILTERS.map(f=>`<option value="${f.k}" ${S.filter===f.k?'selected':''}>${f.t}</option>`).join('')}</select>
-    <span class="hint">${list.length} รายการ${lv.length?` · <b style="color:var(--red)">⛔ เกินกำหนด ${lv.filter(r=>fol(r).level==='over').length}</b> · <b style="color:var(--amber)">⚠ ครบกำหนด ${lv.filter(r=>fol(r).level==='watch').length}</b>`:''}</span>
+    <span class="hint">${list.length} รายการ${lv.length?` · <span class="lv-over-t">⛔ เกินกำหนด ${lv.filter(r=>fol(r).level==='over').length}</span> · <span class="lv-watch-t">⚠ เฝ้าระวัง ${lv.filter(r=>fol(r).level==='watch').length}</span>`:''}</span>
   </div>
   <div class="jobs" id="jobList">${jobsHTML(list)}</div>`;
 }
@@ -632,10 +705,11 @@ function jobCard(r){
   const unapproved=shown&&['Approved','Pending','Won','Closed'].indexOf(String(r.status))<0;
   let val;
   if(isSR(r))val=`<span class="hint">${(r.d&&r.d.lines||[]).length} รายการที่ขอ${hdr(r).needBy?' · ต้องการภายใน '+esc(hdr(r).needBy):''}</span>`;
-  else if(shown)val=`<span class="job-val">${money(valueOf(r),curOf(r))}</span>${curOf(r)!=='THB'&&r.valueTHB!=null?` <span class="hint">≈ ${money(r.valueTHB,'THB')}</span>`:''}${r.gp!=null&&isInternal()?` <span class="tag ${r.gp>=20?'green':r.gp>=12?'amber':'red'}">GP ${fmt(r.gp,1)}%</span>`:''}`;
+  else if(shown)val=`<span class="job-val">${money(valueOf(r),curOf(r))}</span>${curOf(r)!=='THB'&&r.valueTHB!=null?` <span class="hint">≈ ${money(r.valueTHB,'THB')}</span>`:''}${r.gp!=null&&isInternal()?` <span class="tag ${r.gp>=GP_TH.good?'green':r.gp>=GP_TH.warn?'amber':'red'}">GP ${fmt(r.gp,1)}%</span>`:''}`;
   else val=`<span class="hint">🔒 ${f.owner==='REPAIR'?'ทีม Sourcing กำลังเตรียมราคาฉบับสำหรับ Sales':f.owner==='RELEASER'?'รอปล่อยราคาให้คุณ':'ยังไม่ถึงขั้นตอนเห็นราคา'}</span>`;
   const waitLine=(sg.key==='wait'&&f.waitingDays!=null)?`<span>⏳ รออยู่ที่ ${esc(OWNER_SHORT[f.owner]||'')} ${f.waitingDays} วันทำการ${f.slaDays?' (กำหนด '+f.slaDays+')':''}</span>`:'';
-  const lvl=(f.level&&f.level!=='ok'&&sg.key!=='done')?`<span class="tag ${f.level==='over'?'red':'amber'}">${f.level==='over'?'⛔ เกินกำหนด':'⚠ ครบกำหนดวันนี้'}</span>`:'';
+  const lvKey=(sg.key!=='done'&&LEVEL[f.level])?f.level:'';
+  const lvl=lvKey?`<span class="lvb ${lvKey}">${LEVEL[lvKey].icon} ${LEVEL[lvKey].th}</span>`:'';
   const acts=[];
   if(isSR(r)){
     acts.push(`<button class="btn sm ghost" onclick="openDetail('${r.id}')">ดูรายละเอียด</button>`);
@@ -647,7 +721,7 @@ function jobCard(r){
     if(f.owner==='SALES'&&(ownerOf(r)===S.user.id||canTeam()))acts.push(`<button class="btn sm ${need?'red':'ghost'}" onclick="openUpdate('${r.id}')">📝 อัปเดตความคืบหน้า</button>`);
     if(r.canRelease)acts.push(`<button class="btn sm blue" onclick="releasePrice('${r.id}')">🔓 ${String(r.status)==='Pending'?'ยืนยันปล่อยราคาให้':'ปล่อยราคาให้'} ${esc(userName(ownerOf(r))||r.sales||'Sales')}</button>`);
   }
-  return `<div class="job ${need?'alert':(sg.key==='wait'&&f.level==='over'?'late':'')} ${flash?'flash':''}">
+  return `<div class="job ${need?'lv-over':(lvKey?'lv-'+lvKey:'')} ${flash?'flash':''}">
     <div class="job-top"><div style="min-width:0"><div class="job-t">${esc(titleOf(r))}</div><div class="job-c">${esc(custOf(r))}</div></div>
       <div class="job-no">${esc(r.docNo||'—')}${isSR(r)?'':''}</div></div>
     <div class="job-mid"><span class="tag ${sg.color}">${esc(sg.label)}</span>${lvl}${unapproved?'<span class="tag red" title="ราคานี้ยังไม่ผ่านการอนุมัติ ห้ามส่งให้ลูกค้า">⚠ ราคายังไม่อนุมัติ</span>':''}</div>
@@ -689,23 +763,23 @@ function openDetail(id){
   const H=hdr(r),d=r.d||{},sg=stageOf(r),shown=priceShown(r);
   let body;
   if(isSR(r)){
-    body=`<div class="tw"><table class="pt"><thead><tr><th>#</th><th>สินค้า</th><th class="r">จำนวน</th><th>หน่วย</th><th class="r">ราคาเป้าหมาย</th><th>หมายเหตุ</th></tr></thead><tbody>
-      ${(d.lines||[]).map((L,i)=>`<tr><td>${i+1}</td><td><b>${esc(L.code||'')}</b> ${esc(L.desc||'')}</td><td class="r mono">${fmt0(L.qty)}</td><td>${esc(L.uom||'')}</td>
+    body=`<div class="tw"><table class="pt"><thead><tr><th>#</th><th>สินค้า</th><th class="r">จำนวน</th><th>หน่วย</th><th class="r">ราคาเป้าหมาย (${esc(H.currency||'THB')})</th><th>หมายเหตุ</th></tr></thead><tbody>
+      ${(d.lines||[]).map((L,i)=>`<tr><td>${i+1}</td><td><b>${esc(L.code||'')}</b> ${esc(L.desc||'')}</td><td class="r mono">${MGS.fmt.qty(L.qty)}</td><td>${esc(L.uom||'')}</td>
         <td class="r mono">${(+L.targetUp||0)>0?fmt(+L.targetUp):'—'}</td><td>${esc(L.salesNote||'')}</td></tr>`).join('')}</tbody></table></div>
       ${d.salesNote?`<div style="margin-top:10px"><b>รายละเอียด / สเปค:</b><div class="hint" style="white-space:pre-wrap;font-size:13px;color:var(--ink-2)">${esc(d.salesNote)}</div></div>`:''}`;
   }else if(shown){
-    body=`<div class="tw"><table class="pt"><thead><tr><th>#</th><th>สินค้า</th><th class="r">จำนวน</th><th>หน่วย</th><th class="r">ราคา/หน่วย</th><th class="r">รวม</th></tr></thead><tbody>
+    body=`<div class="tw"><table class="pt"><thead><tr><th>#</th><th>สินค้า</th><th class="r">จำนวน</th><th>หน่วย</th><th class="r">ราคา/หน่วย (${esc(H.currency||'THB')})</th><th class="r">รวม (${esc(H.currency||'THB')})</th></tr></thead><tbody>
       ${(d.lines||[]).map((L,i)=>`<tr><td>${i+1}</td><td><b>${esc(L.code||'')}</b><div class="hint">${esc(L.desc||'')}${L.warranty?' · ประกัน '+esc(L.warranty):''}${L.lead?' · '+esc(L.lead):''}</div></td>
-        <td class="r mono">${fmt0(L.qty)}</td><td>${esc(L.uom||'')}</td><td class="r mono">${fmt(L.unitPrice)}</td><td class="r mono"><b>${fmt(L.amount)}</b></td></tr>`).join('')}
+        <td class="r mono">${MGS.fmt.qty(L.qty)}</td><td>${esc(L.uom||'')}</td><td class="r mono">${fmt(L.unitPrice)}</td><td class="r mono"><b>${fmt(L.amount)}</b></td></tr>`).join('')}
       ${(+d.extrasTotal||0)>0?`<tr><td colspan="5" class="r">ค่าใช้จ่ายเพิ่มเติม</td><td class="r mono">${fmt(d.extrasTotal)}</td></tr>`:''}
       <tr style="background:var(--orange-soft)"><td colspan="5" class="r"><b>รวมทั้งสิ้น (${esc(H.currency||'THB')})</b></td><td class="r mono"><b>${fmt(d.total)}</b></td></tr></tbody></table></div>
-      <div class="hint" style="margin-top:8px">${esc(H.incoterm||'')} · ${esc(H.priceTerm||'')} · ยืนราคา ${esc(H.validity||30)} วัน${H.offerDate?' นับจาก '+esc(H.offerDate):''}</div>
+      <div class="hint" style="margin-top:8px">${esc(H.incoterm||'')} · ${esc(H.priceTerm||'')}${H.paymentTerm?' · ชำระเงิน: '+esc(H.paymentTerm):''} · ยืนราคา ${esc(H.validity||30)} วัน${H.offerDate?' นับจาก '+esc(H.offerDate):''}</div>
       ${(d.remarks||[]).filter(x=>String(x).trim()).length?`<ol style="margin:8px 0 0 18px;font-size:12.5px;color:var(--ink-2)">${d.remarks.filter(x=>String(x).trim()).map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`:''}
-      ${['Approved','Pending','Won','Closed'].indexOf(String(r.status))<0?'<div class="banner amber" style="margin-top:10px">⚠ ราคานี้ยังไม่ผ่านการอนุมัติของผู้บริหาร — ใช้ดูภายในเท่านั้น ห้ามส่งให้ลูกค้า</div>':''}`;
+      ${['Approved','Pending','Won','Closed'].indexOf(String(r.status))<0?'<div class="banner amber" style="margin-top:10px">⚠ ราคานี้ยังไม่ผ่านการอนุมัติของผู้จัดการ — ใช้ดูภายในเท่านั้น ห้ามส่งให้ลูกค้า</div>':''}`;
   }else{
     body=`<div class="empty"><div class="big">🔒</div>${String(r.status)==='Approved'
       ?'ราคาอนุมัติแล้ว รอผู้ปล่อยราคาส่งต่อให้คุณ — ระบบจะแจ้งบนหน้านี้อัตโนมัติเมื่อปล่อยแล้ว'
-      :'ใบนี้ยังอยู่ระหว่าง <b>'+esc(sg.label)+'</b> — จะเห็นราคาเมื่อผู้บริหารอนุมัติและปล่อยราคาแล้ว'}</div>`;
+      :'ใบนี้ยังอยู่ระหว่าง <b>'+esc(sg.label)+'</b> — จะเห็นราคาเมื่อผู้จัดการอนุมัติและปล่อยราคาแล้ว'}</div>`;
   }
   const upd=lastUpd(r);
   modal(`<div class="modal-h"><div style="min-width:0"><h3>${esc(titleOf(r))}</h3><div class="hint">${esc(r.docNo||'')} · ${esc(custOf(r))} · <span class="tag ${sg.color}">${esc(sg.label)}</span></div></div>
@@ -720,7 +794,7 @@ function openDetail(id){
 }
 function copyQuote(id){
   const r=S.rows[id];if(!r||!r.d)return;const H=hdr(r),d=r.d;
-  const lines=(d.lines||[]).map((L,i)=>`${i+1}. ${L.code?L.code+' ':''}${L.desc||''}\n   ${fmt0(L.qty)} ${L.uom||''} × ${fmt(L.unitPrice)} = ${fmt(L.amount)} ${H.currency||'THB'}`).join('\n');
+  const lines=(d.lines||[]).map((L,i)=>`${i+1}. ${L.code?L.code+' ':''}${L.desc||''}\n   ${MGS.fmt.qty(L.qty)} ${L.uom||''} × ${fmt(L.unitPrice)} = ${fmt(L.amount)} ${H.currency||'THB'}`).join('\n');
   const txt=`ใบเสนอราคา ${r.docNo||''}\nโครงการ: ${titleOf(r)}\nลูกค้า: ${custOf(r)}\n\n${lines}\n${(+d.extrasTotal||0)>0?'ค่าใช้จ่ายเพิ่มเติม: '+fmt(d.extrasTotal)+'\n':''}รวมทั้งสิ้น: ${fmt(d.total)} ${H.currency||'THB'}\n${H.incoterm||''} · ยืนราคา ${H.validity||30} วัน`;
   copyText(txt,'คัดลอกรายละเอียดราคาแล้ว');
 }
@@ -751,7 +825,7 @@ async function saveUpdate(id){
   const patch={salesUpdate:{at,by:S.user.id,byName:S.user.name,stage,note,next},salesUpdatedAt:at,salesNote:note,followUpDate:date};
   $('#upBtn').disabled=true;
   const res=await api({action:'salesPatch',id,patch:JSON.stringify(patch),note:'Sales update: '+stage+(next?' · ถัดไป '+next:'')+(date?' · นัด '+date:'')});
-  if(!res.ok){$('#upBtn').disabled=false;toast('บันทึกไม่สำเร็จ: '+(res.error||'-'),'bad');return}
+  if(!res.ok){$('#upBtn').disabled=false;toast('บันทึกไม่สำเร็จ — '+errText(res),'bad');return}
   if(r.d)Object.assign(r.d,patch);r.updatedAt=res.updatedAt||at;S.flash[id]=Date.now();
   if(res.follow)r.follow=res.follow;
   closeModal();toast('บันทึกความคืบหน้าแล้ว','good');render();
@@ -769,8 +843,7 @@ async function doRelease(id){
   $('#relBtn').disabled=true;
   const res=await api({action:'release',id});
   closeModal();
-  if(!res.ok){toast(res.error==='NOT_APPROVED'?'ใบนี้ไม่ได้อยู่ในสถานะอนุมัติแล้ว (มีคนเปลี่ยนสถานะไปก่อน)'
-    :res.error==='NO_SALES_COPY'?'ใบนี้ยังไม่มีราคาฉบับ Sales — ให้ Sourcing กด “สร้างข้อมูลสำหรับ Sales” ก่อน':('ปล่อยราคาไม่สำเร็จ: '+(res.error||'-')),'bad');await poll(true);return}
+  if(!res.ok){toast('ปล่อยราคาไม่สำเร็จ — '+errText(res),'bad');await poll(true);return}
   toast('ปล่อยราคาแล้ว','good');await poll(true);render();
 }
 
@@ -778,8 +851,8 @@ async function doRelease(id){
 const DRAFT_KEY='srDraft';
 function blankForm(ownerId){
   return {id:'',status:'Submitted',ownerId:ownerId||S.user.id,
-    header:{title:'',customer:'',groupType:'Inverter',currency:'THB',priceTerm:'Special price',incoterm:'CIF at MGS',validity:30,needBy:''},
-    spec:'',lines:[{code:'',desc:'',qty:1,uom:'pcs',targetUp:'',note:''}]};
+    header:{title:'',customer:'',groupType:DEF_FORM.groupType,currency:defOf('currency'),priceTerm:defOf('priceTerm'),incoterm:defOf('incoterm'),validity:+defOf('validity')||30,needBy:''},
+    spec:'',lines:[{code:'',desc:'',qty:1,uom:defOf('uom'),targetUp:'',note:''}]};
 }
 function newRequest(ownerId){
   const dr=LS.get(DRAFT_KEY,null);
@@ -797,10 +870,24 @@ function editRequest(id){
   if(!S.form.lines.length)S.form.lines=blankForm().lines;
   go('/request/'+id);
 }
-function listOf(k){const v=S.settings[k];return Array.isArray(v)&&v.length?v:DEF_LISTS[k]}
+const LIST_MASTER_KEY={priceTerms:'priceTerm',incoterms:'incoterm',units:'uom',validity:'validity'};
+function masterOf(){return (S.settings&&S.settings.master)||null}
+function listOf(k){
+  const m=masterOf(),ml=m&&m.lists&&m.lists[LIST_MASTER_KEY[k]];
+  if(Array.isArray(ml)&&ml.length)return ml.map(String);
+  const v=S.settings[k];return Array.isArray(v)&&v.length?v:DEF_LISTS[k];
+}
+function defOf(k){const m=masterOf(),d=m&&m.defaults&&m.defaults[k];return (d!=null&&d!=='')?d:DEF_FORM[k]}
+/* หน่วยนับใหม่ที่พิมพ์เอง → จำเข้ารายการให้ทุกคน (server ตรวจซ้ำ + ตัดค่าซ้ำ) */
+async function learnUom(v){
+  v=String(v||'').trim();if(!v||listOf('units').some(x=>x.toLowerCase()===v.toLowerCase()))return;
+  const res=await api({action:'addMaster',list:'uom',value:v});
+  if(res&&res.ok&&res.master&&S.settings)S.settings.master=res.master;
+}
 function viewRequest(){
   if(!S.form){S.form=blankForm()}
-  const F=S.form,H=F.header,opts=(arr,v)=>arr.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('');
+  const F=S.form,H=F.header,opts=(arr,v)=>{const sv=v==null?'':String(v),l=arr.map(String);if(sv&&l.indexOf(sv)<0)l.unshift(sv);   // ค่าเดิมที่ไม่อยู่ในรายการแล้วยังแสดงอยู่
+    return l.map(o=>`<option ${o===sv?'selected':''}>${esc(o)}</option>`).join('')};
   const salesPeople=S.users.filter(u=>(u.role==='Sales'||u.role==='Sales Manager')&&u.active!==false);
   return `<div class="person"><div style="flex:1"><h1>${F.id?'แก้ไขคำขอราคา '+esc(F.docNo||''):'ขอราคาใหม่'}</h1>
     <div class="hint">กรอกข้อมูลลูกค้าและรายการสินค้า → ส่งให้ทีม Sourcing ทำราคา · เลขคำขอ (SR) ระบบออกให้อัตโนมัติ</div></div></div>
@@ -814,10 +901,10 @@ function viewRequest(){
       :`<div class="s2"><label class="lbl">Sales เจ้าของงาน</label><div class="inp" style="background:var(--surface-2)">${esc(S.user.name)}</div></div>`}
     <div><label class="lbl">กลุ่มงาน</label><select class="inp" onchange="fset('groupType',this.value)">${opts(GROUP_TYPES,H.groupType)}</select></div>
     <div><label class="lbl">ต้องการราคาภายใน</label><input class="inp" type="date" value="${esc(H.needBy)}" min="${todayISO()}" onchange="fset('needBy',this.value)"></div>
-    <div><label class="lbl">สกุลเงินที่เสนอ</label><select class="inp" onchange="fset('currency',this.value)">${opts(['THB','USD','CNY'],H.currency)}</select></div>
+    <div><label class="lbl">สกุลเงินที่เสนอ</label><select class="inp" onchange="fset('currency',this.value);renderLines()">${opts(['THB','USD','CNY'],H.currency)}</select></div>
     <div><label class="lbl">Incoterm</label><select class="inp" onchange="fset('incoterm',this.value)">${opts(listOf('incoterms'),H.incoterm)}</select></div>
     <div><label class="lbl">Price term</label><select class="inp" onchange="fset('priceTerm',this.value)">${opts(listOf('priceTerms'),H.priceTerm)}</select></div>
-    <div><label class="lbl">ยืนราคา (วัน)</label><input class="inp" type="number" min="1" value="${esc(H.validity)}" oninput="fset('validity',+this.value||30)"></div>
+    <div><label class="lbl">ยืนราคา (วัน)</label><select class="inp" onchange="fset('validity',+this.value||30)">${opts(listOf('validity'),H.validity)}</select></div>
     <div class="s4"><label class="lbl">รายละเอียดงาน / สเปค / เงื่อนไขพิเศษ</label><textarea class="inp" rows="3" placeholder="เช่น ติดตั้งบนหลังคาเมทัลชีท, ลูกค้าต้องการแบรนด์ Sungrow, ส่งของภายใน มี.ค." oninput="S.form.spec=this.value;saveDraft()">${esc(F.spec)}</textarea></div>
   </div></div></div>
   <div class="card" style="margin-top:16px"><div class="card-h"><h2>รายการสินค้าที่ขอราคา</h2><span class="hint">พิมพ์รหัสหรือชื่อสินค้าเพื่อค้นหาจากแคตตาล็อก หรือพิมพ์ชื่อสินค้าใหม่ได้เลย</span>
@@ -842,8 +929,8 @@ function renderLines(){
     <div class="c2"><label>รหัสสินค้า</label><input class="inp" list="prodList" value="${esc(L.code)}" placeholder="ค้นหารหัส/ชื่อ" onchange="pickCode(${i},this.value)"></div>
     <div class="c2"><label>ชื่อสินค้า / รายละเอียด *</label><input class="inp" id="ld_${i}" value="${esc(L.desc)}" placeholder="เช่น Inverter 110kW" oninput="lset(${i},'desc',this.value)"></div>
     <div><label>จำนวน</label><input class="inp" type="number" min="0" step="any" value="${esc(L.qty)}" oninput="lset(${i},'qty',this.value)"></div>
-    <div><label>หน่วย</label><input class="inp" id="lu_${i}" list="uomList" value="${esc(L.uom)}" oninput="lset(${i},'uom',this.value)"></div>
-    <div><label>ราคาเป้าหมาย/หน่วย</label><input class="inp" type="number" min="0" step="any" value="${esc(L.targetUp)}" placeholder="ถ้ามี" oninput="lset(${i},'targetUp',this.value)"></div>
+    <div><label>หน่วย</label><input class="inp" id="lu_${i}" list="uomList" value="${esc(L.uom)}" oninput="lset(${i},'uom',this.value)" onchange="learnUom(this.value)"></div>
+    <div><label>ราคาเป้าหมาย/หน่วย (${esc(S.form.header.currency||'THB')})</label><input class="inp" style="text-align:right" ${MGS.moneyAttrs(L.targetUp)} placeholder="ถ้ามี" oninput="lset(${i},'targetUp',this.value)"></div>
     <div class="c2"><label>หมายเหตุ</label><input class="inp" value="${esc(L.note)}" placeholder="เช่น ยี่ห้อ / สเปค" oninput="lset(${i},'note',this.value)"></div>
     <button class="del" onclick="delLine(${i})" title="ลบรายการ">✕</button></div>`).join('')+
     `<datalist id="uomList">${listOf('units').map(u=>`<option value="${esc(u)}">`).join('')}</datalist>`;
@@ -856,7 +943,7 @@ function pickCode(i,code){
   if(p){L.code=p.code;if(!L.desc)L.desc=p.desc;if(p.uom)L.uom=String(p.uom).toLowerCase()==='pcs'?'pcs':p.uom;L.group=p.group||'';}
   saveDraft();renderLines();
 }
-function addLine(){S.form.lines.push({code:'',desc:'',qty:1,uom:'pcs',targetUp:'',note:''});saveDraft();renderLines();
+function addLine(){S.form.lines.push({code:'',desc:'',qty:1,uom:defOf('uom'),targetUp:'',note:''});saveDraft();renderLines();
   setTimeout(()=>{const el=$('#ld_'+(S.form.lines.length-1));if(el)el.focus()},30)}
 function delLine(i){if(S.form.lines.length===1){S.form.lines=blankForm().lines}else S.form.lines.splice(i,1);saveDraft();renderLines()}
 function cancelRequest(){S.form=null;go('/me')}
@@ -880,13 +967,13 @@ async function submitRequest(status){
       sales:owner.name,salesUserId:owner.id,groupType:H.groupType,reqDate:todayISO(),needBy:H.needBy||'',
       currency:H.currency,priceTerm:H.priceTerm,incoterm:H.incoterm,offerDate:todayISO(),validity:+H.validity||30},
     lines:lines.map(L=>({code:(L.code||'').trim(),desc:(L.desc||L.code||'').trim(),group:L.group||H.groupType,
-      uom:L.uom||'pcs',qty:+L.qty||1,targetUp:+L.targetUp||0,salesNote:(L.note||'').trim()})),
+      uom:L.uom||'pcs',qty:MGS.parse.num(L.qty,1)||1,targetUp:MGS.parse.num(L.targetUp,0),salesNote:(L.note||'').trim()})),
     remarks:[]};
   _submitting=true;['#btnDraft','#btnSend'].forEach(s=>{const b=$(s);if(b)b.disabled=true});
   const res=await api({action:'saveSR',id,detail:JSON.stringify(doc)});
   _submitting=false;['#btnDraft','#btnSend'].forEach(s=>{const b=$(s);if(b)b.disabled=false});
   if(!res.ok){
-    toast(res.error==='SR_LOCKED'?'คำขอนี้ถูก Sourcing รับงานไปแล้ว แก้ไขไม่ได้':('ส่งไม่สำเร็จ: '+(res.error||'-')+' — ร่างยังอยู่ ลองใหม่ได้'),'bad');return}
+    toast('ส่งคำขอไม่สำเร็จ — '+errText(res)+(res.error==='SR_LOCKED'?'':' · ร่างยังอยู่ในเครื่อง ลองใหม่ได้'),'bad');return}
   if(!F.id)LS.del(DRAFT_KEY);
   S.form=null;S.flash[id]=Date.now();
   toast(status==='Draft'?('บันทึกร่าง '+(res.docNo||'')+' แล้ว'):('ส่งคำขอ '+(res.docNo||'')+' ให้ Sourcing แล้ว ✓'),'good');
@@ -901,7 +988,7 @@ function deleteRequest(id){
 }
 async function doDelete(id){
   closeModal();const res=await api({action:'delete',id});
-  if(!res.ok){toast(res.error==='SR_LOCKED'?'Sourcing รับงานไปแล้ว ลบไม่ได้':('ลบไม่สำเร็จ: '+(res.error||'-')),'bad');return}
+  if(!res.ok){toast('ลบไม่สำเร็จ — '+errText(res),'bad');return}
   if(S.rows[id])S.rows[id].deleted=true;toast('ลบคำขอแล้ว','good');render();
 }
 
@@ -931,7 +1018,7 @@ async function saveChangePassword(){
   if(n1!==n2){$('#pw_err').textContent='รหัสใหม่ทั้งสองช่องไม่ตรงกัน';return}
   if(n1==='1234'){$('#pw_err').textContent='ห้ามใช้รหัสตั้งต้น';return}
   const r=await api({action:'changePassword',oldHash:await hashPass(o),newHash:await hashPass(n1)});
-  if(!r.ok){$('#pw_err').textContent=r.error==='BAD_OLD_PASSWORD'?'รหัสผ่านปัจจุบันไม่ถูกต้อง':('ไม่สำเร็จ: '+(r.error||'-'));return}
+  if(!r.ok){$('#pw_err').textContent=r.error==='BAD_OLD_PASSWORD'?'รหัสผ่านปัจจุบันไม่ถูกต้อง':('ไม่สำเร็จ — '+errText(r));return}
   closeModal();toast('เปลี่ยนรหัสผ่านแล้ว','good');
 }
 

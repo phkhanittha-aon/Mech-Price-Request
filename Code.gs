@@ -42,7 +42,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '4.5';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '4.6';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -53,7 +53,7 @@ var SESSION_HOURS = 12;
 
 var SH = {
   QUOTES:'Quotations', PRODUCTS:'Products', SETTINGS:'Settings',
-  USERS:'Users', LOG:'Log', SESSIONS:'Sessions'
+  USERS:'Users', LOG:'Log', SESSIONS:'Sessions', MASTER:'MasterData'
 };
 
 var HEADERS = {
@@ -67,8 +67,38 @@ var HEADERS = {
   Settings:   ['SettingsRev','SettingsUpdatedAt','By','Detail'],
   Users:      ['Id','Name','Role','Scope','PassHash','Updated','Email','Active'],
   Log:        ['Time','Action','Id','By','Note'],
-  Sessions:   ['Token','UserId','Role','Name','Issued','ExpiresMs','Expires','Agent']
+  Sessions:   ['Token','UserId','Role','Name','Issued','ExpiresMs','Expires','Agent'],
+  MasterData: ['List','Value','IsDefault','Sort','Active','Updated','By']      // v4.6: แท็บใหม่ (ไม่แตะแท็บเดิม)
 };
+
+/* ============================================================ MASTER DATA (v4.6 Phase 4)
+ * ตัวเลือกใน dropdown ที่เพิ่มได้โดยไม่ต้องแก้โค้ด — แท็บ MasterData หนึ่งแถว = หนึ่งตัวเลือก
+ *   List      = ชื่อรายการ (คีย์ด้านล่าง)          Value  = ข้อความที่แสดง/บันทึกลงใบ
+ *   IsDefault = TRUE ที่แถวไหน แถวนั้นเป็นค่าเริ่มต้นของใบใหม่    Sort = ลำดับ (น้อยขึ้นก่อน)
+ *   Active    = FALSE เพื่อซ่อนตัวเลือก (ใบเก่าที่ใช้ค่านั้นอยู่ยังแสดงได้เหมือนเดิม)
+ * add: ใครเพิ่มตัวเลือกใหม่ได้จากปุ่ม "อื่น ๆ (ระบุ)" — none = ห้ามเพิ่ม · internal = ทีมภายใน · any = ทุกคนที่ล็อกอิน
+ * สกุลเงินห้ามเพิ่ม เพราะสูตรแปลงค่าเงินรองรับแค่ THB / USD / CNY (เลือกค่าเริ่มต้นได้)
+ */
+var MASTER_LISTS = {
+  currency:    { label:'สกุลเงิน',          add:'none', fixed:['THB','USD','CNY'] },
+  incoterm:    { label:'Incoterm',          add:'internal' },
+  priceTerm:   { label:'Price Term',        add:'internal' },
+  paymentTerm: { label:'เงื่อนไขชำระเงิน',   add:'internal' },
+  validity:    { label:'ยืนราคา (วัน)',      add:'internal', numeric:true },
+  uom:         { label:'หน่วยนับ',           add:'any' },
+  expenseType: { label:'ประเภทค่าใช้จ่าย',    add:'internal' }
+};
+/* ค่าตั้งต้นตอนสร้างแท็บครั้งแรก (ตัวแรกของแต่ละรายการ = ค่าเริ่มต้น) — รวมกับรายการที่เคยตั้งไว้ใน Settings เดิมด้วย */
+var MASTER_SEED = {
+  currency:    ['THB','USD','CNY'],
+  incoterm:    ['CIF at MGS','DDP at MGS','DDU at MGS','EXWORKS','FOB','CIF at port','DAP (Air)','DPP at site'],
+  priceTerm:   ['Special price','MOU price','Standard Price'],
+  paymentTerm: ['เงินสด / โอนก่อนส่งสินค้า','เครดิต 30 วัน','มัดจำ 30% ส่วนที่เหลือก่อนส่งสินค้า'],
+  validity:    ['30','7','15','45','60','90'],
+  uom:         ['pcs','set','M','Unit','kW','MW','MWH'],
+  expenseType: ['ค่าขนส่ง','ค่าติดตั้ง','ค่าดำเนินการ','ค่าเดินพิธีการ','ค่าประกันภัยขนส่ง']
+};
+var MASTER_SETTINGS_KEY = { incoterm:'incoterms', priceTerm:'priceTerms', uom:'units' };
 
 /* ============================================================ RBAC MATRIX */
 /**
@@ -491,6 +521,8 @@ function handle_(p) {
       case 'saveProduct':  return need_(sess,'writeQuote') || saveProduct_(p, sess);
       case 'saveSettings': return need_(sess,'manageSetting') || saveSettings_(p, sess);
       case 'saveUsers':    return need_(sess,'manageUsers') || saveUsers_(p, sess);
+      case 'addMaster':    return addMaster_(p, sess);
+      case 'saveMaster':   return need_(sess,'manageSetting') || saveMaster_(p, sess);
       default:             return { ok:false, error:'unknown action: ' + action };
     }
   } catch (err) {
@@ -532,7 +564,8 @@ function apiGetObj_(type, token, arg) {
         return { ok:true, quote:one.length ? one[0] : null, view:view, serverTime:serverTime };
       }
       case 'products':   return { ok:true, products:getProducts_(sess) };
-      case 'settings':   return getSettings_(sess);
+      case 'settings':   { var st = getSettings_(sess); st.master = getMaster_(); return st; }
+      case 'master':     return { ok:true, master:getMaster_() };
       case 'users':      return { ok:true, users:getUsers_(sess) };
       case 'whoami':     return { ok:true, user:meOf_(sess) };
       case 'salesview': {
@@ -649,10 +682,10 @@ function saveSR_(p, sess) {
   doc.lines = (doc.lines || []).map(function (L) {
     return {
       code: L.code || '', desc: L.desc || '', group: L.group || '', comGroup: L.comGroup || '',
-      uom: L.uom || 'pcs', qty: Number(L.qty) || 1,
+      uom: L.uom || 'pcs', qty: num_(L.qty, 1) || 1,
       up: 0, costCur: (doc.header && doc.header.currency) || 'THB',
       dutyPct: 0, clearancePct: 0, opPct: 0, freep: 0, extras: [],
-      targetUp: Number(L.targetUp) || 0, salesNote: L.salesNote || '',
+      targetUp: num_(L.targetUp, 0), salesNote: L.salesNote || '',
       warranty: L.warranty || '', lead: L.lead || ''
     };
   });
@@ -978,8 +1011,8 @@ function projectRow_(r, idx, sess, ctx) {
     // + ยอดรวม/GP สรุประดับใบ (ไม่ส่ง Detail/โครงสร้างต้นทุนรายบรรทัดออกไปที่แอปนี้)
     var st0 = String(base.status || ''), dt0 = String(base.docType || 'QT');
     base.salesDetail = salesSafe_(cell_(r, idx, 'SalesDetail') || (dt0 === 'SR' ? cell_(r, idx, 'Detail') : ''));
-    base.salesValue = Number(cell_(r, idx, 'Total')) || 0;
-    base.gp = Number(cell_(r, idx, 'GP')) || 0;
+    base.salesValue = num_(cell_(r, idx, 'Total'));
+    base.gp = num_(cell_(r, idx, 'GP'));
     base.priceLocked = false;
     base.canRelease = !!sess.caps.approve && (st0 === 'Approved' || legacyRelease) && dt0 !== 'SR';
     base.valueTHB = salesValueTHB_(r, idx);
@@ -987,10 +1020,10 @@ function projectRow_(r, idx, sess, ctx) {
   }
   if (ctx.full) {
     base.needsApproval = String(cell_(r, idx, 'NeedsApproval')).toUpperCase() === 'TRUE';
-    base.total  = Number(cell_(r, idx, 'Total'))  || 0;
-    base.cost   = Number(cell_(r, idx, 'Cost'))   || 0;
-    base.profit = Number(cell_(r, idx, 'Profit')) || 0;
-    base.gp     = Number(cell_(r, idx, 'GP'))     || 0;
+    base.total  = num_(cell_(r, idx, 'Total'));
+    base.cost   = num_(cell_(r, idx, 'Cost'));
+    base.profit = num_(cell_(r, idx, 'Profit'));
+    base.gp     = num_(cell_(r, idx, 'GP'));
     base.detail = cell_(r, idx, 'Detail');
     return base;
   }
@@ -1013,7 +1046,7 @@ function projectRow_(r, idx, sess, ctx) {
     base.salesDetail = salesSafe_(cell_(r, idx, 'SalesDetail') || cell_(r, idx, 'Detail'));
     base.priceLocked = false;
   } else if (maySeePrice) {
-    base.salesValue  = Number(cell_(r, idx, 'Total')) || 0;
+    base.salesValue  = num_(cell_(r, idx, 'Total'));
     base.salesDetail = salesSafe_(cell_(r, idx, 'SalesDetail'));   // ห้ามใช้ Detail เด็ดขาด
     base.priceLocked = !fi.hasSalesCopy;                           // ใบรุ่นเก่ายังไม่มีราคาฉบับ Sales
     base.valueTHB = salesValueTHB_(r, idx);                        // แค่ยอดรวมเป็นบาท ไม่ส่งอัตราแลกเปลี่ยนออกไป
@@ -1147,14 +1180,15 @@ function rowRateToTHB_(r, idx) {
   if (cur === 'THB' || !cur) return 1;
   var rates = null, m = /"rates":(\{[^}]*\})/.exec(String(cell_(r, idx, 'Detail') || ''));
   if (m) { try { rates = JSON.parse(m[1]); } catch (e) {} }
-  if (rates && +rates[cur] > 0) return +rates[cur];
-  if (cur === 'USD' && +cell_(r, idx, 'Exrate') > 0) return +cell_(r, idx, 'Exrate');
+  if (rates && num_(rates[cur]) > 0) return num_(rates[cur]);
+  var ex = num_(cell_(r, idx, 'Exrate'));                 // v4.6: เซลล์ที่เป็นข้อความ " 36.50" / "฿36.5" อ่านได้
+  if (cur === 'USD' && ex > 0) return ex;
   return 0;
 }
 /** มูลค่าเป็นบาทของ "ราคาที่ Sales เห็นจริง" (total ใน SalesDetail) — ไม่ใช้คอลัมน์ Total กันตัวเลขสองแหล่งไม่ตรงกัน */
 function salesValueTHB_(r, idx) {
   var m = /"total":(-?[0-9.]+)/.exec(String(cell_(r, idx, 'SalesDetail') || ''));
-  var v = m ? Number(m[1]) : (Number(cell_(r, idx, 'Total')) || 0);
+  var v = m ? num_(m[1]) : num_(cell_(r, idx, 'Total'));
   var rate = rowRateToTHB_(r, idx);
   return rate ? v * rate : null;
 }
@@ -1179,10 +1213,10 @@ function saveProduct_(p, sess) {
   var row = findRow_(sh, idx, 'Code', p.code);
   writeRow_(sh, idx, row, {
     Code:p.code, Desc:p.desc||'', Group:p.group||'', ComGroup:p.comGroup||'', Uom:p.uom||'',
-    Warranty:p.warranty||'', Duty:(p.duty===''||p.duty==null)?'':Number(p.duty),
+    Warranty:p.warranty||'', Duty:numOrBlank_(p.duty),
     Supplier:p.supplier||'', Lead:p.lead||'',
-    DefaultPrice:(p.defaultPrice===''||p.defaultPrice==null)?'':Number(p.defaultPrice),
-    DefaultCur:p.defaultCur||'', BoiPrice:(p.boiPrice===''||p.boiPrice==null)?'':Number(p.boiPrice),
+    DefaultPrice:numOrBlank_(p.defaultPrice),
+    DefaultCur:p.defaultCur||'', BoiPrice:numOrBlank_(p.boiPrice),
     Updated:nowISO_(), By:sess.name
   });
   return { ok:true, code:p.code };
@@ -1410,7 +1444,31 @@ function logRow_(action, docNo, id, by, note) {
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
-function num_(v, d) { var n = Number(v); return isNaN(n) ? (d || 0) : n; }
+/**
+ * อ่านตัวเลข/ยอดเงินแบบป้องกัน (v4.6 Phase 4) — ใช้แทน Number()/parseFloat ทุกจุดที่อ่านค่าจาก client หรือเซลล์ในชีท
+ *   รับ: 1234.5 · "1,234.50" · " 1 234 " · "฿1,234" · "US$ 12" · "12 USD" · "(12)" = -12 · เซลล์ว่าง · ตัวเลขที่เก็บเป็นข้อความ
+ *   อ่านไม่ได้ (ว่าง / ข้อความ / Date / NaN / Infinity) → คืน d (ไม่ส่ง = 0) ไม่เดาเด็ดขาด
+ *   ลูกน้ำ/ช่องว่างต้องอยู่ตำแหน่งหลักพันจริง — "1,5" / "36,5" ถือว่าอ่านไม่ได้ (ไม่เดาว่าเป็น 15 หรือ 1.5)
+ */
+function num_(v, d) {
+  var dv = (d === undefined) ? 0 : d;
+  if (typeof v === 'number') return isFinite(v) ? v : dv;
+  if (v === null || v === undefined || typeof v === 'boolean') return dv;
+  if (Object.prototype.toString.call(v) === '[object Date]') return dv;
+  var s = String(v).trim();
+  if (!s) return dv;
+  var neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  s = s.replace(/US\$|CN¥|THB|USD|CNY|บาท|[฿$¥]/gi, '').trim().replace(/[\s\u00a0\u202f']+/g, ',');
+  // ลูกน้ำ/ช่องว่างต้องอยู่ตำแหน่งหลักพันจริง (1,234 / 1 234 567) — "1,5" / "36,5" อ่านไม่ได้ (ไม่เดาว่าเป็น 15 หรือ 1.5)
+  if (s.indexOf(',') >= 0) { if (!/^[+-]?\d{1,3}(,\d{3})+(\.\d*)?$/.test(s)) return dv; s = s.replace(/,/g, ''); }
+  if (!/^[+-]?(\d+(\.\d*)?|\.\d+)$/.test(s)) return dv;
+  var n = Number(s);
+  if (!isFinite(n)) return dv;
+  return neg ? -n : n;
+}
+/** ค่าว่าง/อ่านไม่ได้ → '' (ให้เซลล์ว่างเหมือนเดิม) */
+function numOrBlank_(v) { var n = num_(v, null); return n === null ? '' : n; }
 /** แปลงเวลาเป็น epoch ms แบบทนทาน — รับได้ทั้ง Date (Sheets แปลงเอง), ISO string, ตัวเลข
  *  ห้ามเทียบเวลาแบบ string กับค่าที่อ่านจาก Sheet (ดู C3 FIX ที่ login_) */
 function toMs_(v) {
@@ -1426,8 +1484,130 @@ function todayStr_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd')
 
 /* ============================================================ MAINTENANCE */
 
+/** อ่านแท็บ MasterData ครั้งเดียวต่อ request → { lists:{ชื่อ:[ค่า…]}, defaults:{ชื่อ:ค่า}, labels, canAdd } */
+function getMaster_() {
+  var sh = sheet_(SH.MASTER);
+  if (sh.getLastRow() < 2) seedMaster_(sh);
+  var rows = masterRows_(sh), lists = {}, defaults = {}, labels = {}, add = {};
+  for (var k in MASTER_LISTS) { lists[k] = []; labels[k] = MASTER_LISTS[k].label; add[k] = MASTER_LISTS[k].add; }
+  var seen = {};
+  rows.slice().sort(function (a, b) { return (a.sort - b.sort) || (a.i - b.i); }).forEach(function (r) {
+    if (!lists[r.list] || !r.active || !r.value) return;
+    var key = r.list + '|' + r.value.toLowerCase();
+    if (seen[key]) return; seen[key] = 1;
+    lists[r.list].push(r.value);
+    if (r.isDefault && defaults[r.list] === undefined) defaults[r.list] = r.value;
+  });
+  lists.currency = MASTER_LISTS.currency.fixed.slice();          // สกุลเงินตายตัว (สูตร FX รองรับแค่ 3 สกุล)
+  if (MASTER_LISTS.currency.fixed.indexOf(defaults.currency) < 0) defaults.currency = 'THB';
+  for (var k2 in lists) if (defaults[k2] === undefined && lists[k2].length) defaults[k2] = lists[k2][0];
+  return { lists:lists, defaults:defaults, labels:labels, canAdd:add };
+}
+function masterRows_(sh) {
+  var last = sh.getLastRow(); if (last < 2) return [];
+  var idx = headerIndex_(sh), data = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues(), out = [];
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i], list = String(cell_(r, idx, 'List')).trim(), v = cell_(r, idx, 'Value');
+    var val = (Object.prototype.toString.call(v) === '[object Date]') ? '' : String(v).trim();
+    var def = MASTER_LISTS[list];
+    if (def && def.numeric) { var n = num_(val, null); val = (n !== null && n > 0) ? String(n) : ''; }
+    out.push({ i:i, row:i + 2, list:list, value:val,
+               isDefault:String(cell_(r, idx, 'IsDefault')).toUpperCase() === 'TRUE',
+               sort:num_(cell_(r, idx, 'Sort'), 9999),
+               active:String(cell_(r, idx, 'Active')).toUpperCase() !== 'FALSE' });
+  }
+  return out;
+}
+/** สร้างแถวตั้งต้นครั้งแรก — รวมรายการเดิมจาก Settings (incoterms / priceTerms / units) ไม่ให้ของที่เคยเพิ่มไว้หาย */
+function seedMaster_(sh) {
+  var lock = LockService.getScriptLock(), mine = !lock.hasLock();   // POST ถือล็อกอยู่แล้ว → ห้ามปล่อยล็อกของ request หลัก
+  if (mine && !lock.tryLock(5000)) return;
+  try {
+    if (sh.getLastRow() >= 2) return;
+    var st = {}; try { st = getSettingsRaw_(); } catch (e) {}
+    var idx = headerIndex_(sh), width = sh.getLastColumn(), out = [], stamp = nowISO_();
+    for (var k in MASTER_SEED) {
+      var vals = MASTER_SEED[k].slice(), sk = MASTER_SETTINGS_KEY[k];
+      if (sk && Object.prototype.toString.call(st[sk]) === '[object Array]')
+        st[sk].forEach(function (x) { x = String(x || '').trim(); if (x && vals.map(lc_).indexOf(lc_(x)) < 0) vals.push(x); });
+      vals.forEach(function (v, n) {
+        var row = new Array(width).fill('');
+        row[idx['List'] - 1] = k; row[idx['Value'] - 1] = v; row[idx['IsDefault'] - 1] = n === 0 ? 'TRUE' : '';
+        row[idx['Sort'] - 1] = (n + 1) * 10; row[idx['Active'] - 1] = 'TRUE';
+        row[idx['Updated'] - 1] = stamp; row[idx['By'] - 1] = 'setup';
+        out.push(row);
+      });
+    }
+    if (out.length) sh.getRange(2, 1, out.length, width).setValues(out);   // เขียนครั้งเดียว ไม่เขียนในลูป
+  } finally { if (mine) lock.releaseLock(); }
+}
+function lc_(x) { return String(x).toLowerCase(); }
+/** ตรวจค่าที่ผู้ใช้พิมพ์เพิ่ม: ตัดช่องว่าง/อักขระควบคุม · ยาวไม่เกิน 60 · ห้ามขึ้นต้นด้วย = + - @ (กันสูตรในชีท) */
+function cleanMasterValue_(list, v) {
+  var s = String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim();
+  if (MASTER_LISTS[list] && MASTER_LISTS[list].numeric) {
+    var n = num_(s, null);
+    return (n !== null && n > 0 && n <= 365 && Math.floor(n) === n) ? String(n) : '';
+  }
+  if (!s || s.length > 60 || /^[=+\-@]/.test(s)) return '';
+  return s;
+}
+/** ปุ่ม "อื่น ๆ (ระบุ)" — เพิ่มตัวเลือกใหม่เข้ารายการ (ซ้ำ = ใช้ของเดิม ไม่เพิ่มแถว) */
+function addMaster_(p, sess) {
+  var list = String(p.list || ''), def = MASTER_LISTS[list];
+  if (!def || def.add === 'none') return { ok:false, error:'LIST_LOCKED' };
+  if (def.add === 'internal' && !seesFullData_(sess)) return { ok:false, error:'ACCESS_DENIED', code:403 };
+  var v = cleanMasterValue_(list, p.value);
+  if (!v) return { ok:false, error:'BAD_VALUE' };
+  var sh = sheet_(SH.MASTER);
+  if (sh.getLastRow() < 2) seedMaster_(sh);
+  var rows = masterRows_(sh).filter(function (r) { return r.list === list; });
+  var same = rows.filter(function (r) { return lc_(r.value) === lc_(v); })[0];
+  if (same) {
+    if (!same.active) return { ok:false, error:'VALUE_HIDDEN', value:same.value };
+    return { ok:true, value:same.value, existed:true, master:getMaster_() };
+  }
+  var maxSort = rows.reduce(function (m, r) { return Math.max(m, r.sort < 9999 ? r.sort : 0); }, 0);
+  writeRow_(sh, headerIndex_(sh), null, { List:list, Value:v, IsDefault:'', Sort:maxSort + 10, Active:'TRUE', Updated:nowISO_(), By:sess.name });
+  logRow_('addMaster', list, '', sess.name, v);
+  return { ok:true, value:v, master:getMaster_() };
+}
+/** Admin: ตั้งค่าเริ่มต้น / ซ่อน / แสดง / เพิ่ม — แก้ทั้งแท็บในหน่วยความจำแล้วเขียนกลับครั้งเดียว */
+function saveMaster_(p, sess) {
+  var list = String(p.list || ''), op = String(p.op || ''), def = MASTER_LISTS[list];
+  if (!def) return { ok:false, error:'BAD_LIST' };
+  if (op === 'add') {
+    if (def.add === 'none') return { ok:false, error:'LIST_LOCKED' };
+    var r0 = addMaster_(p, sess);
+    if (r0.ok || r0.error !== 'VALUE_HIDDEN') return r0;
+    op = 'show'; p.value = r0.value;                              // เคยซ่อนไว้ → แสดงกลับ
+  }
+  if (['default', 'hide', 'show'].indexOf(op) < 0) return { ok:false, error:'BAD_OP' };
+  if (op === 'hide' && list === 'currency') return { ok:false, error:'LIST_LOCKED' };
+  var sh = sheet_(SH.MASTER), last = sh.getLastRow();
+  if (last < 2) return { ok:false, error:'NOT_FOUND' };
+  var idx = headerIndex_(sh), data = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+  var target = lc_(String(p.value == null ? '' : p.value).trim()), hit = false;
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i][idx['List'] - 1]).trim() !== list) continue;
+    var isIt = lc_(String(data[i][idx['Value'] - 1]).trim()) === target;
+    if (op === 'default') data[i][idx['IsDefault'] - 1] = isIt ? 'TRUE' : '';
+    if (isIt) {
+      hit = true;
+      if (op === 'hide') { data[i][idx['Active'] - 1] = 'FALSE'; data[i][idx['IsDefault'] - 1] = ''; }
+      if (op === 'show' || op === 'default') data[i][idx['Active'] - 1] = 'TRUE';
+      data[i][idx['Updated'] - 1] = nowISO_(); data[i][idx['By'] - 1] = sess.name;
+    }
+  }
+  if (!hit) return { ok:false, error:'NOT_FOUND' };
+  sh.getRange(2, 1, data.length, data[0].length).setValues(data);
+  logRow_('saveMaster', list, '', sess.name, op + ' ' + p.value);
+  return { ok:true, master:getMaster_() };
+}
+
 function setup() {
-  [SH.QUOTES, SH.PRODUCTS, SH.SETTINGS, SH.USERS, SH.LOG, SH.SESSIONS].forEach(function (n) { sheet_(n); });
+  [SH.QUOTES, SH.PRODUCTS, SH.SETTINGS, SH.USERS, SH.LOG, SH.SESSIONS, SH.MASTER].forEach(function (n) { sheet_(n); });
+  try { getMaster_(); } catch (e) {}      // v4.6: สร้างตัวเลือกตั้งต้นในแท็บ MasterData (ครั้งแรกเท่านั้น)
   migratePasswordHashes();   // v4.3: แปลง hash รหัสผ่านเดิมเป็น v2 (รันซ้ำได้ ไม่กระทบค่าที่แปลงแล้ว)
   logRow_('setup', '', '', Session.getActiveUser().getEmail() || '-', 'schema v4.2 (RBAC + Live Sync + Email login)');
   SpreadsheetApp.getActive().toast('ติดตั้ง/อัปเกรดแท็บเรียบร้อย (schema v4.2 · เพิ่มคอลัมน์ Email / Active ในแท็บ Users)', 'MGS Pricing', 8);

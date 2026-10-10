@@ -329,13 +329,6 @@
               "is_short": true,
               "text": {
                 "tag": "plain_text",
-                "content": "มูลค่า: US$128,450.50"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
                 "content": "รอบ: R2"
               }
             },
@@ -364,7 +357,7 @@
         }
       ]
     },
-    "webhookText": "✅ อนุมัติราคาครบแล้ว · รอปล่อยราคา · QT-IN-2610-007\nโครงการ: Thaibev Solar Rooftop 1MW\nลูกค้า: Thai Beverage PCL\nSales: BOSS\nมูลค่า: US$128,450.50\nรอบ: R2\nโดย: Chatraporn\nhttps://script.google.com/macros/s/TEST/exec?app=sales&doc=Q-DEMO"
+    "webhookText": "✅ อนุมัติราคาครบแล้ว · รอปล่อยราคา · QT-IN-2610-007\nโครงการ: Thaibev Solar Rooftop 1MW\nลูกค้า: Thai Beverage PCL\nSales: BOSS\nรอบ: R2\nโดย: Chatraporn\nhttps://script.google.com/macros/s/TEST/exec?app=sales&doc=Q-DEMO"
   },
   {
     "event": "QT_RETURNED",
@@ -518,13 +511,6 @@
               "is_short": true,
               "text": {
                 "tag": "plain_text",
-                "content": "มูลค่า: US$128,450.50"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
                 "content": "รอบ: R2"
               }
             },
@@ -534,6 +520,15 @@
                 "tag": "plain_text",
                 "content": "โดย: Chatraporn"
               }
+            }
+          ]
+        },
+        {
+          "tag": "note",
+          "elements": [
+            {
+              "tag": "plain_text",
+              "content": "ราคาอยู่ในแอป Sales — เห็นเฉพาะ Sales เจ้าของงานและผู้จัดการ"
             }
           ]
         },
@@ -553,7 +548,97 @@
         }
       ]
     },
-    "webhookText": "📤 ปล่อยราคาแล้ว · พร้อมเสนอลูกค้า · QT-IN-2610-007\nโครงการ: Thaibev Solar Rooftop 1MW\nลูกค้า: Thai Beverage PCL\nSales: BOSS\nมูลค่า: US$128,450.50\nรอบ: R2\nโดย: Chatraporn\nhttps://script.google.com/macros/s/TEST/exec?app=sales&doc=Q-DEMO"
+    "webhookText": "📤 ปล่อยราคาแล้ว · พร้อมเสนอลูกค้า · QT-IN-2610-007\nโครงการ: Thaibev Solar Rooftop 1MW\nลูกค้า: Thai Beverage PCL\nSales: BOSS\nรอบ: R2\nโดย: Chatraporn\nราคาอยู่ในแอป Sales — เห็นเฉพาะ Sales เจ้าของงานและผู้จัดการ\nhttps://script.google.com/macros/s/TEST/exec?app=sales&doc=Q-DEMO"
+  },
+  {
+    "event": "SR_SUBMITTED",
+    "target": "REQUESTS",
+    "title": "🆕 คำขอราคาใหม่เข้าคิว · SR-2610-003",
+    "botRequest": {
+      "url": "POST /open-apis/im/v1/messages?receive_id_type=chat_id",
+      "body": {
+        "receive_id": "oc_<LARK_CHAT_REQUESTS>",
+        "msg_type": "interactive",
+        "content": "JSON.stringify(card) — ดู card ด้านล่าง",
+        "uuid": "<Id ของแถวในแท็บ NotifyQueue>"
+      }
+    },
+    "card": {
+      "config": {
+        "wide_screen_mode": true
+      },
+      "header": {
+        "template": "orange",
+        "title": {
+          "tag": "plain_text",
+          "content": "🆕 คำขอราคาใหม่เข้าคิว · SR-2610-003"
+        }
+      },
+      "elements": [
+        {
+          "tag": "div",
+          "fields": [
+            {
+              "is_short": true,
+              "text": {
+                "tag": "plain_text",
+                "content": "โครงการ: Factory Rooftop"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "plain_text",
+                "content": "ลูกค้า: CP Group"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "plain_text",
+                "content": "Sales: BOSS"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "plain_text",
+                "content": "จำนวนรายการ: 4 รายการ"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "plain_text",
+                "content": "โดย: BOSS"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "plain_text",
+                "content": "ต้องการราคาภายใน: 2026-10-20"
+              }
+            }
+          ]
+        },
+        {
+          "tag": "action",
+          "actions": [
+            {
+              "tag": "button",
+              "type": "primary",
+              "text": {
+                "tag": "plain_text",
+                "content": "เปิดคำขอราคา"
+              },
+              "url": "https://script.google.com/macros/s/TEST/exec?doc=SR-DEMO"
+            }
+          ]
+        }
+      ]
+    },
+    "webhookText": "🆕 คำขอราคาใหม่เข้าคิว · SR-2610-003\nโครงการ: Factory Rooftop\nลูกค้า: CP Group\nSales: BOSS\nจำนวนรายการ: 4 รายการ\nโดย: BOSS\nต้องการราคาภายใน: 2026-10-20\nhttps://script.google.com/macros/s/TEST/exec?doc=SR-DEMO"
   },
   {
     "event": "SLA_BREACH",

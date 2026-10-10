@@ -1,5 +1,5 @@
 /*************************************************************
- * MGS PROJECT PRICING — LARK NOTIFICATIONS  (v4.7 · Phase 5)
+ * MGS PROJECT PRICING — LARK NOTIFICATIONS  (v4.9 · webhook แยกกลุ่ม + กลุ่มคำขอราคา)
  * ไฟล์แยกในโปรเจกต์ Apps Script เดียวกับ Code.gs (ไฟล์ → + → Script → ตั้งชื่อ "Lark")
  *
  * โครงสร้าง (สร้างข้อความ ↔ ส่ง แยกกันคนละชั้น)
@@ -24,12 +24,22 @@
  *   LARK_CHAT_APPROVERS  oc_xxx  กลุ่มผู้อนุมัติ (Procurement Mgr / BD Mgr / GM) — ต้องมีแต่ผู้จัดการ เพราะการ์ดมี %GP
  *   LARK_CHAT_RELEASE    oc_xxx  กลุ่ม/ผู้ปล่อยราคา (ไม่ตั้ง = ใช้กลุ่ม SALES)
  *   LARK_CHAT_SALES      oc_xxx  กลุ่มทีมขาย — การ์ดไม่มีต้นทุน/GP เด็ดขาด
- *   LARK_WEBHOOK_URL     (ทางเลือก) Custom Bot webhook — ใช้ส่ง "ข้อความธรรมดา" เท่านั้น เมื่อไม่มี App ID
- *   LARK_WEBHOOK_SECRET  (ทางเลือก) secret ของ webhook (ลายเซ็น)
+ *   LARK_CHAT_REQUESTS   oc_xxx  (ทางเลือก) กลุ่มคำขอราคา Sales + Sourcing
+ *
+ *   — หรือใช้ Custom Bot webhook แยกทีละกลุ่ม (ข้อความธรรมดา ไม่มีการ์ด) — v4.9 —
+ *   LARK_WEBHOOK_SOURCING   / LARK_WEBHOOK_SOURCING_SECRET    กลุ่มทีม Sourcing            (ภายใน)
+ *   LARK_WEBHOOK_APPROVERS  / LARK_WEBHOOK_APPROVERS_SECRET   กลุ่มผู้อนุมัติ               (ภายใน — มี %GP)
+ *   LARK_WEBHOOK_RELEASE    / LARK_WEBHOOK_RELEASE_SECRET     ผู้ปล่อยราคา (ไม่ตั้ง = ใช้ของ SALES)  (มี Sales)
+ *   LARK_WEBHOOK_SALES      / LARK_WEBHOOK_SALES_SECRET       กลุ่มทีมขาย                  (มี Sales)
+ *   LARK_WEBHOOK_REQUESTS   / LARK_WEBHOOK_REQUESTS_SECRET    กลุ่มคำขอราคา Sales+Sourcing (มี Sales)
+ *   LARK_WEBHOOK_URL / LARK_WEBHOOK_SECRET  ตัวเดิม (v4.7) — ใช้แทนได้เฉพาะกลุ่ม "ภายใน" (Sourcing / ผู้อนุมัติ) เท่านั้น
+ *
+ *   กติกาความปลอดภัย (fail-closed): กลุ่มที่มี Sales ไม่ได้รับยอดเงิน/%GP เลย · ถ้าปลายทางของกลุ่มภายใน
+ *   ตั้งเป็นกลุ่มเดียวกับกลุ่มที่มี Sales ข้อความของกลุ่มภายในจะถูกระงับ (SKIPPED) แม้ตั้งค่าผิด
  *   APP_URL              URL /exec ของ Web App (ไม่ตั้ง = ใช้ ScriptApp.getService().getUrl())
  *************************************************************/
 
-var LARK_VERSION = '4.7';
+var LARK_VERSION = '4.9';
 
 /* ============================================================ 1) EVENT TABLE */
 /**
@@ -39,7 +49,7 @@ var LARK_VERSION = '4.7';
  * gp       = แสดง %GP ในการ์ดได้ไหม (เฉพาะกลุ่มผู้อนุมัติ)
  */
 var LARK_EVENTS = {
-  SR_SUBMITTED:   { th:'คำขอราคาใหม่เข้าคิว',        icon:'🆕', to:['SOURCING'],             dedupMin:24 * 60, color:'orange',
+  SR_SUBMITTED:   { th:'คำขอราคาใหม่เข้าคิว',        icon:'🆕', to:['SOURCING', 'REQUESTS'],             dedupMin:24 * 60, color:'orange',
                     when:'Sales ส่งคำขอราคา (SR) ใหม่ หรือส่งร่างที่ค้างไว้',  button:'เปิดคำขอราคา' },
   QT_SUBMITTED:   { th:'ใบเสนอราคารออนุมัติ',         icon:'🧾', to:['APPROVERS'],            dedupMin:120,     color:'yellow', gp:true,
                     when:'Sourcing กด “บันทึก & ส่งขออนุมัติ”',               button:'เปิดเพื่ออนุมัติ' },
@@ -47,19 +57,26 @@ var LARK_EVENTS = {
                     when:'ผู้อนุมัติครบทุกฝ่าย (หรือ GM อนุมัติแทน)',          button:'เปิดใบเสนอราคา' },
   QT_RETURNED:    { th:'ไม่อนุมัติ · ส่งกลับแก้ราคา',   icon:'↩️', to:['SOURCING'],             dedupMin:120,     color:'red',
                     when:'ผู้จัดการส่งใบที่รออนุมัติกลับไปแก้ (สถานะกลับเป็นกำลังจัดทำราคา)', button:'เปิดใบเสนอราคา' },
-  PRICE_RELEASED: { th:'ปล่อยราคาแล้ว · พร้อมเสนอลูกค้า', icon:'📤', to:['SALES'],                dedupMin:24 * 60, color:'blue',
+  PRICE_RELEASED: { th:'ปล่อยราคาแล้ว · พร้อมเสนอลูกค้า', icon:'📤', to:['SALES', 'REQUESTS'],                dedupMin:24 * 60, color:'blue',
                     when:'ผู้ปล่อยราคากดปล่อยราคาให้ Sales เจ้าของงาน',        button:'เปิดในแอป Sales' },
   SLA_BREACH:     { th:'งานเกินกำหนด (SLA)',          icon:'⛔', to:'owner',                  dedupMin:24 * 60, color:'red',
                     when:'ตรวจทุกชั่วโมง: งานที่รอเกินจำนวนวันทำการที่กำหนด (รวมหลายงานเป็นการ์ดเดียวต่อกลุ่ม)', button:'เปิดระบบ' },
   DAILY_DIGEST:   { th:'สรุปงานค้างประจำวัน',          icon:'📋', to:['SOURCING', 'APPROVERS', 'RELEASE', 'SALES'], dedupMin:20 * 60, color:'indigo',
                     when:'ทุกเช้าวันทำการ 08:30 — หนึ่งการ์ดต่อกลุ่มต่อวัน (ไม่มีงานค้าง = ไม่ส่ง)', button:'เปิดระบบ' }
 };
+/**
+ * กลุ่มผู้รับ · prop = chat_id (Bot) · hook = webhook ของกลุ่มนั้น (+ hook + '_SECRET')
+ * audience: internal = มีแต่ทีมภายใน (เห็นยอดเงินได้) · sales = มี Sales อยู่ด้วย → ห้ามมียอดเงิน/%GP ในข้อความ
+ * optional: ไม่ได้ตั้งปลายทาง = ไม่สร้างรายการในคิวเลย (ไม่รก)
+ */
 var LARK_GROUPS = {
-  SOURCING:  { th:'ทีม Sourcing',   prop:'LARK_CHAT_SOURCING' },
-  APPROVERS: { th:'ผู้อนุมัติราคา',   prop:'LARK_CHAT_APPROVERS' },
-  RELEASE:   { th:'ผู้ปล่อยราคา',     prop:'LARK_CHAT_RELEASE', fallback:'SALES' },
-  SALES:     { th:'ทีมขาย',          prop:'LARK_CHAT_SALES' }
+  SOURCING:  { th:'ทีม Sourcing',   prop:'LARK_CHAT_SOURCING',  hook:'LARK_WEBHOOK_SOURCING',  audience:'internal' },
+  APPROVERS: { th:'ผู้อนุมัติราคา',   prop:'LARK_CHAT_APPROVERS', hook:'LARK_WEBHOOK_APPROVERS', audience:'internal' },
+  RELEASE:   { th:'ผู้ปล่อยราคา',     prop:'LARK_CHAT_RELEASE',   hook:'LARK_WEBHOOK_RELEASE',   audience:'sales', fallback:'SALES' },
+  SALES:     { th:'ทีมขาย',          prop:'LARK_CHAT_SALES',     hook:'LARK_WEBHOOK_SALES',     audience:'sales' },
+  REQUESTS:  { th:'กลุ่มคำขอราคา',    prop:'LARK_CHAT_REQUESTS',  hook:'LARK_WEBHOOK_REQUESTS',  audience:'sales', optional:true }
 };
+var LARK_HOOK_RE = /^https:\/\/open\.(larksuite\.com|feishu\.cn)\/open-apis\/bot\/v2\/hook\/[A-Za-z0-9-]+$/;
 /* ผู้รับผิดชอบงานตอนนี้ (followState_ ใน Code.gs) → กลุ่ม Lark */
 var LARK_OWNER_GROUP = { SOURCING:'SOURCING', REPAIR:'SOURCING', MANAGEMENT:'APPROVERS', RELEASER:'RELEASE', SALES:'SALES' };
 var LARK_RETRY_MIN = [1, 5, 15, 60, 180];        // ระยะรอก่อนลองใหม่ (นาที) · ครบแล้วยังไม่ได้ = FAILED
@@ -89,6 +106,33 @@ function larkChatOf_(group, props) {
   return v;
 }
 function larkMask_(s) { s = String(s || ''); return s.length <= 6 ? (s ? '***' : '') : s.slice(0, 4) + '…' + s.slice(-2); }
+function larkAudience_(group) { return (LARK_GROUPS[group] || {}).audience === 'internal' ? 'internal' : 'sales'; }
+/**
+ * ปลายทางจริงของกลุ่ม: Bot + chat_id (การ์ด) ก่อน → webhook ของกลุ่ม → webhook ของกลุ่มสำรอง (RELEASE → SALES)
+ * → webhook ตัวเดิม LARK_WEBHOOK_URL (เฉพาะกลุ่มภายใน) · ไม่มี = null
+ * @return {{kind:'chat'|'hook', id?:string, url?:string, secret?:string, key:string}|null}
+ */
+function larkDestOf_(group, props) {
+  var g = LARK_GROUPS[group]; if (!g) return null;
+  var chat = larkChatOf_(group, props);
+  if (props.LARK_APP_ID && props.LARK_APP_SECRET && chat) return { kind:'chat', id:chat, key:'chat:' + chat };
+  var url = String(props[g.hook] || '').trim(), secret = String(props[g.hook + '_SECRET'] || '').trim();
+  if (!url && g.fallback) { var fg = LARK_GROUPS[g.fallback]; url = String(props[fg.hook] || '').trim(); secret = String(props[fg.hook + '_SECRET'] || '').trim(); }
+  if (!url && g.audience === 'internal') { url = String(props.LARK_WEBHOOK_URL || '').trim(); secret = String(props.LARK_WEBHOOK_SECRET || '').trim(); }
+  return url ? { kind:'hook', url:url, secret:secret, key:'hook:' + url } : null;
+}
+/** กลุ่มภายในที่ปลายทางเป็นกลุ่มเดียวกับกลุ่มที่มี Sales → คืนชื่อกลุ่มนั้น (ข้อความต้องถูกระงับ) · ไม่ชน = '' */
+function larkSharedWithSales_(group, props) {
+  if (larkAudience_(group) !== 'internal') return '';
+  var d = larkDestOf_(group, props); if (!d) return '';
+  var hit = [];
+  for (var g in LARK_GROUPS) {
+    if (larkAudience_(g) !== 'sales') continue;
+    var o = larkDestOf_(g, props);
+    if (o && o.key === d.key) hit.push(LARK_GROUPS[g].th);
+  }
+  return hit.join(' / ');
+}
 /**
  * ตรวจการตั้งค่าตอนเริ่มระบบ (setup / ?diag=1 / ก่อนส่งทุกรอบ) — ไม่คืนค่า secret
  * @return {{mode:string, ready:boolean, problems:string[], warnings:string[], targets:Object, appUrl:string, via:string}}
@@ -101,19 +145,25 @@ function larkValidateConfig_(props) {
   var domain = String(props.LARK_DOMAIN || 'https://open.larksuite.com');
   if (!/^https:\/\/open\.(larksuite\.com|feishu\.cn)$/.test(domain)) problems.push('LARK_DOMAIN ต้องเป็น https://open.larksuite.com หรือ https://open.feishu.cn');
   var hasApp = !!(props.LARK_APP_ID && props.LARK_APP_SECRET);
-  var hook = String(props.LARK_WEBHOOK_URL || '');
+  var hook = String(props.LARK_WEBHOOK_URL || ''), anyHook = !!hook;
+  for (var g0 in LARK_GROUPS) if (String(props[LARK_GROUPS[g0].hook] || '').trim()) anyHook = true;
   if (props.LARK_APP_ID && !/^cli_[A-Za-z0-9]+$/.test(String(props.LARK_APP_ID))) problems.push('LARK_APP_ID ควรขึ้นต้นด้วย cli_');
   if (!!props.LARK_APP_ID !== !!props.LARK_APP_SECRET) problems.push('ต้องตั้ง LARK_APP_ID และ LARK_APP_SECRET คู่กัน');
-  if (hook && !/^https:\/\/open\.(larksuite\.com|feishu\.cn)\/open-apis\/bot\/v2\/hook\/[A-Za-z0-9-]+$/.test(hook)) problems.push('LARK_WEBHOOK_URL ไม่ใช่รูปแบบ webhook ของ Lark');
+  if (hook && !LARK_HOOK_RE.test(hook)) problems.push('LARK_WEBHOOK_URL ไม่ใช่รูปแบบ webhook ของ Lark');
   for (var g in LARK_GROUPS) {
-    var chat = larkChatOf_(g, props);
-    targets[g] = chat ? larkMask_(chat) : '';
-    if (chat && !/^oc_[A-Za-z0-9]+$/.test(chat)) problems.push(LARK_GROUPS[g].prop + ' ควรเป็น chat_id ที่ขึ้นต้นด้วย oc_');
-    if (!chat && hasApp) warnings.push('ยังไม่ได้ตั้ง ' + LARK_GROUPS[g].prop + ' — การแจ้งเตือนถึง ' + LARK_GROUPS[g].th + ' จะถูกข้าม (SKIPPED)');
+    var G = LARK_GROUPS[g], chat = larkChatOf_(g, props), gh = String(props[G.hook] || '').trim();
+    if (gh && !LARK_HOOK_RE.test(gh)) problems.push(G.hook + ' ไม่ใช่รูปแบบ webhook ของ Lark');
+    if (chat && !/^oc_[A-Za-z0-9]+$/.test(chat)) problems.push(G.prop + ' ควรเป็น chat_id ที่ขึ้นต้นด้วย oc_');
+    var d = larkDestOf_(g, props);
+    targets[g] = d ? (d.kind === 'chat' ? 'chat ' + larkMask_(d.id) : 'webhook …' + d.url.slice(-6)) : '';
+    if (!d && !G.optional && (hasApp || anyHook))
+      warnings.push('ยังไม่ได้ตั้งปลายทางของ ' + G.th + ' (' + G.prop + ' หรือ ' + G.hook + ') — การแจ้งเตือนถึงกลุ่มนี้จะถูกข้าม (SKIPPED)');
+    var shared = larkSharedWithSales_(g, props);
+    if (shared) warnings.push('ปลายทางของ ' + G.th + ' เป็นกลุ่มเดียวกับ ' + shared + ' ซึ่งมี Sales — ข้อความของ ' + G.th + ' (อาจมียอดเงิน/%GP) จะถูกระงับทั้งหมด');
   }
-  var via = hasApp ? 'bot' : (hook ? 'webhook' : 'none');
-  if (via === 'none') (mode === 'live' ? problems : warnings).push('ยังไม่ได้ตั้ง LARK_APP_ID/SECRET หรือ LARK_WEBHOOK_URL — ส่งจริงไม่ได้');
-  if (via === 'webhook') warnings.push('ใช้ webhook = ส่งได้แค่ข้อความธรรมดาเข้ากลุ่มเดียว (ไม่มีการ์ด/ปุ่ม) — แนะนำตั้ง Bot App');
+  var via = hasApp ? 'bot' : (anyHook ? 'webhook' : 'none');
+  if (via === 'none') (mode === 'live' ? problems : warnings).push('ยังไม่ได้ตั้ง Bot (LARK_APP_ID/SECRET) หรือ webhook ของกลุ่มใดเลย — ส่งจริงไม่ได้');
+  if (via === 'webhook') warnings.push('ใช้ webhook = ส่งได้แค่ข้อความธรรมดา (ไม่มีการ์ดสี/ปุ่ม แต่มีลิงก์เปิดเอกสารท้ายข้อความ)');
   var appUrl = larkAppUrl_(props);
   if (!appUrl) warnings.push('ยังไม่รู้ URL ของ Web App — ปุ่ม “เปิดเอกสาร” ในการ์ดจะไม่มีลิงก์ (ตั้ง APP_URL)');
   return { mode:mode, ready:mode === 'live' && problems.length === 0 && via !== 'none', problems:problems, warnings:warnings,
@@ -133,8 +183,10 @@ function larkMoney_(n, cur) {
 }
 function larkLink_(appUrl, doc, target) {
   if (!appUrl) return '';
+  var sep = appUrl.indexOf('?') >= 0 ? '&' : '?';
+  if (target === 'REQUESTS') return doc ? appUrl + sep + 'doc=' + encodeURIComponent(doc) : appUrl;   // กลุ่มผสม: ไม่ระบุแอป ให้ระบบเลือกตามอีเมลผู้กด
   var app = (target === 'SALES' || target === 'RELEASE') ? 'sales' : 'index';
-  return appUrl + (appUrl.indexOf('?') >= 0 ? '&' : '?') + 'app=' + app + (doc ? '&doc=' + encodeURIComponent(doc) : '');
+  return appUrl + sep + 'app=' + app + (doc ? '&doc=' + encodeURIComponent(doc) : '');
 }
 /**
  * สร้างข้อความของ event หนึ่งรายการสำหรับกลุ่มผู้รับหนึ่งกลุ่ม
@@ -148,6 +200,7 @@ function larkBuild_(event, info, target, appUrl) {
   var ev = LARK_EVENTS[event]; if (!ev) throw new Error('unknown event ' + event);
   info = info || {};
   var showGp = !!ev.gp && target === 'APPROVERS';          // price gate: %GP เฉพาะกลุ่มผู้อนุมัติ · ต้นทุนไม่ออกไปที่ไหนเลย
+  var showMoney = larkAudience_(target) === 'internal';      // v4.9: กลุ่มที่มี Sales ไม่ได้รับยอดเงินเลย (Sales แต่ละคนเห็นเฉพาะงานตัวเองในแอป)
   var title = ev.icon + ' ' + ev.th + (info.docNo ? ' · ' + larkSafe_(info.docNo, 40) : '');
   var fields = [], lines = [];
   var add = function (label, value) {
@@ -182,12 +235,13 @@ function larkBuild_(event, info, target, appUrl) {
     add('ลูกค้า', info.customer);
     add('Sales', info.sales);
     if (event === 'SR_SUBMITTED') add('จำนวนรายการ', info.lines ? info.lines + ' รายการ' : '');
-    else add('มูลค่า', info.value != null && info.value !== '' ? larkMoney_(info.value, info.currency) : '');
+    else if (showMoney) add('มูลค่า', info.value != null && info.value !== '' ? larkMoney_(info.value, info.currency) : '');
     if (showGp && info.gp != null && info.gp !== '') add('%GP', (Math.round(Number(info.gp) * 10) / 10) + '%');
     if (info.round > 1) add('รอบ', 'R' + info.round);
     add('โดย', info.by);
     if (info.needBy) add('ต้องการราคาภายใน', info.needBy);
     elements.push({ tag:'div', fields:fields });
+    if (!showMoney && event === 'PRICE_RELEASED' && !info.note) info = Object.assign({}, info, { note:'ราคาอยู่ในแอป Sales — เห็นเฉพาะ Sales เจ้าของงานและผู้จัดการ' });
     if (info.note) { elements.push({ tag:'note', elements:[{ tag:'plain_text', content:larkSafe_(info.note, 200) }] }); lines.push(larkSafe_(info.note, 200)); }
   }
   var url = larkLink_(appUrl, (event === 'SLA_BREACH' || event === 'DAILY_DIGEST') ? '' : info.id, target);
@@ -247,21 +301,27 @@ function larkEnqueueMany_(items) {
     var appUrl = larkAppUrl_(props), day = Utilities.formatDate(new Date(now), TZ, 'yyyy-MM-dd'), rows = [];
     items.forEach(function (it) {
       var ev = LARK_EVENTS[it.event]; if (!ev) return;
-      var targets = it.targets || (ev.to === 'owner' ? [] : ev.to);
+      var targets = it.targets || (ev.to === 'owner' ? [] : ev.to), destSeen = {};
       targets.forEach(function (target) {
+        var G = LARK_GROUPS[target]; if (!G) return;
+        var dest = larkDestOf_(target, props);
+        if (!dest && G.optional) return;                                   // กลุ่มเสริมที่ไม่ได้ตั้ง = ไม่สร้างรายการ
+        var shared = larkSharedWithSales_(target, props);
+        if (dest && !shared && destSeen[dest.key]) { out.deduped++; return; }  // หลายกลุ่มชี้ไปกลุ่ม Lark เดียวกัน → ส่งครั้งเดียว
         var key = larkDedupKey_(it.event, it.info || {}, target, day);
         if (recent[key] && now - recent[key] < ev.dedupMin * 60000) { out.deduped++; return; }
         recent[key] = now;
         var msg = larkBuild_(it.event, it.info || {}, target, appUrl);
-        var chat = larkChatOf_(target, props);
         var r = new Array(width).fill('');
         var set = function (h, v) { if (idx[h]) r[idx[h] - 1] = v; };
         set('Id', Utilities.getUuid()); set('Event', it.event); set('DocId', (it.info && it.info.id) || '');
         set('DedupKey', key); set('Target', target); set('Title', msg.title);
         set('Payload', JSON.stringify({ card:msg.card, text:msg.text }).slice(0, CELL_LIMIT));
         set('Status', 'PENDING'); set('Tries', 0); set('NextAt', stamp); set('CreatedAt', stamp);
-        if (!chat && mode === 'live' && !props.LARK_WEBHOOK_URL) { set('Status', 'SKIPPED'); set('LastError', 'ยังไม่ได้ตั้ง ' + LARK_GROUPS[target].prop); out.skipped++; }
-        else { out.queued++; if (!chat) set('LastError', 'ยังไม่ได้ตั้ง ' + LARK_GROUPS[target].prop + (mode === 'dryrun' ? ' (dry-run: ไม่กระทบ)' : '')); }
+        var missing = 'ยังไม่ได้ตั้งปลายทาง ' + G.prop + ' / ' + G.hook;
+        if (shared) { set('Status', 'SKIPPED'); set('LastError', 'ระงับ: ปลายทางของ ' + G.th + ' เป็นกลุ่มเดียวกับ ' + shared + ' ซึ่งมี Sales (ข้อความนี้อาจมียอดเงิน/%GP)'); out.skipped++; }
+        else if (!dest && mode === 'live') { set('Status', 'SKIPPED'); set('LastError', missing); out.skipped++; }
+        else { out.queued++; if (!dest) set('LastError', missing + ' (dry-run: ไม่กระทบ)'); else destSeen[dest.key] = 1; }
         rows.push(r);
       });
     });
@@ -326,18 +386,20 @@ function larkSign_(timestamp, secret) {
 /** แปลงรายการในคิว → request ของ UrlFetchApp (ยังไม่ยิง) */
 function larkRequestFor_(item, props, token) {
   var domain = String(props.LARK_DOMAIN || 'https://open.larksuite.com'), p = JSON.parse(item.payload || '{}');
-  var chat = larkChatOf_(item.target, props);
-  if (token && chat) {
+  var shared = larkSharedWithSales_(item.target, props);   // ตรวจซ้ำตอนส่ง เผื่อตั้งค่าเปลี่ยนหลังเข้าคิว (fail-closed)
+  if (shared) return { skip:'ระงับ: ปลายทางของ ' + ((LARK_GROUPS[item.target] || {}).th || item.target) + ' เป็นกลุ่มเดียวกับ ' + shared + ' ซึ่งมี Sales' };
+  var dest = larkDestOf_(item.target, props);
+  if (!dest) return null;
+  if (dest.kind === 'chat') {
+    if (!token) return null;
     return { url:domain + '/open-apis/im/v1/messages?receive_id_type=chat_id', method:'post', muteHttpExceptions:true,
              contentType:'application/json; charset=utf-8', headers:{ Authorization:'Bearer ' + token },
-             payload:JSON.stringify({ receive_id:chat, msg_type:'interactive', content:JSON.stringify(p.card), uuid:item.id }) };
+             payload:JSON.stringify({ receive_id:dest.id, msg_type:'interactive', content:JSON.stringify(p.card), uuid:item.id }) };
   }
-  if (props.LARK_WEBHOOK_URL) {                            // webhook = ข้อความธรรมดาเท่านั้น
-    var body = { msg_type:'text', content:{ text:'[' + (LARK_GROUPS[item.target] ? LARK_GROUPS[item.target].th : item.target) + '] ' + p.text } };
-    if (props.LARK_WEBHOOK_SECRET) { var ts = String(Math.floor(Date.now() / 1000)); body.timestamp = ts; body.sign = larkSign_(ts, props.LARK_WEBHOOK_SECRET); }
-    return { url:props.LARK_WEBHOOK_URL, method:'post', muteHttpExceptions:true, contentType:'application/json; charset=utf-8', payload:JSON.stringify(body) };
-  }
-  return null;
+  // webhook = ข้อความธรรมดาเท่านั้น · ลายเซ็นด้วย secret ของกลุ่มนั้น
+  var body = { msg_type:'text', content:{ text:'[' + (LARK_GROUPS[item.target] ? LARK_GROUPS[item.target].th : item.target) + '] ' + p.text } };
+  if (dest.secret) { var ts = String(Math.floor(Date.now() / 1000)); body.timestamp = ts; body.sign = larkSign_(ts, dest.secret); }
+  return { url:dest.url, method:'post', muteHttpExceptions:true, contentType:'application/json; charset=utf-8', payload:JSON.stringify(body) };
 }
 /**
  * ส่งรายการที่ถึงเวลาในคิว (trigger ทุก 5 นาที) — dryrun = ไม่ยิงออก แค่เปลี่ยนสถานะเป็น DRYRUN
@@ -377,7 +439,8 @@ function larkFlush() {
       if (token !== null) {
         picked.forEach(function (it, k) {
           var rq = larkRequestFor_(it, props, token);
-          if (rq) { reqs.push(rq); map.push(k); } else outcome[k] = { status:'SKIPPED', err:'ไม่มีปลายทางของกลุ่ม ' + it.target };
+          if (rq && rq.skip) outcome[k] = { status:'SKIPPED', err:rq.skip };
+          else if (rq) { reqs.push(rq); map.push(k); } else outcome[k] = { status:'SKIPPED', err:'ไม่มีปลายทางของกลุ่ม ' + it.target };
         });
         var resps = [];
         try { resps = reqs.length ? UrlFetchApp.fetchAll(reqs) : []; }                // HTTP ครั้งเดียวทั้งชุด
@@ -520,7 +583,7 @@ function larkDryRunDemo() {
   var demo = [
     ['SR_SUBMITTED', sr, 'SOURCING'], ['QT_SUBMITTED', qt, 'APPROVERS'], ['QT_APPROVED', qt, 'SOURCING'], ['QT_APPROVED', qt, 'RELEASE'],
     ['QT_RETURNED', Object.assign({}, qt, { note:'ส่งกลับให้ Sourcing แก้ราคา — ต้องขออนุมัติใหม่ทั้งสองฝ่าย' }), 'SOURCING'],
-    ['PRICE_RELEASED', qt, 'SALES'], ['SLA_BREACH', { items:items.slice(0, 1) }, 'APPROVERS'],
+    ['PRICE_RELEASED', qt, 'SALES'], ['SR_SUBMITTED', sr, 'REQUESTS'], ['SLA_BREACH', { items:items.slice(0, 1) }, 'APPROVERS'],
     ['DAILY_DIGEST', { items:items, counts:{ total:2, over:1, watch:1 } }, 'APPROVERS']
   ];
   demo.forEach(function (d) {

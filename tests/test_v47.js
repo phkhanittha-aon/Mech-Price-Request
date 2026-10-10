@@ -42,7 +42,7 @@ ok('กลุ่มที่ยังไม่ตั้ง chat → เตือ
 ok('RELEASE ไม่ตั้ง = ใช้กลุ่ม SALES', W.ctx.larkChatOf_('RELEASE', W.props) === 'oc_sales1');
 ok('setup() บันทึกผลตรวจการตั้งค่าใน Log', W.sheets['Log'].rows.some(r => /lark-config/.test(r.join(' '))));
 const dg = W.ctx.diagHtml_();
-ok('?diag=1 แสดงสถานะ Lark (โหมด + ปัญหา) โดยไม่มี secret', /Lark \(Lark\.gs v4\.7\)/.test(dg) && /โหมด <b>live<\/b>/.test(dg) && !dg.includes('SuperSecretValue123'));
+ok('?diag=1 แสดงสถานะ Lark (โหมด + ปัญหา) โดยไม่มี secret', dg.includes('Lark (Lark.gs v' + W.ctx.LARK_VERSION + ')') && /โหมด <b>live<\/b>/.test(dg) && !dg.includes('SuperSecretValue123'));
 
 /* ------------------------------------------------------------------ 2) จุดเชื่อม + กันซ้ำ */
 console.log('== 2) event จากการทำงานจริง (โหมด dryrun) ==');
@@ -77,7 +77,8 @@ r = W.post({ token: W.T.gm, action: 'release', id: 'Q1' }); q = W.Q();
 const rel = q.find(x => x.Event === 'PRICE_RELEASED');
 ok('ปล่อยราคา → PRICE_RELEASED ถึงทีมขาย ปุ่มเปิดในแอป Sales', r.ok && rel && rel.Target === 'SALES' && /app=sales&doc=Q1/.test(rel.Payload), rel);
 ok('Price gate: การ์ดทีมขายไม่มี %GP / ต้นทุน / กำไร', !/GP|ต้นทุน|กำไร|220,000|50,000|18\.5/.test(rel.Payload), rel.Payload);
-ok('การ์ดทีมขายใช้ยอดฉบับ Sales (฿270,000.00)', /฿270,000\.00/.test(rel.Payload));
+// v4.9: เปลี่ยนโดยตั้งใจ — กลุ่มที่มี Sales ไม่ได้รับยอดเงินเลย (Sales แต่ละคนเห็นเฉพาะงานตัวเองในแอป) เดิมเทสต์นี้คาด ฿270,000.00
+ok('การ์ดทีมขายไม่มียอดเงิน (v4.9) และบอกให้เปิดดูราคาในแอป Sales', !/270,000|฿|US\$/.test(rel.Payload) && /ราคาอยู่ในแอป Sales/.test(rel.Payload), rel.Payload);
 ok('ธุรกรรมหลักไม่ยิง HTTP เลย (แค่เข้าคิว)', W.fetchLog.length === 0, W.fetchLog.length);
 
 /* ------------------------------------------------------------------ 3) ส่งไม่สำเร็จต้องไม่ทำให้ธุรกรรมหลักล้ม */
@@ -175,12 +176,57 @@ ok('trigger ส่ง event object (ไม่มี nowMs) → ใช้เว�
 W.ctx.larkInstallTriggers(); W.ctx.larkInstallTriggers();
 ok('ติดตั้ง trigger ซ้ำได้ ไม่ซ้อน (3 ตัว)', W.triggers.length === 3 && W.triggers.map(t => t.getHandlerFunction()).sort().join() === 'larkDailyDigest,larkFlush,larkSlaScan');
 const demo = W.ctx.larkDryRunDemo();
-ok('larkDryRunDemo(): ตัวอย่างครบทุก event ไม่เขียนชีท ไม่ยิง HTTP', demo.length === 8 && new Set(demo.map(d => d.event)).size === 7 && W.fetchLog.length === 0);
+ok('larkDryRunDemo(): ตัวอย่างครบทุก event ไม่เขียนชีท ไม่ยิง HTTP', demo.length === 9 && new Set(demo.map(d => d.event)).size === 7 && demo.some(d => d.target === 'REQUESTS')   /* v4.9: เพิ่มตัวอย่างกลุ่มคำขอราคา (เดิม 8) */ && W.fetchLog.length === 0);
 ok('NotifyQueue เป็นแท็บใหม่ — header ชีทเดิมไม่เปลี่ยน', JSON.stringify(W.ctx.HEADERS.NotifyQueue) === JSON.stringify(['Id','Event','DocId','DedupKey','Target','Title','Payload','Status','Tries','NextAt','CreatedAt','SentAt','LastError']) &&
   JSON.stringify(W.ctx.HEADERS.Quotations.slice(0, 3)) === '["Id","DocType","DocNo"]' && W.ctx.HEADERS.Quotations.length === 35);
 const larkSrc = fs.readFileSync(DIR + '/Lark.gs', 'utf8');
 ok('ไม่มี secret/chat id ฝังในโค้ด', !/cli_[A-Za-z0-9]{6,}|oc_[A-Za-z0-9]{6,}|hook\/[A-Za-z0-9-]{8,}/.test(larkSrc));
 ok('HTTP ใช้ fetchAll ทั้งชุด (ไม่มี UrlFetchApp.fetch ในลูปส่งข้อความ)', (larkSrc.match(/UrlFetchApp\.fetch\(/g) || []).length === 1 && /UrlFetchApp\.fetchAll\(/.test(larkSrc));
+
+/* ------------------------------------------------------------------ 9) v4.9: webhook แยกกลุ่ม + กลุ่มคำขอราคา */
+console.log('== 9) webhook แยกกลุ่ม / กลุ่มคำขอราคา / fail-closed ==');
+const HK = n => 'https://open.larksuite.com/open-apis/bot/v2/hook/' + n;
+const hookCalls = (w, url) => w.fetchLog.filter(x => x.url === url).map(x => JSON.parse(x.o.payload));
+// (ก) ทุกกลุ่มมี webhook ของตัวเอง
+let G = world();
+Object.assign(G.props, { LARK_MODE: 'live', LARK_WEBHOOK_SOURCING: HK('src-1'), LARK_WEBHOOK_SOURCING_SECRET: 'ssrc', LARK_WEBHOOK_APPROVERS: HK('apv-1'), LARK_WEBHOOK_APPROVERS_SECRET: 'sapv',
+  LARK_WEBHOOK_SALES: HK('sales-1'), LARK_WEBHOOK_SALES_SECRET: 'ssales', LARK_WEBHOOK_REQUESTS: HK('req-1'), LARK_WEBHOOK_REQUESTS_SECRET: 'sreq' });
+ok('ตรวจค่า: webhook แยกกลุ่มครบ ไม่มีปัญหา · ช่องทาง = webhook', (c => c.problems.length === 0 && c.via === 'webhook')(G.ctx.larkValidateConfig_()), G.ctx.larkValidateConfig_());
+G.post({ token: G.T.boss, action: 'saveSR', id: 'SRG', status: 'Submitted', detail: JSON.stringify({ status: 'Submitted', header: { title: 'Req G', customer: 'PTT' }, lines: [{ desc: 'x' }] }) });
+G.saveQT('G1', 'Submitted'); G.post({ token: G.T.pm, action: 'approve', id: 'G1' }); G.post({ token: G.T.bd, action: 'approve', id: 'G1' }); G.post({ token: G.T.gm, action: 'release', id: 'G1' });
+G.ctx.larkFlush();
+const apv = hookCalls(G, HK('apv-1')), req = hookCalls(G, HK('req-1')), sal = hookCalls(G, HK('sales-1')), src = hookCalls(G, HK('src-1'));
+ok('ใบรออนุมัติ (มี %GP) ไปกลุ่มผู้อนุมัติเท่านั้น', apv.length === 1 && /%GP/.test(apv[0].content.text) && ![...req, ...sal, ...src].some(b => /%GP/.test(b.content.text)), apv.map(b => b.content.text));
+ok('SR ใหม่ → กลุ่ม Sourcing และกลุ่มคำขอราคา', src.some(b => /คำขอราคาใหม่/.test(b.content.text)) && req.some(b => /คำขอราคาใหม่/.test(b.content.text)));
+ok('ปล่อยราคา → กลุ่มทีมขาย และกลุ่มคำขอราคา (ไม่มียอดเงิน)', [sal, req].every(l => l.some(b => /ปล่อยราคาแล้ว/.test(b.content.text) && !/฿|270,000/.test(b.content.text))));
+ok('อนุมัติครบ → ผู้ปล่อยราคาใช้ webhook ของทีมขาย (ไม่มีกลุ่มของตัวเอง) และไม่มียอดเงิน', sal.some(b => /อนุมัติราคาครบแล้ว/.test(b.content.text) && !/฿|270,000/.test(b.content.text)));
+ok('กลุ่มคำขอราคาไม่ได้รับข้อความภายใน (อนุมัติ / ไม่อนุมัติ / มียอดเงิน)', !req.some(b => /รออนุมัติ|อนุมัติราคาครบ|ส่งกลับแก้|฿|%GP/.test(b.content.text)), req.map(b => b.content.text.split('\n')[0]));
+const sig = b => crypto.createHmac('sha256', b.timestamp + '\n' + (b === apv[0] ? 'sapv' : '')).update('').digest('base64');
+ok('แต่ละกลุ่มเซ็นด้วย secret ของตัวเอง', apv[0].sign === sig(apv[0]) && req.every(b => b.sign === crypto.createHmac('sha256', b.timestamp + '\nsreq').update('').digest('base64')));
+ok('ลิงก์ในกลุ่มคำขอราคาไม่ระบุแอป (ระบบเลือกหน้าตามอีเมลผู้กด) แต่เปิดเอกสารตรง', req.some(b => /exec\?doc=SRG/.test(b.content.text)) && !req.some(b => /app=/.test(b.content.text)));
+// (ข) ตั้งค่าผิด: กลุ่มผู้อนุมัติ = กลุ่มทีมขาย → ต้องระงับ
+G = world();
+Object.assign(G.props, { LARK_MODE: 'live', LARK_WEBHOOK_APPROVERS: HK('same-1'), LARK_WEBHOOK_SALES: HK('same-1') });
+const cw = G.ctx.larkValidateConfig_();
+ok('ตรวจค่าเตือน: ผู้อนุมัติชี้ไปกลุ่มเดียวกับทีมขาย → ข้อความผู้อนุมัติจะถูกระงับ', cw.warnings.some(w => /ผู้อนุมัติราคา.*ทีมขาย.*ระงับ/.test(w)), cw.warnings);
+G.saveQT('B1', 'Submitted'); G.ctx.larkFlush();
+ok('fail-closed: ใบรออนุมัติ (มี %GP) ไม่ถูกส่งเข้ากลุ่มที่มี Sales เลย · SKIPPED พร้อมเหตุผล', hookCalls(G, HK('same-1')).length === 0 && G.Q().some(x => x.DocId === 'B1' && x.Status === 'SKIPPED' && /ระงับ/.test(x.LastError)), G.Q().map(x => [x.Target, x.Status, x.LastError]));
+G.props.LARK_WEBHOOK_URL = HK('same-1'); delete G.props.LARK_WEBHOOK_APPROVERS;
+G.saveQT('B2', 'Submitted'); G.ctx.larkFlush();
+ok('fail-closed: webhook ตัวเดิม (LARK_WEBHOOK_URL) ชี้ไปกลุ่มทีมขาย → ก็ถูกระงับเช่นกัน', hookCalls(G, HK('same-1')).length === 0 && G.Q().some(x => x.DocId === 'B2' && x.Status === 'SKIPPED'));
+// (ค) กลุ่มคำขอราคาเดียว (Sales + Sourcing) ใช้แทนกลุ่ม Sourcing
+G = world();
+Object.assign(G.props, { LARK_MODE: 'live', LARK_WEBHOOK_REQUESTS: HK('req-2'), LARK_WEBHOOK_SOURCING: HK('req-2'), LARK_WEBHOOK_APPROVERS: HK('apv-2') });
+G.post({ token: G.T.boss, action: 'saveSR', id: 'SRC', status: 'Submitted', detail: JSON.stringify({ status: 'Submitted', header: { title: 'Req C' }, lines: [{ desc: 'x' }] }) });
+G.saveQT('C1', 'Submitted'); G.saveQT('C1', 'In Progress'); G.ctx.larkFlush();
+const r2 = hookCalls(G, HK('req-2'));
+ok('กลุ่มเดียวทั้ง Sales+Sourcing: SR ใหม่เข้ากลุ่ม 1 ครั้ง (ไม่ซ้ำ 2 ข้อความ)', r2.filter(b => /คำขอราคาใหม่/.test(b.content.text)).length === 1, r2.map(b => b.content.text.split('\n')[0]));
+ok('…ข้อความภายใน (ส่งกลับแก้ราคา มียอดเงิน) ถูกระงับ ไม่เข้ากลุ่มนี้', !r2.some(b => /ส่งกลับแก้|฿/.test(b.content.text)) && G.Q().some(x => x.Event === 'QT_RETURNED' && x.Status === 'SKIPPED'));
+ok('…ใบรออนุมัติยังไปกลุ่มผู้อนุมัติตามปกติ', hookCalls(G, HK('apv-2')).some(b => /รออนุมัติ/.test(b.content.text)));
+// (ง) ไม่ตั้งกลุ่มคำขอราคา = ไม่มีรายการเกิน
+G = world(); G.post({ token: G.T.boss, action: 'saveSR', id: 'SRN', status: 'Submitted', detail: JSON.stringify({ status: 'Submitted', header: { title: 'n' }, lines: [] }) });
+ok('ไม่ได้ตั้งกลุ่มคำขอราคา → ไม่สร้างรายการของกลุ่มนี้ในคิว', !G.Q().some(x => x.Target === 'REQUESTS') && G.Q().some(x => x.Target === 'SOURCING'));
+ok('ตรวจค่า: webhook ของกลุ่มที่รูปแบบผิดถูกฟ้อง', (() => { const w = world(); w.props.LARK_WEBHOOK_SALES = 'https://evil.example/hook'; return w.ctx.larkValidateConfig_().problems.some(x => /LARK_WEBHOOK_SALES/.test(x)); })());
 
 if (DOCS) {     // ส่งมอบ: ตัวอย่าง payload การ์ดจริงของทุก event
   fs.writeFileSync(DOCS + '/lark_payload_samples.json', JSON.stringify(demo, null, 2));

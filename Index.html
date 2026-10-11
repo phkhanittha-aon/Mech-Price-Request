@@ -617,8 +617,8 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='5.1';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
-const BUILD='2026-10-11 · build 5.1 · อนุมัติ 2 ฝ่าย (ก่อนหลังได้) + ล้างข้อมูลเหลือ Pending';
+const APP_VERSION='5.2';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const BUILD='2026-10-11 · build 5.2 · พร้อมเสนอลูกค้า = Sales เห็นราคาแล้วจริง';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
@@ -1326,6 +1326,41 @@ function followOf(q){
   if(q.docType==='SR'&&linkedQTsOf(q).length)return {owner:'DONE',label:'จัดทำใบเสนอราคาแล้ว',actionable:false,level:'ok',waitingDays:0};
   return q._follow||localFollow(q);
 }
+/* v5.2: ขั้นของใบเสนอราคาที่ "ตรงกับความจริง" — ใช้กับตัวกรอง/นับจำนวน/ป้ายสถานะทุกที่
+   สถานะในชีท Pending ไม่ได้แปลว่า Sales เห็นราคาเสมอ (ข้อมูลรุ่นเก่า): server บอกผ่าน follow.owner
+     Pending + REPAIR   → 'NOPRICE'  ยังไม่มีราคาฉบับ Sales (Sales ยังไม่เห็นราคา)
+     Pending + RELEASER → 'Approved' ยังไม่ได้ปล่อยให้ Sales เจ้าของงาน (นับรวมกับ "อนุมัติแล้ว · รอปล่อยราคา")
+     Pending + SALES    → 'Pending'  พร้อมเสนอลูกค้าจริง */
+const NOPRICE_TH='⚠ Sales ยังไม่เห็นราคา';
+function qtStage(q){
+  const st=q.status||QT_DEFAULT_STATUS;
+  if(st!=='Pending')return st;
+  const o=followOf(q).owner;
+  return o==='REPAIR'?'NOPRICE':o==='RELEASER'?'Approved':'Pending';
+}
+/* ป้ายเตือนข้างสถานะ: บอกตรง ๆ ว่าทำไม Sales ยังไม่เห็นราคา และใครต้องทำอะไร */
+function statusWarn(q){
+  if(!q||q.docType==='SR'||(q.status||'')!=='Pending')return '';
+  const f=followOf(q);
+  if(f.owner==='REPAIR')return f.repair==='NO_PRICE'
+    ?'<div><span class="tag red" style="font-size:10px" title="ใบนี้ไม่มีรายการราคา — เปิดใบ ใส่ราคา แล้วบันทึก">⚠ ยังไม่มีราคาในใบ</span></div>'
+    :'<div><span class="tag red" style="font-size:10px" title="ข้อมูลรุ่นเก่า — กด “สร้างราคาฉบับ Sales” ด้านบน">⚠ Sales ยังไม่เห็นราคา</span></div>';
+  if(f.owner==='RELEASER')return '<div><span class="tag blue" style="font-size:10px" title="ต้องให้ผู้ปล่อยราคากดยืนยันปล่อยราคาก่อน">🔒 ยังไม่ปล่อยให้ Sales</span></div>';
+  return '';
+}
+/* แถบซ่อมข้อมูลรุ่นเก่า (ใช้ทั้งภาพรวมและหน้าติดตามงาน) */
+function repairBanner(qs){
+  if(!perms().create)return '';
+  const all=(qs||latestQuotes(QUOTES)).filter(q=>!q.deleted&&q.docType!=='SR'&&followOf(q).owner==='REPAIR');
+  if(!all.length)return '';
+  const fix=all.filter(q=>followOf(q).repair!=='NO_PRICE'&&repairable(q)),noPrice=all.filter(q=>!fix.includes(q));
+  return `<div class="wl-repair no-print">🛠 <span style="flex:1;min-width:220px">มี <b>${all.length} ใบ</b> สถานะ “พร้อมเสนอลูกค้า” (ข้อมูลรุ่นเก่า) ที่ <b>Sales ยังไม่เห็นราคา</b>
+      ${fix.length?` · <b>${fix.length}</b> ใบสร้างราคาฉบับ Sales ได้เลย แล้ว ${esc(gatekeeperName())} กดยืนยันปล่อยราคา`:''}
+      ${noPrice.length?` · <b style="color:var(--red)">${noPrice.length}</b> ใบไม่มีราคาในใบ ต้องเปิดใบใส่ราคาก่อน (${noPrice.slice(0,6).map(q=>`<a href="#" onclick="openQuote('${q.id}');return false">${esc(q.docNo||q.header.ref||'—')}</a>`).join(', ')}${noPrice.length>6?' …':''})`:''}</span>
+    ${fix.length?`<button class="btn sm" onclick='backfillSalesDetail(${JSON.stringify(fix.map(q=>q.id))})'>สร้างราคาฉบับ Sales ${fix.length} ใบ</button>`:''}</div>`;
+}
+/* ใบนี้สร้างราคาฉบับ Sales แล้วมีราคาจริงไหม (ไม่มีรายการ / ราคา 0 = สร้างไปก็ยังไม่มีราคาให้ Sales) */
+function repairable(q){try{return (buildSalesProjection(q).lines||[]).some(l=>+l.unitPrice>0)}catch(e){return false}}
 /* งานค้างของ Sales = ได้ราคาแล้ว และถึงเวลาต้องอัปเดต (server ตัดสิน) */
 function needsSalesUpdate(q){
   if(!q||q.docType==='SR'||q.deleted)return false;
@@ -2317,7 +2352,7 @@ function workloadCard(){
       <span class="hint" style="margin-left:8px">${over?`<b style="color:var(--lv-over-ink)">⛔ เกินกำหนด ${over}</b> · `:''}${watch?`<b style="color:var(--lv-watch-ink)">⚠ เฝ้าระวัง ${watch}</b> · `:''}ทั้งหมด ${open.length} งาน</span>
       <div class="spacer"></div><span class="hint">SLA: Sourcing ${SLA_TXT('SOURCING')} · อนุมัติ ${SLA_TXT('MANAGEMENT')} · ปล่อยราคา ${SLA_TXT('RELEASER')} วันทำการ</span></div>
     <div class="card-b">
-      ${(repair.length&&perms().create)?`<div class="wl-repair">🛠 มี <b>${repair.length} ใบ</b> (สถานะพร้อมเสนอ ข้อมูลรุ่นเก่า) ที่ Sales ยังไม่เห็นราคา เพราะยังไม่มีราคาฉบับ Sales
+      ${repairBanner()}${false?`<div class="wl-repair">🛠 มี <b>${repair.length} ใบ</b> (สถานะพร้อมเสนอ ข้อมูลรุ่นเก่า) ที่ Sales ยังไม่เห็นราคา เพราะยังไม่มีราคาฉบับ Sales
         <button class="btn sm" onclick='backfillSalesDetail(${JSON.stringify(repair)})'>สร้างข้อมูลสำหรับ Sales ${repair.length} ใบ</button></div>`:''}
       <div class="wl-tiles">${tiles}</div>
       <div class="tw" style="border:none;margin-top:10px"><table><thead><tr><th></th><th>เอกสาร</th><th>โครงการ / ลูกค้า</th><th>รออยู่ที่</th><th class="r">รอมาแล้ว</th><th></th></tr></thead><tbody>
@@ -3365,9 +3400,9 @@ function allowedNextStatuses(q){
 function statusSelect(q){
   const cur=q.status||(q.docType==='SR'?'Submitted':QT_DEFAULT_STATUS);
   const next=allowedNextStatuses(q).filter(x=>x!==cur);
-  if(!next.length)return `<span class="tag ${STATUS_TAG[cur]||'grey'}">${esc(cur)}</span>`;
+  if(!next.length)return `<span class="tag ${STATUS_TAG[cur]||'grey'}">${esc(cur)}</span>${statusWarn(q)}`;
   return `<select class="inp" style="padding:4px 8px;font-size:12px;width:auto" onchange="setStatus('${q.id}',this.value)">
-  <option selected>${esc(cur)}</option>${next.map(x=>`<option>${x}</option>`).join('')}</select>`;}
+  <option selected>${esc(cur)}</option>${next.map(x=>`<option>${x}</option>`).join('')}</select>${statusWarn(q)}`;}
 function updateStatus(q,newStatus){
   if(q.status!==newStatus){            // v4.3: เก็บเวลาเปลี่ยนสถานะ ใช้นับวัน SLA แยกช่วง (คีย์ใหม่แบบ optional)
     const at=new Date().toISOString();q.statusChangedAt=at;
@@ -3975,17 +4010,19 @@ function viewFollowup(){
   // BUSINESS RULE: Followup tracks QT only
   let list=[...QUOTES].filter(q=>q.docType==='QT'||!q.docType);
   if(fGroup!=='all')list=list.filter(q=>(q.header.groupType||'Inverter')===fGroup);
-  if(fStatus!=='all')list=list.filter(q=>(q.status||QT_DEFAULT_STATUS)===fStatus);
+  if(fStatus!=='all')list=list.filter(q=>qtStage(q)===fStatus);        // v5.2: กรองตามขั้นจริง (Pending = Sales เห็นราคาแล้วเท่านั้น)
   if(fSales!=='all')list=list.filter(q=>(q.header.sales||'—')===fSales);
   list.sort((a,b)=>byUrgency(a,b)||(b.header.reqDate||'').localeCompare(a.header.reqDate||''));   // v4.6: งานเร่งด่วนขึ้นก่อน
   const scope=QUOTES.filter(q=>(q.docType==='QT'||!q.docType)&&(fGroup==='all'||q.header.groupType===fGroup));
-  const counts={};QT_STATUSES.forEach(s=>counts[s]=scope.filter(q=>(q.status||QT_DEFAULT_STATUS)===s).length);
+  const counts={NOPRICE:0};QT_STATUSES.forEach(s=>counts[s]=0);scope.forEach(q=>{const k=qtStage(q);counts[k]=(counts[k]||0)+1;});
+  const tabs=['all',...QT_STATUSES.slice(0,QT_STATUSES.indexOf('Pending')),...(counts.NOPRICE||fStatus==='NOPRICE'?['NOPRICE']:[]),...QT_STATUSES.slice(QT_STATUSES.indexOf('Pending'))];
   const salesList=[...new Set(QUOTES.filter(q=>q.docType==='QT'||!q.docType).map(q=>q.header.sales||'—').filter(s=>s))].sort();
   return `
   ${unassignedOwnersCard()}
+  ${repairBanner(scope)}
   <div class="kpis">
     ${kpi('ทั้งหมด',scope.length,fGroup==='all'?'ทุกกลุ่ม':fGroup,'grid')}
-    ${kpi(STATUS_TH.Pending,counts.Pending||0,'รอลูกค้าตัดสินใจ','amber')}${kpi(STATUS_TH.Won,counts.Won||0,'ได้งาน','green')}${kpi(STATUS_TH.Closed,counts.Closed||0,'ไม่ได้งาน','grey')}</div>
+    ${kpi(STATUS_TH.Pending,counts.Pending||0,counts.NOPRICE?('Sales เห็นราคาแล้ว · อีก '+counts.NOPRICE+' ใบ Sales ยังไม่เห็นราคา'):'Sales เห็นราคาแล้ว · รอลูกค้าตัดสินใจ','amber')}${kpi(STATUS_TH.Won,counts.Won||0,'ได้งาน','green')}${kpi(STATUS_TH.Closed,counts.Closed||0,'ไม่ได้งาน','grey')}</div>
   <div class="row-flex no-print" style="justify-content:space-between;margin-bottom:14px;align-items:flex-start">
     <div class="row-flex">
       <div class="seg">${['all',...GROUP_TYPES].map(g=>`<button class="${fGroup===g?'on':''}" onclick="fGroup='${g}';render()">${g==='all'?'ทุกกลุ่ม':g}</button>`).join('')}</div>
@@ -3993,7 +4030,7 @@ function viewFollowup(){
     <div class="row-flex">
       <select class="inp" style="width:auto;padding:7px 30px 7px 11px" onchange="fSales=this.value;render()">
         <option value="all">Sales: ทั้งหมด</option>${salesList.map(s=>`<option value="${esc(s)}" ${fSales===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
-      <div class="seg">${['all',...QT_STATUSES].map(s=>`<button class="${fStatus===s?'on':''}" onclick="fStatus='${s}';render()">${s==='all'?'ทุกสถานะ':esc(STATUS_TH[s]||s)}</button>`).join('')}</div>
+      <div class="seg">${tabs.map(s=>`<button class="${fStatus===s?'on':''}" onclick="fStatus='${s}';render()">${s==='all'?'ทุกสถานะ':s==='NOPRICE'?esc(NOPRICE_TH)+' ('+counts.NOPRICE+')':esc(STATUS_TH[s]||s)}</button>`).join('')}</div>
     </div></div>
   <div class="card"><div class="card-h" style="padding:11px 18px"><h2>${list.length} งาน</h2>${lvSummary(list)}<span class="hint">งานเร่งด่วนขึ้นก่อน</span></div><div class="card-b" style="padding:0">
   ${list.length?`<div class="tw" style="border:none"><table><thead><tr>
@@ -4335,7 +4372,8 @@ async function backfillSalesDetail(ids){
     if(bar)bar.style.width=Math.round((i+1)/list.length*100)+'%';
   }
   LS.set('quotes',QUOTES);closeModal();
-  toast('สร้างข้อมูลสำหรับ Sales แล้ว '+done+' ใบ'+(fail?(' · ไม่สำเร็จ '+fail+' (กด 🔄 ซิงค์ แล้วลองใหม่)'):''),fail?'bad':'good');
+  const noPrice=list.filter(q=>!repairable(q)).length;
+  toast('สร้างข้อมูลสำหรับ Sales แล้ว '+done+' ใบ'+(fail?(' · ไม่สำเร็จ '+fail+' (กด 🔄 ซิงค์ แล้วลองใหม่)'):'')+(noPrice?(' · '+noPrice+' ใบไม่มีราคาในใบ ต้องเปิดใบใส่ราคา'):'')+' · ขั้นต่อไป: '+gatekeeperName()+' กดยืนยันปล่อยราคา',fail?'bad':'good');
   renderNav();render();
 }
 function setRateCNY(v){
@@ -5053,7 +5091,18 @@ function liveRender(){
   const ae=document.activeElement;
   if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&$('#content').contains(ae)){_renderPending=true;return}
   _renderPending=false;
-  const y=window.scrollY;render();window.scrollTo(0,y);
+  keepScroll(render);
+}
+/* v5.2: วาดใหม่โดยไม่ให้จอ "เด้ง" — จำตำแหน่งเลื่อนของหน้าและของทุกกล่องที่เลื่อนได้ข้างใน (ตารางกว้าง/คอลัมน์บอร์ด)
+   ระบุกล่องด้วยลำดับลูกจาก #content (โครงสร้างหน้าเดิมเมื่อวาดซ้ำ) แล้วคืนค่าหลังวาดเสร็จ */
+function scrollPath(el,root){const p=[];while(el&&el!==root){const par=el.parentElement;if(!par)return null;p.unshift(Array.prototype.indexOf.call(par.children,el));el=par;}return el===root?p:null}
+function keepScroll(fn){
+  const root=document.getElementById('content'),y=window.scrollY,saved=[];
+  if(root)root.querySelectorAll('*').forEach(el=>{if(el.scrollTop||el.scrollLeft){const path=scrollPath(el,root);if(path)saved.push({path,t:el.scrollTop,l:el.scrollLeft,tag:el.tagName,cls:el.className});}});
+  fn();
+  if(root)saved.forEach(sv=>{let el=root;for(const i of sv.path){el=el&&el.children[i];}
+    if(el&&el.tagName===sv.tag&&el.className===sv.cls){el.scrollTop=sv.t;el.scrollLeft=sv.l;}});
+  window.scrollTo(0,y);
 }
 function isFlash(id){return _flashIds[id]&&(Date.now()-_flashIds[id]<6000)}
 function setLiveStamp(){

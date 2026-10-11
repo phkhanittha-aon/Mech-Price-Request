@@ -32,6 +32,8 @@
  *     · row.follow มี step / actor / due — ทุกหน้าจอแสดง "อยู่ขั้นไหน · รอใคร · ครบกำหนดเมื่อไร" จากค่าเดียวกัน
  *  I) v5.1: อนุมัติ 2 ฝ่ายกดก่อนหลังได้ · ล้างข้อมูลเหลือเฉพาะใบ Pending — exportPendingFile() → importUploadFile()
  *     (สำรองก่อนเสมอ · Settings.dataEpoch ใหม่ = ทุกเครื่องล้างสำเนาในเครื่องแล้วโหลดใหม่ · เครื่องเก่าส่งใบที่ถูกล้างกลับมาไม่ได้ = DATA_RESET)
+ *  J) v5.2: ใบ Pending ที่ Sales ยังไม่เห็นราคา (REPAIR) บอกเหตุผล — follow.repair = 'NO_COPY' (ยังไม่มีราคาฉบับ Sales → กดสร้างได้)
+ *     หรือ 'NO_PRICE' (มีฉบับ Sales แล้วแต่ไม่มีราคาในใบ → Sourcing ต้องใส่ราคา) · ไม่นับเป็น "พร้อมเสนอลูกค้า" ในทุกหน้าจอ
  *  * v4.2: รัน setup() หนึ่งครั้ง เพื่อเพิ่มคอลัมน์ Email / Active ในแท็บ Users แล้ว Deploy → New version
  *
  * สิ่งที่เปลี่ยนจาก v2.1 (สำคัญ — ต้องอัปเดต HTML ทั้ง 2 ไฟล์พร้อมกัน)
@@ -50,7 +52,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '5.1';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '5.2';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -1300,6 +1302,8 @@ function followInfo_(r, idx) {
     owner:String(cell_(r, idx, 'SalesUserId') || ''),
     releasedTo:String(cell_(r, idx, 'ReleasedTo') || '').split('|').filter(function (x) { return x; }),
     hasSalesCopy:sd.indexOf('"unitPrice"') >= 0,
+    // v5.2: ไม่มีราคาให้ Sales จริง ๆ (สร้างฉบับ Sales ซ้ำก็ไม่หาย) = มีฉบับ Sales แต่ไม่มีราคา หรือใบไม่มีรายการสินค้าเลย
+    salesCopyNoPrice:(!!sd && sd.indexOf('"unitPrice"') < 0) || /"lines":\[\]/.test(det),
     updatedMs:toMs_(cell_(r, idx, 'UpdatedAt')) || toMs_(cell_(r, idx, 'Updated')),
     statusLog:topArr_(det, 'statusLog') || [],
     statusChangedAt:topStr_(det, 'statusChangedAt'),
@@ -1428,6 +1432,10 @@ function followState_(f, cfg, nowMs) {
     out.ownerLabel = out.label;
   }
   if (owner === 'RELEASER' && st === 'Pending') out.label = 'รอยืนยันปล่อยราคา (ข้อมูลรุ่นเก่า)';
+  if (owner === 'REPAIR') {                                // v5.2: บอกเหตุผล + ทางแก้ (Sales ยังไม่เห็นราคา)
+    out.repair = f.salesCopyNoPrice ? 'NO_PRICE' : 'NO_COPY';
+    if (f.salesCopyNoPrice) out.label = out.ownerLabel = 'ใบนี้ยังไม่มีราคา — Sourcing ต้องใส่ราคาแล้วบันทึก';
+  }
 
   if (owner === 'SALES') {
     // Sales: นับจากการอัปเดตล่าสุด (หรือวันที่ได้ราคา) เป็นวันปฏิทิน + วันนัดที่เลยกำหนด

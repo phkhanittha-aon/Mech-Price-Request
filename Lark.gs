@@ -38,7 +38,7 @@
  *   ค่าของ v4.9 (LARK_WEBHOOK_*, LARK_APP_ID, LARK_CHAT_*) ไม่ใช้แล้ว — ยกเว้น LARK_WEBHOOK_REQUESTS ใช้แทน Bot A ได้ชั่วคราว
  *************************************************************/
 
-var LARK_VERSION = '5.1';
+var LARK_VERSION = '5.2';
 
 /* ============================================================ 1) EVENT TABLE */
 /**
@@ -472,8 +472,9 @@ function larkWithLock_(fn) {
   if (mine && !lock.tryLock(25000)) return { busy:true };
   try { return fn(); } finally { if (mine) lock.releaseLock(); }
 }
-/** งานที่ Bot B เตือน: เกินกำหนดและไม่ใช่งานติดตามลูกค้าของ Sales (SALES) / งานปิดแล้ว (DONE) */
-var LARK_REMIND_OWNERS = ['SOURCING', 'MANAGEMENT', 'RELEASER', 'REPAIR'];
+/** งานที่ Bot B เตือน: เกินกำหนดและไม่ใช่งานติดตามลูกค้าของ Sales (SALES) / งานปิดแล้ว (DONE)
+ *  v5.2: ไม่เตือนงานซ่อมข้อมูลรุ่นเก่า (REPAIR) ในกลุ่ม — แก้ได้ทีเดียวด้วยปุ่มในระบบ ไม่ใช่งานของคนในกลุ่ม */
+var LARK_REMIND_OWNERS = ['SOURCING', 'MANAGEMENT', 'RELEASER'];
 /** รายชั่วโมง (ชื่อเดิม larkSlaScan — trigger เดิมใช้ต่อได้) · opts.nowMs / opts.force ใช้ในเทสต์ (trigger ส่ง event object มา = ใช้เวลาจริง) */
 function larkSlaScan(opts) { return larkWithLock_(function () { return larkSlaScan_(opts); }); }
 function larkSlaScan_(opts) {

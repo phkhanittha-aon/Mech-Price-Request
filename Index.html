@@ -472,6 +472,15 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
 .ac-gp b{font-family:'Sora',sans-serif;font-size:24px;line-height:1.1}
 .ac-gp span{font-size:10px;font-weight:700;opacity:.8}
 .ac-gp.green{background:var(--green-soft);color:var(--green)}.ac-gp.amber{background:var(--amber-soft);color:var(--amber)}.ac-gp.red{background:var(--red-soft);color:var(--red)}
+/* v5.3 ดีลค่าคอมจาก Supplier = สีน้ำเงิน (ไม่ใช่ %GP) */
+.ac-gp.blue{background:var(--blue-soft);color:var(--blue)}.kcard .kc-gp.blue{background:var(--blue-soft);color:var(--blue)}
+.lb-pct.blue{background:var(--blue-soft)}.lb-pct.blue b{color:var(--blue)}.lr-gp.blue{background:var(--blue-soft);color:var(--blue)}
+.scom-box{border:1px solid var(--blue);background:var(--blue-soft);border-radius:12px;padding:12px 14px}
+.scom-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;font-size:13.5px}
+.scom-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 14px}
+.scom-grid .f{min-width:0}.scom-grid .f.w2{grid-column:span 2}.scom-grid .inp{background:var(--surface)}
+@media(max-width:760px){.scom-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+@media(max-width:420px){.scom-grid{grid-template-columns:minmax(0,1fr)}.scom-grid .f.w2{grid-column:auto}}
 .ac-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .ac-top{display:flex;justify-content:space-between;gap:6px}
 .ac-title{flex:1;min-width:0;font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -617,8 +626,8 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='5.2';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
-const BUILD='2026-10-11 · build 5.2 · พร้อมเสนอลูกค้า = Sales เห็นราคาแล้วจริง';
+const APP_VERSION='5.3';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const BUILD='2026-10-11 · build 5.3 · ใบเสนอราคาดีลค่าคอมจาก Supplier (Sales เกรด D)';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
@@ -1630,16 +1639,16 @@ function approvalBadges(q){
 }
 /* การ์ดอนุมัติสำหรับผู้จัดการ: %GP ตัวใหญ่ + ป้าย 2 ฝ่าย + ปุ่มอนุมัติได้จากหน้าการ์ด */
 function approvalCard(q){
-  const t=quoteTotals(q),cat=q.header.groupType,gc=gpClass(t.gp,cat),mine=canApprove(q);
+  const t=quoteTotals(q),gc=gpClassQ(q,t),mine=canApprove(q);
   const lv=lvOf(q);
   return `<div class="acard lv-card lv-${lv} ${mine?'mine':''} ${isFlash(q.id)?'flash':''}" onclick="openQuote('${q.id}')">
-    <div class="ac-gp ${gc}"><b>${pp(t.gp)}</b><span>%GP</span></div>
+    <div class="ac-gp ${gc}"><b>${pp(t.isCommission?t.supplierComPct:t.gp)}</b><span>${gpWordQ(q)}</span></div>
     <div class="ac-body">
       <div class="ac-top"><span class="ac-title">${esc(q.header.title||q.header.customer||'(ไม่มีชื่อ)')}</span>
         <span class="kc-doc">${esc(q.docNo||q.header.ref||'—')}${q.round>1?' · R'+q.round:''}</span></div>
       <div class="hint">${esc(q.header.customer||'—')} · ${esc(salesNameOf(q)||'ไม่ระบุ Sales')} · ${esc(creatorName(q))}</div>
       <div class="ac-nums"><span>ยอดขาย <b class="mono">${money(t.total,curOf(q))}</b></span><span>ต้นทุน <b class="mono">${money(t.cost,curOf(q))}</b></span>
-        <span>กำไร <b class="mono" style="color:var(--green)">${money(t.profit,curOf(q))}</b></span></div>
+        <span>${t.isCommission?'ค่าคอม Sup.':'กำไร'} <b class="mono" style="color:var(--green)">${money(t.profit,curOf(q))}</b></span></div>
       <div class="ac-badges">${approvalBadges(q)}${q.needsApproval?'<span class="abadge warn">⚠ ต่ำกว่าเกณฑ์</span>':''}</div>
       ${flowMeta(q,{short:true})}
     </div>
@@ -2153,6 +2162,21 @@ function rateMissing(L,H){
   if(!cur||cur===H.currency||cur==='THB')return false;
   return !(getRate(H,cur)>0);
 }
+/* ============================================================ v5.3 ดีลค่าคอมจาก Supplier
+   ใบเสนอราคาที่ MGS ไม่บวก %GP แต่ได้ค่าคอมมิชชันจาก Supplier แทน
+     - ราคาขาย = ต้นทุน Landed (ทุน + Duty + Clearance + ค่าขนส่ง/ชิ้น) · %GP ทุกบรรทัด = 0
+     - รายได้ MGS = ค่าคอมจาก Supplier = % × ฐาน (มูลค่าซื้อจาก Supplier หรือมูลค่าขาย) + จำนวนเงินคงที่
+     - Commission Sales = เกรด D อัตรา 0% (ไม่ได้ค่าคอม) ทุกหมวด
+   เก็บที่หัวใบ: H.dealType='commission' + H.supplierCom={pct,amount,cur,basis,supplier,note}
+   - ใบเก่าไม่มี dealType = ดีลปกติ (คำนวณเหมือนเดิมทุกอย่าง) · L.opPct เดิมไม่ถูกลบ สลับกลับเป็นดีลปกติได้
+   - supplierCom อยู่ใน COST_KEYS ของ server → ไม่หลุดไปหา Sales                                              */
+const DEAL_TYPES={normal:'ปกติ (บวกกำไร %GP)',commission:'ค่าคอมจาก Supplier'};
+const SUPCOM_BASIS={supplier:'มูลค่าซื้อจาก Supplier (ทุนสินค้า ไม่รวมภาษี/ขนส่ง)',sale:'มูลค่าขายสินค้า (ไม่รวม Extras)'};
+const COMDEAL_GRADE='D';      // BUSINESS RULE: ดีลค่าคอมจาก Supplier → Commission Sales เกรด D = ไม่มีค่าคอม
+function isComDeal(x){const H=x&&x.header?x.header:x;return !!H&&H.dealType==='commission'}
+function supComOf(H){const s=(H&&H.supplierCom)||{};
+  return {pct:+s.pct||0,amount:+s.amount||0,cur:s.cur||(H&&H.currency)||'THB',basis:s.basis==='sale'?'sale':'supplier',
+    supplier:s.supplier||'',note:s.note||''};}
 function computeLine(L,H){
   const rate=getRate(H,L.costCur);
   const pricePC=(+L.up||0)*rate;
@@ -2164,7 +2188,7 @@ function computeLine(L,H){
   const clearance=(clrPct/100)*pricePC;
   const freep=+L.freep||0;
   const baseCost=pricePC+duty+clearance+freep;        // landed cost / unit (before profit)
-  let gpPct=(+L.opPct||0);                              // opPct now = %GP MARGIN on selling price
+  let gpPct=isComDeal(H)?0:(+L.opPct||0);             // opPct now = %GP MARGIN on selling price · v5.3 ดีลค่าคอม = ขายราคาทุน
   if(gpPct>99.9)gpPct=99.9; if(gpPct<-1000)gpPct=-1000;
   const rawUP=(1-gpPct/100)!==0 ? baseCost/(1-gpPct/100) : baseCost;   // Price = Cost / (1 - Margin%)
   // 3.5: commit the rounding here, then derive everything from the rounded price so that
@@ -2174,7 +2198,7 @@ function computeLine(L,H){
   const qty=+L.qty||0;
   const lineTotal=Math.round(totalUP*qty*100)/100;
   return {rate,pricePC,dutyPct,duty,clrPct,clearance,freep,baseCost,gpPct,opPct:gpPct,op,totalUP,rawUP,
-    lineTotal, lineCost:baseCost*qty, lineProfit:op*qty,
+    lineTotal, lineCost:baseCost*qty, lineProfit:op*qty, comDeal:isComDeal(H),
     gp:totalUP>0?op/totalUP*100:gpPct};                // displayed %GP == gpPct
 }
 // Global Extra Costs (quote-level) total, converted to offer currency
@@ -2196,11 +2220,20 @@ function computeQuote(q){
   });
   const prodTotal=sumSub;
   const prodCost=base.reduce((s,b)=>s+b.r.lineCost,0);
-  const profit=base.reduce((s,b)=>s+b.r.lineProfit,0);   // product-level profit (no extras)
   const total=prodTotal+E;                                // grand total customer pays
   const cost=prodCost+E;                                  // total landed cost
+  // v5.3 ดีลค่าคอมจาก Supplier: รายได้ = ค่าคอม (ปันเข้าแต่ละบรรทัดตามสัดส่วนยอด เพื่อให้สรุปตามกลุ่มสินค้าตรงกับยอดรวม)
+  const comDeal=isComDeal(H);
+  let supCom=0,supComBase=0;
+  if(comDeal){
+    const sc=supComOf(H);
+    supComBase=sc.basis==='sale'?prodTotal:base.reduce((s,b)=>s+b.r.pricePC*(+b.L.qty||0),0);
+    supCom=Math.round(((sc.pct/100)*supComBase+sc.amount*getRate(H,sc.cur))*100)/100;
+    lines.forEach(o=>{o.supCom=supCom*o.weight;});
+  }
+  const profit=base.reduce((s,b)=>s+b.r.lineProfit,0)+supCom;   // product-level profit (no extras) · ดีลค่าคอม = ค่าคอม Supplier
   const gpProd=prodTotal>0?profit/prodTotal*100:0;        // %GP on product only (before extras dilution)
-  const gp=total>0?profit/total*100:0;                    // %GP after extras allocated (for display)
+  const gp=total>0?profit/total*100:0;                    // %GP after extras allocated (for display) · ดีลค่าคอม = รายได้ค่าคอม/ยอดขาย
   const byCat={};
   lines.forEach(o=>{
     const cat=o.L.comGroup||comCategory(o.L.group);       // explicit product com-group wins
@@ -2212,13 +2245,25 @@ function computeQuote(q){
   const com={};
   Object.keys(byCat).forEach(cat=>{
     const b=byCat[cat];const gpCat=b.total>0?b.gpW/b.total:0;   // weighted avg %GP after extras (margin)
+    if(comDeal){com[cat]={gp:0,grade:COMDEAL_GRADE,rate:0,total:b.total,comAmt:0,comDeal:true};return}   // Sales ไม่ได้ค่าคอม
     const bands=(SETTINGS.commission[cat])||SETTINGS.commission['Inverter'];
     let g=bands[bands.length-1];
     for(const band of bands){if(gpCat>=band.min){g=band;break}}
     com[cat]={gp:gpCat,grade:g.grade,rate:g.rate,total:b.total,comAmt:b.total*(g.rate/100)};
   });
-  return {lines,prodTotal,total,cost,profit,gp,gpProd,globalExtras:E,byCat,com};
+  const out={lines,prodTotal,total,cost,profit,gp,gpProd,globalExtras:E,byCat,com};
+  if(comDeal)Object.assign(out,{isCommission:true,supplierCom:supCom,supplierComBase:supComBase,
+    supplierComPct:supComBase>0?supCom/supComBase*100:0});   // % ค่าคอมจริงเทียบฐาน (รวมจำนวนเงินคงที่แล้ว)
+  return out;
 }
+/* v5.3: ป้าย %GP หรือ ค่าคอม Supplier — ใช้ทุกจุดที่เคยโชว์ %GP ของทั้งใบ */
+function gpClassQ(q,t){return isComDeal(q)?'blue':gpClass(t.gp,q.header&&q.header.groupType)}
+function gpWordQ(q){return isComDeal(q)?'คอม Sup.':'%GP'}
+function gpTagQ(q,t){return isComDeal(q)
+  ?`<span class="tag blue" title="ดีลค่าคอมจาก Supplier · ขายราคาทุน · Commission Sales เกรด ${COMDEAL_GRADE}">คอม ${pp(t.supplierComPct||0)}</span>`
+  :gpTag(t.gp,q.header&&q.header.groupType)}
+function gpBigQ(q,t){if(!isComDeal(q))return gpBig(t.gp,q.header.groupType);
+  return `<span style="display:inline-block;min-width:52px;padding:4px 9px;border-radius:8px;font-weight:700;font-size:13px;text-align:center;background:var(--blue-soft);color:var(--blue)" title="ดีลค่าคอมจาก Supplier">คอม ${pp(t.supplierComPct||0)}</span>`}
 function quoteTotals(q){return computeQuote(q);}   // back-compat alias
 /* S2.2: ประทับ "ตัวอักษรเกรด" คอมมิชชันของแต่ละกลุ่มสินค้า ลงบนบรรทัด
    - เกรดคิดจาก %GP รวมของ "หมวดคอมมิชชัน" (เช่น Inverter/ESS/...) ตาม comCategory(group)
@@ -2310,7 +2355,7 @@ function viewDashboard(){
             <td class="mono" style="font-size:11.5px">${esc(q.docNo||q.header.ref||'—')}</td>
             <td>${esc(q.header.customer||'—')}</td><td>${esc(q.header.sales||'—')}</td>
             <td><span class="tag grey" style="font-size:10.5px">${esc(q.header.groupType||'—')}</span></td>
-            ${mgr?`<td>${gpTag(t.gp)}</td>`:''}
+            ${mgr?`<td>${gpTagQ(q,t)}</td>`:''}
             <td><span class="tag ${STATUS_TAG[statusOf(q)]||'grey'}">${esc(STATUS_TH[statusOf(q)]||statusOf(q))}</span>${inApprovalStage(q)?`<div class="row-flex" style="gap:3px;margin-top:3px">${approvalBadges(q)}</div>`:''}</td></tr>`}).join('')}</tbody></table></div>`
         :emptyState('ยังไม่มีใบเสนอราคา','เริ่มทำราคาแรกของคุณได้เลย')}
       </div>
@@ -2421,9 +2466,10 @@ function aggregateQuotes(list){
     globalExtras+=t.globalExtras*x;
     t.lines.forEach(o=>{
       const cat=o.L.comGroup||comCategory(o.L.group);
+      const p=o.lineProfit+(o.supCom||0);                 // v5.3 ดีลค่าคอม: กำไร = ค่าคอม Supplier ที่ปันเข้าบรรทัด
       if(!byCat[cat])byCat[cat]={total:0,cost:0,profit:0};
-      byCat[cat].total+=o.lineTotal*x;byCat[cat].cost+=o.lineCost*x;byCat[cat].profit+=o.lineProfit*x;
-      total+=o.lineTotal*x;cost+=o.landedCost*x;profit+=o.lineProfit*x;
+      byCat[cat].total+=o.lineTotal*x;byCat[cat].cost+=o.lineCost*x;byCat[cat].profit+=p*x;
+      total+=o.lineTotal*x;cost+=o.landedCost*x;profit+=p*x;
     });
   });
   const gp=total>0?profit/total*100:0;
@@ -2557,6 +2603,8 @@ function viewCosting(){
         <button class="btn ghost" onclick="addSalesInline()" title="เพิ่มชื่อ Sales ใหม่">+</button></div>`
       }</div>
       <div class="fc"><label class="lbl">กลุ่มงาน</label><select class="inp" onchange="hsetGroup(this.value)">${opts(GROUP_TYPES,H.groupType)}</select></div>
+      ${canSeeCost(CURRENT)?`<div class="fc"><label class="lbl" title="ปกติ = บวกกำไร %GP · ค่าคอมจาก Supplier = ขายราคาทุน รายได้มาจากค่าคอมที่ Supplier จ่าย">ประเภทดีล</label><select class="inp" id="dealSel" onchange="hsetDeal(this.value)">
+        ${Object.keys(DEAL_TYPES).map(k=>`<option value="${k}" ${(isComDeal(H)?'commission':'normal')===k?'selected':''}>${esc(DEAL_TYPES[k])}</option>`).join('')}</select></div>`:''}
       <div class="fc"><label class="lbl">วันที่ขอราคา</label><input class="inp" type="date" value="${H.reqDate}" oninput="hset('reqDate',this.value)"></div>
       <div class="fc"><label class="lbl">วันที่เสนอ</label><input class="inp" type="date" value="${H.offerDate}" oninput="hset('offerDate',this.value)"></div>
       <div class="fc"><label class="lbl">สกุลเงินเสนอ</label><select class="inp" onchange="hset('currency',this.value);refreshLines()">${optOptions('currency',H.currency)}</select></div>
@@ -2568,6 +2616,7 @@ function viewCosting(){
       <div class="fc"><label class="lbl">Price Term</label><select class="inp" onchange="if(optOther(this,'priceTerm'))return;hset('priceTerm',this.value)">${optOptions('priceTerm',H.priceTerm)}</select></div>
       <div class="fc w2"><label class="lbl">เงื่อนไขชำระเงิน</label><select class="inp" onchange="if(optOther(this,'paymentTerm'))return;hset('paymentTerm',this.value)">${optOptions('paymentTerm',H.paymentTerm||'',true)}</select></div>
       ${optDatalist('uom','uomList')}${optDatalist('expenseType','expenseList')}
+      ${(isComDeal(H)&&canSeeCost(CURRENT))?supComBoxHTML(H):''}
       <div class="fnotes">${salesLocked
         ? '<div class="hint">🔒 เปลี่ยนเจ้าของงานหลังอนุมัติได้เฉพาะผู้จัดการ (กันการเปลี่ยนผู้รับราคาหลังผ่านการอนุมัติแล้ว)</div>'
         : (quoteApproved(editing)?'<div class="hint" style="color:var(--amber)">⚠ ใบนี้อนุมัติแล้ว — การเปลี่ยนเจ้าของงานจะถูกบันทึกในประวัติ</div>':'')}</div>
@@ -2576,7 +2625,7 @@ function viewCosting(){
 
   <div class="card" style="margin-bottom:18px">
     <div class="card-h"><h2>รายการสินค้า</h2>
-      <span class="hint ch-hint">%GP คิดจากราคาขาย · แก้ราคาขาย/หน่วยได้ ระบบคิด %GP ย้อนกลับให้</span>
+      <span class="hint ch-hint">${isComDeal(H)?'ดีลค่าคอมจาก Supplier · ราคาขาย = ต้นทุน Landed (ไม่บวก %GP)':'%GP คิดจากราคาขาย · แก้ราคาขาย/หน่วยได้ ระบบคิด %GP ย้อนกลับให้'}</span>
       <div class="spacer"></div>
       <span class="hint" id="draftStamp" style="margin-right:8px"></span>
       <button class="btn sm ghost" onclick="exportCostCSV()" title="ส่งออกตารางต้นทุนเป็น CSV เปิดใน Excel ได้">⤓ CSV</button>
@@ -2650,6 +2699,61 @@ function hsetGroup(v){editing.header.groupType=v;
     editing.docNo=genDocNo('QT',REF_PREFIX[v]||'IN');
   }
   render();}
+/* v5.3 ดีลค่าคอมจาก Supplier — กล่องกรอกค่าคอม (เฉพาะฝ่ายในที่เห็นต้นทุน) */
+function supComBoxHTML(H){
+  const sc=supComOf(H);
+  const curOpts=[...new Set([H.currency||'THB','THB','USD','CNY'])];
+  return `<div class="fc scom-box" id="scomBox" style="grid-column:1/-1">
+    <div class="scom-h"><b>💼 ค่าคอมจาก Supplier</b><span class="tag blue">ขายราคาทุน · ไม่บวก %GP</span>
+      <span class="grade ${COMDEAL_GRADE}" style="width:auto;padding:0 8px;height:20px;font-size:11px" title="Commission Sales ของดีลนี้">Sales เกรด ${COMDEAL_GRADE} · ไม่มีค่าคอม</span></div>
+    <div class="scom-grid">
+      <div class="f"><label class="lbl">Supplier ที่จ่ายค่าคอม</label><input class="inp" value="${esc(sc.supplier)}" placeholder="เช่น Sungrow" onfocus="comFocus('supplier')" oninput="hsetCom('supplier',this.value)" onchange="comAudit('supplier')"></div>
+      <div class="f"><label class="lbl">% ค่าคอม</label><input class="inp r mono" type="number" step="any" min="0" value="${sc.pct||''}" placeholder="0" onfocus="comFocus('pct')" oninput="hsetCom('pct',this.value)" onchange="comAudit('pct')"></div>
+      <div class="f w2"><label class="lbl">คิด % จาก</label><select class="inp" onchange="hsetCom('basis',this.value,true)">
+        ${Object.keys(SUPCOM_BASIS).map(k=>`<option value="${k}" ${sc.basis===k?'selected':''}>${esc(SUPCOM_BASIS[k])}</option>`).join('')}</select></div>
+      <div class="f"><label class="lbl">+ จำนวนเงินคงที่ (ถ้ามี)</label><input class="inp r mono" ${MGS.moneyAttrs(sc.amount)} placeholder="0" onfocus="comFocus('amount')" oninput="hsetCom('amount',this.value)" onchange="comAudit('amount')"></div>
+      <div class="f"><label class="lbl">สกุลเงินจำนวนคงที่</label><select class="inp" onchange="hsetCom('cur',this.value,true)">
+        ${curOpts.map(c=>`<option ${sc.cur===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="f w2"><label class="lbl">หมายเหตุ (เงื่อนไขการจ่ายค่าคอม)</label><input class="inp" value="${esc(sc.note)}" placeholder="เช่น จ่ายหลังลูกค้าชำระครบ 30 วัน" onfocus="comFocus('note')" oninput="hsetCom('note',this.value)" onchange="comAudit('note')"></div>
+    </div>
+    <div class="hint" id="scomCalc" style="margin-top:6px">${supComCalcText()}</div></div>`;
+}
+function supComCalcText(){
+  if(!editing)return '';
+  const t=computeQuote(editing),cur=curOf(editing),sc=supComOf(editing.header);
+  if(!(sc.pct>0)&&!(sc.amount>0))return '<span style="color:var(--amber)">⚠ ยังไม่ได้ใส่ค่าคอม — ใส่ % หรือจำนวนเงิน</span>';
+  if(sc.amount>0&&!(getRate(editing.header,sc.cur)>0))return `<span style="color:var(--red)">⛔ ไม่มีเรตแลกเงินของ ${esc(sc.cur)} — กรอกเรตในหัวใบก่อน</span>`;
+  return `รายได้ MGS จากค่าคอม ≈ <b class="mono" style="color:var(--green)">${money(t.supplierCom,cur)}</b>`+
+    ` (${pp(sc.pct)} × ${money(t.supplierComBase,cur)}${sc.amount>0?' + '+esc(fmt(sc.amount))+' '+esc(sc.cur):''})`+
+    ` · คิดเป็น ${pp(t.supplierComPct)} ของฐาน · ราคาขายลูกค้า = ต้นทุน`;
+}
+function hsetDeal(v){
+  const H=editing.header;const oldV=isComDeal(H)?'commission':'normal';
+  if(v===oldV||!DEAL_TYPES[v])return;
+  if(v==='commission'&&!H.supplierCom)H.supplierCom={pct:0,amount:0,cur:H.currency||'THB',basis:'supplier',supplier:'',note:''};
+  H.dealType=v;                              // %GP เดิมของแต่ละบรรทัดยังเก็บไว้ — สลับกลับเป็นดีลปกติได้ทันที
+  markDirty();logAuditStatus(editing,'Header · ประเภทดีล',DEAL_TYPES[oldV],DEAL_TYPES[v]);
+  render();
+  toast(v==='commission'?'ดีลค่าคอมจาก Supplier: ราคาขาย = ต้นทุน · Commission Sales เกรด '+COMDEAL_GRADE:'กลับเป็นดีลปกติ: ใช้ %GP เดิมของแต่ละรายการ','good');
+}
+const SUPCOM_LABEL={supplier:'Supplier',pct:'%',amount:'จำนวนเงิน',cur:'สกุลเงิน',basis:'ฐานคำนวณ',note:'หมายเหตุ'};
+// ช่องพิมพ์: บันทึกประวัติครั้งเดียวตอนออกจากช่อง (ไม่ใช่ทุกตัวอักษร) · dropdown: บันทึกทันที
+const _comOld={};
+function comFocus(k){if(editing)_comOld[k]=(editing.header.supplierCom||{})[k];}
+function comAudit(k){
+  if(!editing||!(k in _comOld))return;
+  const oldV=_comOld[k],nv=(editing.header.supplierCom||{})[k];delete _comOld[k];
+  if(String(oldV)!==String(nv))logAuditStatus(editing,'ค่าคอม Supplier · '+(SUPCOM_LABEL[k]||k),oldV===''||oldV==null?'—':oldV,nv===''||nv==null?'—':nv);
+}
+function hsetCom(k,v,audit){
+  const H=editing.header;if(!H.supplierCom)H.supplierCom={pct:0,amount:0,cur:H.currency||'THB',basis:'supplier',supplier:'',note:''};
+  const sc=H.supplierCom,oldV=sc[k];
+  sc[k]=(k==='pct'||k==='amount')?Math.max(0,MGS.parse.num(v,0)):v;
+  if(String(oldV)!==String(sc[k])){markDirty();
+    if(audit)logAuditStatus(editing,'ค่าคอม Supplier · '+(SUPCOM_LABEL[k]||k),oldV===''||oldV==null?'—':oldV,sc[k]===''||sc[k]==null?'—':sc[k]);}
+  const c=document.getElementById('scomCalc');if(c)c.innerHTML=supComCalcText();
+  renderSummary();
+}
 
 /* ---- full table re-render (only on add/remove/header change) ---- */
 function lockNote(kind,H){
@@ -2681,6 +2785,8 @@ function refreshLines(){
   // 2.6: show the target unit price the Sales asked for (read-only reference) when the QT came from an SR
   const nCols=10;
   const dutyTip=lockNote('duty',H), clrTip=lockNote('clr',H);
+  const cd=isComDeal(H), cdTip='ดีลค่าคอมจาก Supplier — ขายราคาทุน ไม่บวก %GP (เปลี่ยน “ประเภทดีล” ด้านบนถ้าต้องการบวกกำไร)';
+  const cdAttr=cd?`disabled title="${esc(cdTip)}" style="opacity:.55;cursor:not-allowed;font-weight:700"`:'';
 
   /* ---------- desktop table (v4.3: พอดีจอ 1280px โดยไม่ต้องเลื่อนซ้ายขวา) ----------
      4 โซนเหมือนเดิม แต่รวมช่องที่เป็นคู่กันไว้ในเซลล์เดียว และย้ายช่องที่แก้ไม่บ่อยไปไว้ในแถวรายละเอียด (⋯)
@@ -2707,9 +2813,9 @@ function refreshLines(){
       <td class="ic z-cost-c"><div class="pct-wrap lockwrap"><input class="cell-inp" style="${ddp?'opacity:.45;cursor:not-allowed':''}" type="number" step="any" value="${L.dutyPct}" ${ddp?`disabled title="${esc(dutyTip)}"`:''} onfocus="auditFocus(this)" onchange="auditLine(${i},'Duty%',this)" oninput="lset(${i},'dutyPct',this.value)">${ddp?`<span class="lock-ico" title="${esc(dutyTip)}">🔒</span>`:''}</div></td>
       <td class="ic z-cost-c"><div class="pct-wrap lockwrap"><input class="cell-inp" style="${!cif?'opacity:.45;cursor:not-allowed':''}" type="number" step="any" value="${L.clearancePct}" ${!cif?`disabled title="${esc(clrTip)}"`:''} onfocus="auditFocus(this)" onchange="auditLine(${i},'Clearance%',this)" oninput="lset(${i},'clearancePct',this.value)">${!cif?`<span class="lock-ico" title="${esc(clrTip)}">🔒</span>`:''}</div></td>
       <td class="r mono z-cost-c" id="lc_${i}" style="font-weight:700;color:var(--blue)" title="ทุน + Duty + Clearance + ค่าขนส่ง/ชิ้น (${esc(H.currency)})">${fmt(r.baseCost)}</td>
-      <td class="ic zs z-gp-c"><div class="pct-wrap"><input class="cell-inp" id="op_${i}" type="number" step="any" value="${L.opPct}" style="font-weight:700;color:${gpColor(r.gp,cat)}" onfocus="auditFocus(this)" onchange="auditLine(${i},'%GP',this)" oninput="lset(${i},'opPct',this.value)" title="%GP = กำไรขั้นต้นบนราคาขาย (Price = Cost / (1 - %GP))"></div>
+      <td class="ic zs z-gp-c"><div class="pct-wrap${cd?' lockwrap':''}"><input class="cell-inp" id="op_${i}" type="number" step="any" value="${cd?0:L.opPct}" ${cdAttr||`style="font-weight:700;color:${gpColor(r.gp,cat)}"`} onfocus="auditFocus(this)" onchange="auditLine(${i},'%GP',this)" oninput="lset(${i},'opPct',this.value)" title="%GP = กำไรขั้นต้นบนราคาขาย (Price = Cost / (1 - %GP))">${cd?`<span class="lock-ico" title="${esc(cdTip)}">🔒</span>`:''}</div>
           <div class="cell-sub" style="color:var(--green)" title="กำไรต่อหน่วย">+<span id="opu_${i}">${fmt(r.op)}</span></div></td>
-      <td class="ic zs z-sell-c"><input class="cell-inp" id="tu_${i}" style="font-weight:700;color:var(--orange-deep)" ${MGS.moneyAttrs(r.totalUP)} onfocus="auditFocus(this)" onchange="auditTotal(${i},this);totalEdit(${i},this.value,this)" title="แก้ราคาขายนี้เพื่อคำนวณ %GP ย้อนกลับ">
+      <td class="ic zs z-sell-c"><input class="cell-inp" id="tu_${i}" ${cdAttr||'style="font-weight:700;color:var(--orange-deep)"'} ${MGS.moneyAttrs(r.totalUP)} onfocus="auditFocus(this)" onchange="auditTotal(${i},this);totalEdit(${i},this.value,this)" title="แก้ราคาขายนี้เพื่อคำนวณ %GP ย้อนกลับ">
           <div class="cell-sub" id="tum_${i}">${marginHint(r,cat,true)}</div>
           ${tgt?`<div class="cell-sub" style="color:var(--blue)" title="ราคาเป้าหมายที่ Sales ระบุมาใน SR (อ่านอย่างเดียว)">เป้า ${fmt(+L.targetUp)}</div>`:''}</td>
       <td class="r mono z-sell-c" id="lt_${i}" style="font-weight:700;color:var(--orange-deep)">${fmt(r.lineTotal)}</td>
@@ -2751,17 +2857,18 @@ function refreshLines(){
     <th class="r zs z-sell-h">ราคาขาย/หน่วย</th><th class="r z-sell-h">รวม</th>
     <th class="zs"></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="lines-mobile">${cards}
-      <div class="hint" style="text-align:center;padding:2px 0 6px">แตะรายการเพื่อแก้จำนวน / ต้นทุน / %GP / ราคาขาย / รายละเอียด</div></div>`;
+      <div class="hint" style="text-align:center;padding:2px 0 6px">${cd?'ดีลค่าคอม: ขายราคาทุน · แตะรายการเพื่อแก้จำนวน / ต้นทุน / รายละเอียด':'แตะรายการเพื่อแก้จำนวน / ต้นทุน / %GP / ราคาขาย / รายละเอียด'}</div></div>`;
   renderSummary();
 }
 /* margin สด ๆ ใต้ราคาขาย — เห็นผลทันทีว่าราคาที่พิมพ์ได้กำไรเท่าไร (ไอคอน + ตัวหนา + สี ไม่ใช้สีอย่างเดียว) */
 function marginHint(r,cat,short){
   if(!(r.totalUP>0))return '<span style="color:var(--muted)">ยังไม่มีราคาขาย</span>';
+  if(r.comDeal)return `<b style="color:var(--blue)" title="ดีลค่าคอมจาก Supplier — ราคาขาย = ต้นทุน รายได้มาจากค่าคอม">= ราคาทุน${short?'':' · รายได้จากค่าคอม Supplier'}</b>`;
   if(r.op<0)return `<b style="color:var(--red)" title="ราคาขายต่ำกว่าต้นทุน ${esc(fmt(Math.abs(r.op)))} ต่อหน่วย">⛔ ขาดทุน${short?'':' '+fmt(Math.abs(r.op))+' / หน่วย'}</b>`;
   const c=gpClass(r.gp,cat),ic=c==='green'?'✓':c==='amber'?'⚠':'⛔';
   return `<b style="color:var(--${c})">${ic} GP ${Math.round(r.gp*10)/10}%</b>${short?'':` · กำไร ${fmt(r.op)} / หน่วย`}`;
 }
-function gpChip(r,cat){return `<span class="lr-gp ${gpClass(r.gp,cat)}">GP ${(Math.round(r.gpPct*10)/10)}%</span>`}
+function gpChip(r,cat){return r.comDeal?'<span class="lr-gp blue">ราคาทุน</span>':`<span class="lr-gp ${gpClass(r.gp,cat)}">GP ${(Math.round(r.gpPct*10)/10)}%</span>`}
 function lineRowMobile(L,i,H){
   const r=computeLine(L,H),cat=L.comGroup||comCategory(L.group);
   return `<button type="button" class="lrow" id="mrow_${i}" onclick="openLineSheet(${i})">
@@ -2807,8 +2914,8 @@ function openLineSheet(i){
         <span class="zg"><i>กำไร/ชิ้น</i><b id="mopu_${i}">${fmt(r.op)}</b></span></div>
       <div class="sh-sec">③ มาร์จิ้น · ④ ราคาขาย</div>
       <div class="lc-grid" style="margin-top:0">
-        <div class="f"><label>%GP</label><input class="num" id="mop_${i}" type="number" step="any" value="${L.opPct}" style="font-weight:700;color:${gpColor(r.gp,cat)}" onfocus="auditFocus(this)" onchange="auditLine(${i},'%GP',this)" oninput="lset(${i},'opPct',this.value)"></div>
-        <div class="f"><label>ราคาขาย/หน่วย</label><input class="num" id="mtu_${i}" ${MGS.moneyAttrs(r.totalUP)} style="font-weight:700;background:var(--surface-2)" title="แก้ได้เพื่อคิด %GP ย้อนกลับ" onfocus="auditFocus(this)" onchange="auditTotal(${i},this);totalEdit(${i},this.value,this)">
+        <div class="f"><label>%GP${r.comDeal?' 🔒':''}</label><input class="num" id="mop_${i}" type="number" step="any" value="${r.comDeal?0:L.opPct}" ${r.comDeal?'disabled title="ดีลค่าคอมจาก Supplier — ขายราคาทุน" style="opacity:.55;font-weight:700"':`style="font-weight:700;color:${gpColor(r.gp,cat)}"`} onfocus="auditFocus(this)" onchange="auditLine(${i},'%GP',this)" oninput="lset(${i},'opPct',this.value)"></div>
+        <div class="f"><label>ราคาขาย/หน่วย${r.comDeal?' 🔒':''}</label><input class="num" id="mtu_${i}" ${MGS.moneyAttrs(r.totalUP)} ${r.comDeal?'disabled style="opacity:.55;font-weight:700" title="ดีลค่าคอมจาก Supplier — ราคาขาย = ต้นทุน"':'style="font-weight:700;background:var(--surface-2)" title="แก้ได้เพื่อคิด %GP ย้อนกลับ"'} onfocus="auditFocus(this)" onchange="auditTotal(${i},this);totalEdit(${i},this.value,this)">
           <div class="mhint" id="mtum_${i}">${marginHint(r,cat)}</div></div>
         ${(+L.targetUp||0)>0?`<div class="f" style="grid-column:span 2"><label>Target U/P ที่ Sales ขอมา (อ่านอย่างเดียว)</label>
           <input class="num" value="${fmt(+L.targetUp)}" disabled style="color:var(--blue);background:var(--blue-soft)"></div>`:''}
@@ -2849,7 +2956,7 @@ function recalcRow(i){
   setHTML('tum_'+i,marginHint(r,cat,true));setHTML('mtum_'+i,marginHint(r,cat));
   setVal('mpc_'+i,fmt(r.pricePC));
   ['op_'+i,'mop_'+i].forEach(id=>{const el=document.getElementById(id);
-    if(el){el.style.color=gpColor(r.gp,cat); if(document.activeElement!==el)el.value=Math.round(r.gpPct*1000)/1000;}});
+    if(el){if(!r.comDeal)el.style.color=gpColor(r.gp,cat); if(document.activeElement!==el)el.value=Math.round(r.gpPct*1000)/1000;}});
   MGS.setMoney(document.getElementById('tu_'+i),r.totalUP);
   MGS.setMoney(document.getElementById('mtu_'+i),r.totalUP);
 }
@@ -2872,6 +2979,7 @@ function lset(i,k,v){
 }
 // reverse calc: target Total U/P -> %GP MARGIN  (Margin = 1 - Cost/Price)
 function totalEdit(i,v,el){
+  if(isComDeal(editing))return;                       // v5.3 ดีลค่าคอม: ราคาขาย = ต้นทุน แก้ไม่ได้
   const L=editing.lines[i],H=editing.header,r=computeLine(L,H);
   const baseCost=r.baseCost,T=MGS.parse.num(v,0);
   if(baseCost<=0){if(el){el.style.borderColor='var(--red)';setTimeout(()=>el.style.borderColor='',1200);}return}
@@ -2966,10 +3074,28 @@ function renderSummary(){
   if(com){
     const rows=Object.entries(t.com).filter(([k])=>k!=='Mounting'||t.com[k].total>0).map(([cat,c])=>`
       <div class="row-flex" style="justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line)">
-        <div><div style="font-weight:600;font-size:13px">${cat}</div><div class="hint">GP ${pp(c.gp)} · ${money(c.total,cur)}</div></div>
+        <div><div style="font-weight:600;font-size:13px">${cat}</div><div class="hint">${c.comDeal?'ดีลค่าคอม Supplier':'GP '+pp(c.gp)} · ${money(c.total,cur)}</div></div>
         <div class="row-flex"><span class="grade ${c.grade==='—'?'none':c.grade}">${c.grade}</span>
           <div style="text-align:right"><div class="mono" style="font-weight:600;font-size:13px">${c.rate?pp(c.rate):'—'}</div><div class="hint">คอม ${money(c.comAmt,cur)}</div></div></div></div>`).join('');
-    comHTML=`<div class="divider"></div><div class="hint" style="margin-bottom:6px;font-weight:600">เกรดคอมมิชชั่น (เฉพาะ Manager)</div>${rows||'<div class="hint">—</div>'}`;
+    comHTML=`<div class="divider"></div><div class="hint" style="margin-bottom:6px;font-weight:600">เกรดคอมมิชชั่น (เฉพาะ Manager)</div>${rows||'<div class="hint">—</div>'}`+
+      (t.isCommission?`<div class="hint" style="margin-top:6px;color:var(--red)">ดีลค่าคอมจาก Supplier → Commission Sales เกรด ${COMDEAL_GRADE} = ไม่มีค่าคอม</div>`:'');
+  }
+  const sc=t.isCommission?supComOf(editing.header):null;
+  if(t.isCommission){
+    box.innerHTML=`
+    <div class="tag blue" style="margin-bottom:10px">💼 ดีลค่าคอมจาก Supplier · ขายราคาทุน</div>
+    <div class="row-flex" style="justify-content:space-between;margin-bottom:9px"><span class="hint">ยอดสินค้า (Product)</span><b class="mono">${money(t.prodTotal,cur)}</b></div>
+    ${t.globalExtras>0?`<div class="row-flex" style="justify-content:space-between;margin-bottom:9px"><span class="hint">ค่าใช้จ่ายรวม (Extras)</span><b class="mono">${money(t.globalExtras,cur)}</b></div>`:''}
+    <div class="row-flex" style="justify-content:space-between;margin-bottom:9px"><span class="hint">ต้นทุนรวม (Landed) = ราคาขาย</span><b class="mono">${money(t.cost,cur)}</b></div>
+    <div class="row-flex" style="justify-content:space-between;margin-bottom:9px"><span class="hint">ค่าคอมจาก Supplier${sc.supplier?' ('+esc(sc.supplier)+')':''}</span><b class="mono" style="color:var(--green)">${money(t.supplierCom,cur)}</b></div>
+    <div class="row-flex" style="justify-content:space-between;margin-bottom:9px"><span class="hint">% ค่าคอม (เทียบ${sc.basis==='sale'?'มูลค่าขาย':'มูลค่าซื้อ'})</span><span class="tag blue">${pp(t.supplierComPct)}</span></div>
+    <div class="row-flex" style="justify-content:space-between;margin-bottom:9px"><span class="hint">Commission Sales</span><span class="grade ${COMDEAL_GRADE}" style="width:auto;padding:0 8px;height:20px;font-size:11px">เกรด ${COMDEAL_GRADE} · ไม่มีค่าคอม</span></div>
+    <div class="divider"></div>
+    <div class="row-flex" style="justify-content:space-between;align-items:flex-end">
+      <span class="hint">มูลค่าเสนอรวม</span>
+      <span class="disp" style="font-size:24px;font-weight:700;color:var(--orange-deep)">${money(t.total,curOf(editing))}</span></div>
+    ${comHTML}`;
+    renderLiveBar(t);return;
   }
   box.innerHTML=`
     <div class="row-flex" style="justify-content:space-between;margin-bottom:9px"><span class="hint">ยอดสินค้า (Product)</span><b class="mono">${money(t.prodTotal,cur)}</b></div>
@@ -2991,6 +3117,13 @@ function renderLiveBar(t){
   const cur=esc(editing.header.currency||'THB');
   const gpc=gpClass(t.gp,editing.header.groupType);
   const n=(editing.lines||[]).length;
+  if(t.isCommission){
+    bar.innerHTML=`<div class="lb-item lb-sell"><span>ยอดขายรวม (Revenue)</span><b>${fmt(t.total)}</b><i>${cur} · ${n} รายการ</i></div>
+    <div class="lb-item lb-cost"><span>ต้นทุนรวม (Landed)</span><b>${fmt(t.cost)}</b><i>${cur} · ขายราคาทุน</i></div>
+    <div class="lb-item lb-gp"><span>ค่าคอมจาก Supplier</span><b>${fmt(t.supplierCom)}</b><i>${cur}</i></div>
+    <div class="lb-item lb-pct blue"><span>% ค่าคอม Supplier</span><b>${pp(t.supplierComPct)}</b><i>Sales เกรด ${COMDEAL_GRADE} · ไม่มีค่าคอม</i></div>`;
+    return;
+  }
   bar.innerHTML=`<div class="lb-item lb-sell"><span>ยอดขายรวม (Revenue)</span><b>${fmt(t.total)}</b><i>${cur} · ${n} รายการ</i></div>
     <div class="lb-item lb-cost"><span>ต้นทุนรวม (Landed)</span><b>${fmt(t.cost)}</b><i>${cur}${t.globalExtras>0?(' · รวม Extras '+fmt(t.globalExtras)):''}</i></div>
     <div class="lb-item lb-gp"><span>กำไรขั้นต้น (GP)</span><b>${fmt(t.profit)}</b><i>${cur}</i></div>
@@ -3148,19 +3281,28 @@ function exportCostCSV(){
   rows.push(['','','','','','','','','','','','',...(mgr?['']:[]),'รวมทั้งสิ้น',round2_(t.total)]);
   if(mgr){
     rows.push(['','','','','','','','','','','','','','ต้นทุนรวม',round2_(t.cost)]);
+    if(t.isCommission){
+      const sc=supComOf(H);
+      rows.push(['','','','','','','','','','','','','','ประเภทดีล','ค่าคอมจาก Supplier'+(sc.supplier?' ('+sc.supplier+')':'')]);
+      rows.push(['','','','','','','','','','','','','','ค่าคอม Supplier',round2_(t.supplierCom)]);
+      rows.push(['','','','','','','','','','','','','','% ค่าคอม',round2_(t.supplierComPct)]);
+      rows.push(['','','','','','','','','','','','','','Commission Sales','เกรด '+COMDEAL_GRADE+' (0%)']);
+    }else{
     rows.push(['','','','','','','','','','','','','','กำไร OP',round2_(t.profit)]);
     rows.push(['','','','','','','','','','','','','','%GP รวม',round2_(t.gp)]);
+    }
   }
   downloadCSV('cost_'+String(editing.docNo||H.ref||editing.id).replace(/[^\w.-]+/g,'_')+'.csv',rows);
 }
 function exportSummaryCSV(){
   const list=summaryFiltered();
   if(!list.length){toast('ไม่มีข้อมูลตามตัวกรอง','bad');return}
-  const rows=[['Doc No','โครงการ','ลูกค้า','Sales','กลุ่ม','สถานะ','รอบ','วันที่','สกุลเงิน','ยอดเสนอ','ต้นทุน','กำไร','%GP','ยอดเสนอ (บาท)']];
+  const rows=[['Doc No','โครงการ','ลูกค้า','Sales','กลุ่ม','สถานะ','รอบ','วันที่','สกุลเงิน','ยอดเสนอ','ต้นทุน','กำไร','%GP','ยอดเสนอ (บาท)','ประเภทดีล']];
   list.forEach(q=>{const t=computeQuote(q);
     rows.push([q.docNo||q.header.ref||'',q.header.title||'',q.header.customer||'',salesNameOf(q)||'',
       q.header.groupType||'',q.status||'',q.round||1,q.updated||'',curOf(q),
-      round2_(t.total),round2_(t.cost),round2_(t.profit),round2_(t.gp),round2_(toTHB(q,t.total))]);
+      round2_(t.total),round2_(t.cost),round2_(t.profit),round2_(t.gp),round2_(toTHB(q,t.total)),
+      t.isCommission?'ค่าคอม Supplier (กำไร = ค่าคอม)':'ปกติ']);
   });
   const agg=aggregateQuotes(list);
   rows.push([]);
@@ -3222,6 +3364,14 @@ function validateQuote(q){
       if(!((+o.L.up)>0))warnings.push(`${esc(label)}: ทุน (Unit Price) = 0`);
       if(o.gpPct<0)warnings.push(`${esc(label)}: %GP ติดลบ (${pp(o.gpPct)})`);
     });
+    // v5.3 ดีลค่าคอมจาก Supplier: ไม่มี %GP จึงไม่เทียบเกณฑ์ %GP ขั้นต่ำ — ตรวจค่าคอมแทน
+    if(isComDeal(q)){
+      const sc=supComOf(H);
+      if(sc.amount>0&&!(getRate(H,sc.cur)>0))errors.push(`ค่าคอม Supplier: ไม่มีเรตแลกเงินของสกุล <b>${esc(sc.cur)}</b> — กรอกเรตในหัวใบก่อน`);
+      if(sc.pct>=100)errors.push('ค่าคอม Supplier: % ค่าคอมต้องน้อยกว่า 100');
+      if(!(sc.pct>0)&&!(sc.amount>0))warnings.push('ดีลค่าคอมจาก Supplier แต่ยังไม่ได้ใส่ <b>ค่าคอม</b> (% หรือจำนวนเงิน) — ใบนี้จะมีรายได้ 0');
+      return {errors,warnings,belowThreshold};
+    }
     Object.entries(t.com).forEach(([cat,c])=>{
       const min=minGpThreshold(cat);
       if(min!=null&&c.total>0&&c.gp<min){belowThreshold=true;
@@ -3373,7 +3523,7 @@ function quotesRows(){
       <td>${esc(q.header.customer||'—')}</td><td>${ownerTag(q)}</td>
       <td style="font-size:12px">${esc(creatorName(q))}</td>
       <td>${q.round>1?`<span class="tag blue">R${q.round}</span>`:`<span class="hint">R1</span>`}</td>
-      <td class="r mono" style="font-weight:600">${money(t.total,curOf(q))}</td><td>${gpTag(t.gp,q.header.groupType)}</td>
+      <td class="r mono" style="font-weight:600">${money(t.total,curOf(q))}</td><td>${gpTagQ(q,t)}</td>
       <td><span class="tag ${STATUS_TAG[st]||'grey'}" title="เปลี่ยนสถานะได้ในหน้ารายละเอียดใบ / หน้าติดตามงาน">${esc(STATUS_TH[st]||st)}</span>${inApprovalStage(q)?`<div class="row-flex" style="gap:3px;margin-top:3px">${approvalBadges(q)}</div>`:''}${(q._conflict||q._cloudNewer)?'<div><span class="abadge warn" title="ข้อมูลบน Cloud ถูกแก้โดยคนอื่น — เปิดแก้เพื่อเลือกเวอร์ชัน">⚠ Cloud ใหม่กว่า</span></div>':''}</td>
       <td style="font-size:12px;color:var(--muted)">${q.updated||'—'}</td>
       <td><div class="row-flex" style="flex-wrap:nowrap;gap:4px">
@@ -3582,7 +3732,7 @@ function viewPreview(){
   ${inApprovalStage(q)?`<div class="no-print card" style="border-left:4px solid var(--amber);margin-bottom:12px"><div class="card-b" style="padding:11px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
     <b style="font-size:13px">อนุมัติ 2 ฝ่าย (ก่อนหลังได้):</b> <span class="ac-badges">${approvalBadges(q)}</span>
     <span class="hint">${apv.complete?'ครบแล้ว':'รอ '+esc(apv.missing.map(roleTH).join(' + '))}</span>
-    ${internal?`<span style="margin-left:auto" class="row-flex"><span class="hint">%GP รวม</span>${gpBig(t.gp,H.groupType)}</span>`:''}</div></div>`:''}
+    ${internal?`<span style="margin-left:auto" class="row-flex"><span class="hint">${t.isCommission?'ค่าคอม Supplier':'%GP รวม'}</span>${gpBigQ(q,t)}</span>`:''}</div></div>`:''}
   ${((q.status||'')==='Approved')?`<div class="no-print card" style="border-left:4px solid var(--blue);background:var(--blue-soft);margin-bottom:12px"><div class="card-b" style="padding:11px 16px;font-size:13px">
     🔒 อนุมัติครบแล้ว — รอ <b>${esc(gatekeeperName())}</b> กด “ปล่อยราคา” เพื่อส่งต่อให้ <b>${esc(salesNameOf(q)||'Sales เจ้าของงาน')}</b></div></div>`:''}
   ${q.needsApproval?`<div class="no-print card" style="border-left:4px solid var(--amber);background:var(--amber-soft);margin-bottom:12px"><div class="card-b" style="padding:11px 16px;font-size:13px">
@@ -3604,7 +3754,8 @@ function viewPreview(){
       ${internal?`<b>Sales:</b><span>${esc(salesNameOf(q)||'—')}</span>`:''}
       <b>Currency:</b><span>${esc(H.currency)}</span><b>Terms:</b><span>${esc(H.priceTerm)}</span>${H.paymentTerm?`<b>Payment:</b><span>${esc(H.paymentTerm)}</span>`:''}
       <b>Incoterm:</b><span>${esc(H.incoterm)}</span>${internal?`<b>Exchange rate:</b><span>${H.exrate}</span>`:''}
-      ${gp?`<b>% GP โครงการรวม:</b><span>${com?`<span class="grade ${comObj.grade==='—'?'none':comObj.grade}" style="width:20px;height:20px;font-size:11px;vertical-align:middle">${comObj.grade}</span> &nbsp;`:''}${pp(t.gp)}</span>`:''}</div>
+      ${(gp&&t.isCommission)?`<b>ดีลค่าคอม Supplier:</b><span><span class="grade ${COMDEAL_GRADE}" style="width:auto;padding:0 7px;height:20px;font-size:11px;vertical-align:middle">Sales ${COMDEAL_GRADE}</span> &nbsp;ค่าคอม ${money(t.supplierCom,H.currency)} (${pp(t.supplierComPct)}) · ขายราคาทุน</span>`:''}
+      ${(gp&&!t.isCommission)?`<b>% GP โครงการรวม:</b><span>${com?`<span class="grade ${comObj.grade==='—'?'none':comObj.grade}" style="width:20px;height:20px;font-size:11px;vertical-align:middle">${comObj.grade}</span> &nbsp;`:''}${pp(t.gp)}</span>`:''}</div>
     <div class="tw" style="border:none"><table><thead><tr>
       <th>No.</th><th>Item No.</th><th>Description</th><th class="r">Qty</th><th>Unit</th>
       ${gp?`<th class="r z-cost-h">ต้นทุน/หน่วย (${esc(H.currency)})</th><th class="r z-gp-h">%GP</th><th class="r z-gp-h">กำไร/หน่วย</th>`:''}<th class="r">Unit Price (${esc(H.currency)})</th><th class="r">Amount (${esc(H.currency)})</th><th>Warranty</th></tr></thead>
@@ -3612,7 +3763,7 @@ function viewPreview(){
       <td>${i+1}</td><td class="mono" style="font-size:11px">${esc(L.code)}</td>
       <td style="white-space:normal;max-width:300px">${esc(L.desc||L.code)}</td>
       <td class="r mono">${MGS.fmt.qty(L.qty)}</td><td>${esc(L.uom)}</td>
-      ${gp?`<td class="r mono" style="color:var(--blue)">${fmt(r.baseCost)}</td><td class="r mono" style="font-weight:700;color:${gpColor(r.gp,L.comGroup||comCategory(L.group))}">${pp(L.opPct)}</td><td class="r mono" style="color:var(--green)">${fmt(r.op)}</td>`:''}
+      ${gp?`<td class="r mono" style="color:var(--blue)">${fmt(r.baseCost)}</td><td class="r mono" style="font-weight:700;color:${r.comDeal?'var(--blue)':gpColor(r.gp,L.comGroup||comCategory(L.group))}">${pp(r.gpPct)}</td><td class="r mono" style="color:var(--green)">${fmt(r.op)}</td>`:''}
       <td class="r mono">${fmt(r.totalUP)}</td><td class="r mono" style="font-weight:600">${fmt(r.lineTotal)}</td><td>${esc(L.warranty||'—')}</td></tr>`).join('')}
       ${(t.globalExtras>0)?`<tr><td colspan="${preCols}" style="text-align:right">ค่าใช้จ่ายเพิ่มเติม (Extra Costs)</td>
         <td class="r mono">${fmt(t.globalExtras)}</td><td></td></tr>`:''}
@@ -3620,8 +3771,8 @@ function viewPreview(){
         <td class="r mono" style="font-weight:700;font-size:13px">${fmt(t.total)}</td><td></td></tr></tbody></table></div>
     ${gp?`<div style="margin-top:14px;background:var(--surface-2);border-radius:10px;padding:12px 14px" class="no-print"><div class="row-flex" style="gap:28px;font-size:12px">
       <span><span class="hint">ต้นทุนรวม</span> <b class="mono">${money(t.cost,H.currency)}</b></span>
-      <span><span class="hint">กำไร OP</span> <b class="mono" style="color:var(--green)">${money(t.profit,H.currency)}</b></span>
-      <span><span class="hint">% GP รวม</span> <b>${pp(t.gp)}</b></span>
+      <span><span class="hint">${t.isCommission?'ค่าคอมจาก Supplier':'กำไร OP'}</span> <b class="mono" style="color:var(--green)">${money(t.profit,H.currency)}</b></span>
+      <span><span class="hint">${t.isCommission?'% ค่าคอม':'% GP รวม'}</span> <b>${pp(t.isCommission?t.supplierComPct:t.gp)}</b></span>
       ${com?Object.entries(t.com).map(([c,v])=>`<span><span class="hint">${c}</span> <span class="grade ${v.grade==='—'?'none':v.grade}" style="width:18px;height:18px;font-size:10px;vertical-align:middle">${v.grade}</span> <span class="mono">${v.rate?pp(v.rate):'—'}</span></span>`).join(''):''}</div></div>`:''}
     <div style="margin-top:16px"><div style="font-weight:700;margin-bottom:6px">Remark:</div>
       <ol style="margin-left:18px;font-size:12px;line-height:1.8">${(q.remarks||[]).filter(r=>r.trim()).map(r=>`<li>${esc(r)}</li>`).join('')}</ol>
@@ -3763,7 +3914,7 @@ function releasePrice(id){
   <div class="modal-b">
     <p style="line-height:1.9;font-size:14px">กำลังจะปล่อยราคาใบ <b>${esc(q.docNo||q.header.ref||'')}</b><br>
       ให้กับ Sales เจ้าของงาน: <b style="color:var(--blue)">${esc(ownerName)}</b><br>
-      มูลค่ารวม: <b>${money(t.total,curOf(q))}</b> · %GP <b>${(t.gp||0).toFixed(1)}%</b></p>
+      มูลค่ารวม: <b>${money(t.total,curOf(q))}</b> · ${t.isCommission?`ดีลค่าคอม Supplier <b>${money(t.supplierCom,curOf(q))}</b> (Sales เกรด ${COMDEAL_GRADE})`:`%GP <b>${(t.gp||0).toFixed(1)}%</b>`}</p>
     <div class="hint" style="margin-top:10px;line-height:1.7">เมื่อปล่อยแล้ว ${esc(ownerName)} จะเห็นราคานี้และนำไปเสนอลูกค้าได้ · ${statusOf(q)==='Pending'?'ใบนี้เป็นข้อมูลรุ่นเก่า — เป็นการ<b>ยืนยัน</b>สิทธิ์เห็นราคาให้เจ้าของงาน':'สถานะจะเปลี่ยนเป็น <b>พร้อมเสนอลูกค้า</b>'}</div>
   </div>
   <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button>
@@ -3817,7 +3968,7 @@ function kanbanCard(q){
   const upd=lastUpdate(q);
   const appr=inApprovalStage(q);
   // v4.1: ผู้บริหารเห็น %GP ตัวใหญ่ + ป้ายรออนุมัติฝั่งไหน บนหน้าการ์ดเลย
-  const gpBox=(canSeeCost(CURRENT)&&appr)?(()=>{const t=quoteTotals(q);return `<div class="kc-gp ${gpClass(t.gp,q.header.groupType)}">${pp(t.gp)}<span>%GP</span></div>`})():'';
+  const gpBox=(canSeeCost(CURRENT)&&appr)?(()=>{const t=quoteTotals(q);return `<div class="kc-gp ${gpClassQ(q,t)}">${pp(t.isCommission?t.supplierComPct:t.gp)}<span>${gpWordQ(q)}</span></div>`})():'';
   const lv=stale&&lvOf(q)==='ok'?'over':lvOf(q);
   return `<div class="kcard lv-card lv-${lv} ${appr&&canApprove(q)?'mine':''} ${isFlash(q.id)?'flash':''}" onclick="openQuote('${q.id}')">
     <div class="kc-top">
@@ -4814,6 +4965,7 @@ function buildSalesProjection(q){
     warranty:o.L.warranty||'',lead:o.L.lead||'',deliveryDate:o.L.deliveryDate||'',
     targetUp:+o.L.targetUp||0,customerRemark:o.L.customerRemark||''}));
   base.extrasTotal=t.globalExtras;                   // ยอดรวมค่าใช้จ่ายเพิ่ม (ไม่แตกรายการต้นทุน)
+  if(t.isCommission){base.comDeal=true;base.salesComGrade=COMDEAL_GRADE;}   // v5.3 แค่ป้าย ไม่มีตัวเลขค่าคอม Supplier
   base.total=t.total;
   return base;
 }

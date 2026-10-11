@@ -34,6 +34,9 @@
  *     (สำรองก่อนเสมอ · Settings.dataEpoch ใหม่ = ทุกเครื่องล้างสำเนาในเครื่องแล้วโหลดใหม่ · เครื่องเก่าส่งใบที่ถูกล้างกลับมาไม่ได้ = DATA_RESET)
  *  J) v5.2: ใบ Pending ที่ Sales ยังไม่เห็นราคา (REPAIR) บอกเหตุผล — follow.repair = 'NO_COPY' (ยังไม่มีราคาฉบับ Sales → กดสร้างได้)
  *     หรือ 'NO_PRICE' (มีฉบับ Sales แล้วแต่ไม่มีราคาในใบ → Sourcing ต้องใส่ราคา) · ไม่นับเป็น "พร้อมเสนอลูกค้า" ในทุกหน้าจอ
+ *  K) v5.3: ใบเสนอราคา "ดีลค่าคอมจาก Supplier" — header.dealType='commission' + header.supplierCom{pct,amount,cur,basis,supplier,note}
+ *     ขายราคาทุน (ไม่มี %GP) · รายได้ = ค่าคอม Supplier (คอลัมน์ Profit) · Commission Sales เกรด D (0%) · คำนวณฝั่ง client เหมือนเดิม
+ *     server เปลี่ยนแค่ COST_KEYS เพิ่ม 'suppliercom' → ตัวเลขค่าคอม Supplier ไม่หลุดไปหา Sales · ไม่มีคอลัมน์ใหม่ใน Sheet
  *  * v4.2: รัน setup() หนึ่งครั้ง เพื่อเพิ่มคอลัมน์ Email / Active ในแท็บ Users แล้ว Deploy → New version
  *
  * สิ่งที่เปลี่ยนจาก v2.1 (สำคัญ — ต้องอัปเดต HTML ทั้ง 2 ไฟล์พร้อมกัน)
@@ -52,7 +55,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '5.2';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '5.3';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -196,7 +199,8 @@ var COST_KEYS = ['up','costcur','dutypct','clearancepct','freep','oppct','extras
   'cost','linecost','basecost','pricepc','duty','clearance','profit','lineprofit','op',
   'gp','gppct','gppercent','margin','purchasecost','supplierprice','supplier','landedcost',
   'internaldiscount','commission','comgroup','boiprice','defaultprice','needsapproval',
-  'rawup','approvalroles','auditlogs','globalextras'];
+  'rawup','approvalroles','auditlogs','globalextras',
+  'suppliercom'];   // v5.3 ค่าคอมที่ Supplier จ่าย MGS (ดีลค่าคอม) — ข้อมูลภายใน
 
 function stripCost_(v) {
   if (v === null || typeof v !== 'object') return v;

@@ -100,7 +100,8 @@ const shot = async (p, n) => { if (OUT) await p.screenshot({ path: OUT + '/v50_'
   const pm = await loginIndex(b, 'pm');
   await pm.evaluate(() => go('settings')); await pm.waitForTimeout(500);
   txt = await pm.textContent('#content');
-  ok('หน้า ⚙️ ตั้งค่า: ตาราง "คำขอราคาส่งถึงใคร" · Mounting → Napasorn · Inverter → Chatraporn', /คำขอราคาส่งถึงใคร/.test(txt) &&
+  // v5.4: ตารางเดิมเปลี่ยนชื่อเป็น "สำรอง … ส่งตามกลุ่มงาน" (ใช้หลังผู้รับผิดชอบตามหมวดสินค้า) — ผลส่งงานตามกลุ่มงานยังเหมือนเดิม
+  ok('หน้า ⚙️ ตั้งค่า: ตาราง "ส่งตามกลุ่มงาน" (สำรอง) · Mounting → Napasorn · Inverter → Chatraporn', /ส่งตามกลุ่มงาน/.test(txt) && /หมวดสินค้า · กลุ่มสินค้า · ผู้รับผิดชอบ/.test(txt) &&
     await pm.evaluate(() => autoRouteOf('Mounting').name === 'Napasorn' && autoRouteOf('Inverter').name === 'Chatraporn'), txt.slice(0, 200));
   ok('ชื่อที่แสดง: Sourcing Manager (role Procurement Mgr)', await pm.evaluate(() => roleTH(CURRENT.role) === 'Sourcing Manager'));
   console.log('== v5.1 ล้างข้อมูลเหลือ Pending: เครื่องที่เปิดค้างอยู่ ==');

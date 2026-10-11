@@ -37,6 +37,11 @@
  *  K) v5.3: ใบเสนอราคา "ดีลค่าคอมจาก Supplier" — header.dealType='commission' + header.supplierCom{pct,amount,cur,basis,supplier,note}
  *     ขายราคาทุน (ไม่มี %GP) · รายได้ = ค่าคอม Supplier (คอลัมน์ Profit) · Commission Sales เกรด D (0%) · คำนวณฝั่ง client เหมือนเดิม
  *     server เปลี่ยนแค่ COST_KEYS เพิ่ม 'suppliercom' → ตัวเลขค่าคอม Supplier ไม่หลุดไปหา Sales · ไม่มีคอลัมน์ใหม่ใน Sheet
+ *  L) v5.4: ผู้รับผิดชอบตาม "หมวดสินค้า" — Settings.catOwner = { หมวด: Id ผู้ใช้ } (ตั้งที่หน้า ⚙️ ตั้งค่า)
+ *     · ลำดับชั้น: หมวดสินค้า (ย่อย เช่น INVERTER / DATA LOGGER / BATTERY) → กลุ่มสินค้า (ใช้คิดค่าคอม: Inverter / ESS / …)
+ *     · ทั้ง SR และ QT วิ่งถึงผู้ดูแลหมวดของรายการส่วนใหญ่ในใบ (routeFor_) · QT ที่มีผู้รับงานแล้ว (AssignedTo) ใช้คนนั้น
+ *     · row.follow.resp = ผู้รับผิดชอบเอกสาร (ทุกขั้น) · follow.actor.uids = Id ของคนที่ต้องทำต่อ → หน้าติดตามงานกรอง "งานของฉัน" ได้ตรง
+ *     · ไม่มีคอลัมน์ใหม่ · ใบเก่าที่ไม่มี routedSig ยังใช้ผู้รับเดิมตราบที่กลุ่มงานไม่เปลี่ยน (ไม่ย้ายงานที่ส่งไปแล้ว)
  *  * v4.2: รัน setup() หนึ่งครั้ง เพื่อเพิ่มคอลัมน์ Email / Active ในแท็บ Users แล้ว Deploy → New version
  *
  * สิ่งที่เปลี่ยนจาก v2.1 (สำคัญ — ต้องอัปเดต HTML ทั้ง 2 ไฟล์พร้อมกัน)
@@ -55,7 +60,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '5.3';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '5.4';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -654,8 +659,9 @@ function saveQuote_(p, sess) {
   var prevStatus = row ? String(sh.getRange(row, idx['Status']).getValue() || '') : '';   // v4.7: ใช้ตัดสินว่าต้องแจ้งเตือนไหม
   var stamp = nowISO_();
   var route = null;
-  if (String(p.docType || '') === 'SR' && p.detail) {
+  if (p.detail && (String(p.docType || '') === 'SR' || String(p.docType || 'QT') === 'QT')) {
     // v5.0: SR ที่บันทึกจากระบบทำราคา (รับงาน / ส่งต่อ / สร้างแทน Sales) — ผู้รับคำขอตัดสินที่ server เหมือน saveSR_
+    // v5.4: QT ก็วิ่งตามหมวดสินค้าเช่นกัน (ใช้เมื่อยังไม่มีผู้รับงาน AssignedTo)
     try {
       var srDoc = JSON.parse(p.detail), srPrev = null;
       if (row && idx.Detail) { try { srPrev = JSON.parse(String(sh.getRange(row, idx.Detail).getValue() || '{}')); } catch (e) { srPrev = null; } }
@@ -687,7 +693,7 @@ function saveQuote_(p, sess) {
   if (salesText) vals.SalesDetail = salesText;
   var savedRow = writeRow_(sh, idx, row, vals);
   logRow_('save', p.docNo || p.ref || '', p.id, sess.name, detail.note + (p.force ? ' (force)' : ''));
-  larkHook_(sh, idx, savedRow, prevStatus, vals.Status, sess, (route && route.forwarded && vals.Status === 'Submitted') ? { event:'SR_FORWARDED' } : null);
+  larkHook_(sh, idx, savedRow, prevStatus, vals.Status, sess, (route && route.forwarded && vals.DocType === 'SR' && vals.Status === 'Submitted') ? { event:'SR_FORWARDED' } : null);
   var out = { ok:true, id:p.id, trimmed:detail.trimmed, updatedAt:stamp, follow:followForRow_(sh, idx, savedRow) };
   if (route) { try { var rd = JSON.parse(p.detail); out.routedTo = rd.routedTo || ''; out.routedName = rd.routedName || ''; out.routedWhy = rd.routedWhy || ''; } catch (e) {} }
   return out;
@@ -1162,7 +1168,7 @@ var GROUP_TYPE_GROUPS = {
   'ESS':         ['ENERGY STORAGE', 'BATTERY'],
   'Residential': ['INVERTER', 'BATTERY', 'PV MODULE']
 };
-var ROUTE_WHY_TH = { setting:'ตั้งค่าผู้รับตามกลุ่มงาน', scope:'ตามกลุ่มสินค้าที่ดูแล', manual:'ส่งต่อโดยทีมภายใน', pool:'ส่งถึงทีม Sourcing' };
+var ROUTE_WHY_TH = { category:'ตามหมวดสินค้าที่ดูแล', setting:'ตั้งค่าผู้รับตามกลุ่มงาน', scope:'ตามกลุ่มสินค้าที่ดูแล', manual:'ส่งต่อโดยทีมภายใน', pool:'ส่งถึงทีม Sourcing' };
 function upGroup_(g) { return String(g || '').toUpperCase().replace(/\s+/g, ' ').trim(); }
 /** Scope ในชีท → 'all' หรือ array ของกลุ่ม (ตัวพิมพ์ใหญ่) — รองรับ JSON array / "all" / คั่นด้วยจุลภาค */
 function parseScope_(v) {
@@ -1196,18 +1202,37 @@ function peopleCtx_() {
   } catch (e) {}
   var st = {}; try { st = getSettingsRaw_() || {}; } catch (e) {}
   out.routing = (st.srRouting && typeof st.srRouting === 'object') ? st.srRouting : {};
+  out.catOwner = {};                                        // v5.4: หมวดสินค้า (ตัวพิมพ์ใหญ่) → Id ผู้รับผิดชอบ
+  if (st.catOwner && typeof st.catOwner === 'object')
+    for (var ck in st.catOwner) if (st.catOwner.hasOwnProperty(ck) && st.catOwner[ck]) out.catOwner[upGroup_(ck)] = String(st.catOwner[ck]);
   out.gate = gateFromList_(String(st.releaseGatekeeperId || ''), out.list);
   out.delegate = String(st.releaseDelegateId || '');
   return out;
 }
-/** ผู้รับคำขอราคาของกลุ่มงานนี้ → { id, name, why } (id ว่าง = ส่งถึงทีม Sourcing) — pure (ไม่มี I/O) */
+/** ผู้รับผิดชอบเอกสารนี้ → { id, name, why, cat } (id ว่าง = ส่งถึงทีม Sourcing) — pure (ไม่มี I/O)
+ *  v5.4 ลำดับ: 1) ผู้ดูแลหมวดของรายการในใบ (Settings.catOwner) — นับจำนวนรายการต่อคน มากสุดได้งาน เสมอกัน = คนของรายการแรก
+ *              2) ตั้งผู้รับตามกลุ่มงาน (Settings.srRouting) 3) ผู้ดูแลหมวดหลักของกลุ่มงาน 4) คะแนน Scope (v5.0) 5) ทีม Sourcing */
+function catOwnerUser_(cat, people) {
+  var id = (people.catOwner || {})[upGroup_(cat)], u = id && people.byId[id];
+  return (u && u.active && u.tier !== 'SALES') ? u : null;
+}
 function routeFor_(groupType, lineGroups, people) {
   var gt = String(groupType || '').trim(), ov = String((people.routing || {})[gt] || '').trim();
+  var cnt = {}, first = {}, order = 0, top = null;
+  (lineGroups || []).forEach(function (g) {
+    var u = g ? catOwnerUser_(g, people) : null; if (!u) return;
+    if (!cnt[u.id]) { cnt[u.id] = 0; first[u.id] = { n:order++, cat:upGroup_(g) }; }
+    cnt[u.id]++;
+  });
+  for (var uid in cnt) if (!top || cnt[uid] > cnt[top] || (cnt[uid] === cnt[top] && first[uid].n < first[top].n)) top = uid;
+  if (top) return { id:top, name:people.byId[top].name, why:'category', cat:first[top].cat };
   if (ov) {
     var o = people.byId[ov];
     if (o && o.active && o.tier !== 'SALES') return { id:o.id, name:o.name, why:'setting' };
   }
   var groups = GROUP_TYPE_GROUPS[gt] || [upGroup_(gt)], primary = groups[0];
+  var pu = catOwnerUser_(primary, people);
+  if (pu) return { id:pu.id, name:pu.name, why:'category', cat:primary };
   var lg = (lineGroups || []).map(upGroup_).filter(function (x) { return x; });
   var best = null, bestScore = 0, tie = false;
   people.list.forEach(function (u) {
@@ -1232,7 +1257,13 @@ function routeFor_(groupType, lineGroups, people) {
  *  · กลุ่มงานเดิม = คงผู้รับเดิม · เปลี่ยนกลุ่มงาน = คำนวณใหม่
  * @return {{routed:boolean, forwarded:boolean}}
  */
-var ROUTE_KEYS = ['routedTo', 'routedName', 'routedWhy', 'routedAt', 'routedBy'];
+var ROUTE_KEYS = ['routedTo', 'routedName', 'routedWhy', 'routedAt', 'routedBy', 'routedSig', 'routedCat'];
+/** v5.4: ลายเซ็นการส่งงาน = กลุ่มงาน + หมวดของรายการ — เปลี่ยนเมื่อไรคำนวณผู้รับใหม่ */
+function routeSig_(doc) {
+  var seen = {}, cats = [];
+  (doc.lines || []).forEach(function (L) { var g = upGroup_(L && L.group); if (g && !seen[g]) { seen[g] = 1; cats.push(g); } });
+  return String((doc.header || {}).groupType || '') + '|' + cats.sort().join(',');
+}
 function applyRoute_(doc, prev, sess, people) {
   var res = { routed:false, forwarded:false }, incoming = doc.routedTo, manual = !!doc.routedManual;
   delete doc.routedManual;
@@ -1247,12 +1278,16 @@ function applyRoute_(doc, prev, sess, people) {
       return res;
     }
   }
-  if (prev && prev.routedWhy && String((prev.header || {}).groupType || '') === gt) {
+  var sig = routeSig_(doc);
+  // คงผู้รับเดิม: ส่งต่อด้วยมือ · หรือกลุ่มงาน/หมวดไม่เปลี่ยน (ใบรุ่นเก่าที่ไม่มี routedSig เทียบแค่กลุ่มงานเหมือน v5.0)
+  if (prev && prev.routedWhy && (prev.routedWhy === 'manual' ? String((prev.header || {}).groupType || '') === gt
+        : prev.routedSig ? prev.routedSig === sig : String((prev.header || {}).groupType || '') === gt)) {
     ROUTE_KEYS.forEach(function (k) { if (prev[k] !== undefined) doc[k] = prev[k]; });
     return res;
   }
   var r = routeFor_(gt, (doc.lines || []).map(function (L) { return L && L.group; }), people);
   doc.routedTo = r.id; doc.routedName = r.name; doc.routedWhy = r.why; doc.routedAt = nowISO_(); doc.routedBy = 'auto';
+  doc.routedSig = sig; if (r.cat) doc.routedCat = r.cat;
   res.routed = true;
   return res;
 }
@@ -1316,7 +1351,8 @@ function followInfo_(r, idx) {
     approvalRoles:topArr_(det, 'approvalRoles') || [],
     quoteIds:topArr_(det, 'quoteIds') || [],
     assignedTo:String(cell_(r, idx, 'AssignedTo') || ''),       // v5.0: ผู้ทำราคา (Sourcing ที่รับงาน)
-    routedTo:topStr_(det, 'routedTo')                           // v5.0: SR ส่งถึงใคร (routeSR)
+    routedTo:topStr_(det, 'routedTo'),                          // v5.0: SR ส่งถึงใคร (routeSR) · v5.4 QT ด้วย
+    routedWhy:topStr_(det, 'routedWhy'), routedCat:topStr_(det, 'routedCat')
   };
 }
 /* v5.0: ขั้นตอนของคำขอราคา (stepper ทุกหน้าจอใช้ชุดนี้)  0 ส่งคำขอ · 1 Sourcing ทำราคา · 2–3 อนุมัติ 2 ฝ่าย
@@ -1332,8 +1368,9 @@ function stepOf_(f, owner) {
     var who = (st === 'Accepted' && f.assignedTo) ? f.assignedTo : (f.routedTo || f.assignedTo);
     return { step:1, actor:who ? { kind:'user', ids:[who] } : { kind:'pool' } };
   }
-  if (owner === 'SOURCING') return { step:1, actor:f.assignedTo ? { kind:'user', ids:[f.assignedTo] } : { kind:'pool' } };
-  if (owner === 'REPAIR') return { step:4, actor:f.assignedTo ? { kind:'user', ids:[f.assignedTo] } : { kind:'pool' } };
+  var resp = f.assignedTo || f.routedTo;                   // v5.4: ผู้รับงาน > ผู้ดูแลหมวดสินค้า > ทีม Sourcing
+  if (owner === 'SOURCING') return { step:1, actor:resp ? { kind:'user', ids:[resp] } : { kind:'pool' } };
+  if (owner === 'REPAIR') return { step:4, actor:resp ? { kind:'user', ids:[resp] } : { kind:'pool' } };
   if (owner === 'MANAGEMENT') {
     var a = approvalStep_(f.approvalRoles), miss = a.missing.length ? a.missing : REQUIRED_APPROVAL_ROLES.slice();
     return { step:Math.min(3, 2 + a.approved.length), actor:{ kind:'roles', roles:miss }, approvedRoles:a.approved };
@@ -1380,9 +1417,11 @@ function actorUsers_(actor, people) {
 }
 /** เติมชื่อผู้ดำเนินการลงใน follow (ไม่ส่งอีเมลออกไป) */
 function followActors_(out, people) {
+  if (out && out.resp && people && people.byId[out.resp]) out.respName = people.byId[out.resp].name;   // v5.4
   var a = out && out.actor; if (!a || !people) return out;
-  var names = actorUsers_(a, people).map(function (u) { return u.name; });
+  var users = actorUsers_(a, people), names = users.map(function (u) { return u.name; });
   a.names = names;
+  a.uids = users.map(function (u) { return u.id; });       // v5.4: ใครต้องทำต่อ (Id) — หน้าติดตามงานใช้กรอง "งานของฉัน"
   a.label = (a.kind === 'roles' || a.kind === 'role') ? (a.roles || [a.role]).map(function (r) {
               var ns = actorUsers_({ kind:'roles', roles:[r] }, people).map(function (u) { return u.name; });
               return roleLabel_(r) + (ns.length ? ' · ' + ns.join(', ') : ''); }).join(' / ')
@@ -1418,7 +1457,9 @@ function followState_(f, cfg, nowMs) {
   var out = { owner:owner, ownerLabel:FOLLOW_LABEL[owner], label:FOLLOW_LABEL[owner], actionable:false,
               waitingDays:0, slaDays:0, level:'ok', slaBreached:false, since:new Date(sinceMs).toISOString(),
               stageDays:stageDays, estimated:!log.length,
-              step:stp.step, actor:stp.actor, due:'' };            // v5.0
+              step:stp.step, actor:stp.actor, due:'',              // v5.0
+              resp:f.assignedTo || f.routedTo || '',               // v5.4: ผู้รับผิดชอบเอกสาร (ทุกขั้น) — ใช้กรอง "งานของฉัน"
+              respWhy:f.assignedTo ? 'assigned' : (f.routedWhy || ''), respCat:f.assignedTo ? '' : (f.routedCat || '') };
   if (stp.handedOff) out.handedOff = true;
   if (stp.approvedRoles) out.approvedRoles = stp.approvedRoles;
   if (owner === 'DONE') {

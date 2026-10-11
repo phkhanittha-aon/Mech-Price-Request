@@ -462,6 +462,14 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
 .route-tag{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:2px 8px;border-radius:20px;background:var(--blue-soft);color:var(--blue);font-weight:600;white-space:nowrap}
 .route-tag.me{background:var(--orange);color:#fff}
 .route-tag.pool{background:var(--surface-2);color:var(--ink-2)}
+/* v5.4 หมวดสินค้า → กลุ่มสินค้า → ผู้รับผิดชอบ */
+.cat-tree{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:10px}
+.cat-tree-g{border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:0}
+.cat-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.cat-chip{font-size:11px;padding:2px 7px;border-radius:12px;background:var(--blue-soft);color:var(--blue);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cat-chip.none{background:var(--amber-soft);color:var(--amber)}
+.cat-sel{padding:6px 26px 6px 9px;font-size:12.5px;height:auto}
+.who-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
 /* ---- approval cards (Dashboard) ---- */
 .agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(330px,100%),1fr));gap:10px}
 @media(max-width:520px){.acard{flex-wrap:wrap}.ac-gp{flex:0 0 72px}.ac-btn{width:100%}}
@@ -626,8 +634,8 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='5.3';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
-const BUILD='2026-10-11 · build 5.3 · ใบเสนอราคาดีลค่าคอมจาก Supplier (Sales เกรด D)';
+const APP_VERSION='5.4';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const BUILD='2026-10-11 · build 5.4 · งานวิ่งตามหมวดสินค้า · ติดตามงานเฉพาะของฉัน';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
@@ -818,8 +826,20 @@ const ROLE_PERMS={
 /* ---------- GROUP TYPES (project level) ---------- */
 const GROUP_TYPES=['Inverter','Mounting','DC Cable','EV Charger','ESS','Residential'];
 const REF_PREFIX={'Inverter':'IN','Mounting':'MT','DC Cable':'DC','EV Charger':'EV','ESS':'ES','Residential':'RS'};
-// product group -> commission category
+/* v5.4 ลำดับชั้นสินค้า (ย่อย → ใหญ่)
+     หมวดสินค้า  = SETTINGS.groups (Sub Group จากแคตตาล็อก เช่น INVERTER / DATA LOGGER / BATTERY) — ค่า Duty/Clr/%GP + ผู้รับผิดชอบ
+     กลุ่มสินค้า = SETTINGS.commission (Inverter / ESS / Residential / DC Cable / EV Charger / Mounting) — ใช้คิดเกรดค่าคอม Sales
+   SETTINGS.catGroup = {หมวด: กลุ่มสินค้า}  ไม่ตั้ง = กติกาเดิม (comCategoryLegacy) → ค่าคอมของใบเดิมไม่เปลี่ยน
+   SETTINGS.catOwner = {หมวด: Id ผู้รับผิดชอบ} — server ใช้ส่งงาน SR / QT (routeFor_ ใน Code.gs)                       */
+function catKey(g){return String(g||'').toUpperCase().replace(/\s+/g,' ').trim()}
+function catMapLookup(map,g){if(!map||typeof map!=='object')return undefined;const k=catKey(g);for(const x in map)if(catKey(x)===k)return map[x];return undefined}
 function comCategory(group){
+  let m;try{m=catMapLookup(SETTINGS.catGroup,group)}catch(e){m=undefined}
+  try{if(m&&SETTINGS.commission&&SETTINGS.commission[m])return m}catch(e){}
+  return comCategoryLegacy(group);
+}
+// product group -> commission category (กติกาเดิม — ค่าตั้งต้นของ SETTINGS.catGroup)
+function comCategoryLegacy(group){
   const g=(group||'').toUpperCase();
   if(g.includes('MOUNT')||g==='CONNECTOR'||g==='CARPORT'||g==='WALKWAY'||g==='ACCESSORIES') return 'Mounting';
   if(g.includes('DC CABLE')) return 'DC Cable';
@@ -1438,9 +1458,9 @@ function linkedQTsOf(sr){return (QUOTES||[]).filter(x=>x.srId===sr.id&&!x.delete
 const GROUP_TYPE_GROUPS={'Inverter':['INVERTER','MICRO INVERTER','OPTIMIZER','DATA LOGGER','MONITORING','ENERGY METER','SENSOR','RAPID SHUTDOWN','SOLAREDGE','CURRENT TRANFORMER'],
   'Mounting':['MOUNTING','CARPORT','WALKWAY','FLOATING'],'DC Cable':['DC CABLE','CONNECTOR'],'EV Charger':['EV CHARGER','EV CHARGE'],
   'ESS':['ENERGY STORAGE','BATTERY'],'Residential':['INVERTER','BATTERY','PV MODULE']};
-const ROUTE_WHY_TH={setting:'ตั้งค่าผู้รับตามกลุ่มงาน',scope:'ตามกลุ่มสินค้าที่ดูแล (Scope)',manual:'ส่งต่อโดยทีมภายใน',pool:'ยังไม่ระบุคน — ใครในทีมรับก่อนได้งาน'};
+const ROUTE_WHY_TH={category:'ตามหมวดสินค้าที่ดูแล',setting:'ตั้งค่าผู้รับตามกลุ่มงาน',scope:'ตามกลุ่มสินค้าที่ดูแล (Scope)',manual:'ส่งต่อโดยทีมภายใน',pool:'ยังไม่ระบุคน — ใครในทีมรับก่อนได้งาน'};
 function routeOf(q){
-  if(!q||q.docType!=='SR'||!(q.routedWhy||q.routedTo))return null;
+  if(!q||q.docType!=='SR'||!(q.routedWhy||q.routedTo))return null;   // คำขอราคา (SR) เท่านั้น — QT ใช้ respOf()
   const u=USERS.find(x=>x.id===q.routedTo);
   return {id:q.routedTo||'',name:(u&&u.name)||q.routedName||q.routedTo||'',why:q.routedWhy||''};
 }
@@ -1457,6 +1477,8 @@ function autoRouteOf(gt){
   const ov=(SETTINGS.srRouting||{})[gt],o=ov&&USERS.find(u=>u.id===ov&&u.active!==false&&tierOf(u)!=='SALES');
   if(o)return {id:o.id,name:o.name,why:'setting'};
   const up=x=>String(x||'').toUpperCase().replace(/\s+/g,' ').trim(),groups=GROUP_TYPE_GROUPS[gt]||[up(gt)];
+  const pu=catOwnerUser(groups[0]);                               // v5.4: ผู้ดูแลหมวดหลักของกลุ่มงาน
+  if(pu)return {id:pu.id,name:pu.name,why:'category',cat:groups[0]};
   let best=null,bs=0,tie=false;
   const synced=USERS.some(u=>u.active===true);                   // มีข้อมูลจากแท็บ Users แล้ว → ใช้เฉพาะผู้ใช้จริงบน server (ไม่นับบัญชีตัวอย่างในเครื่อง)
   USERS.filter(u=>(synced?u.active===true:u.active!==false)&&normRole(u.role)==='Sourcing').forEach(u=>{
@@ -1467,16 +1489,139 @@ function autoRouteOf(gt){
   });
   return (best&&!tie)?{id:best.id,name:best.name,why:'scope'}:{id:'',name:'ทีม Sourcing',why:'pool'};
 }
+/* v5.4: ผู้รับผิดชอบตามหมวดสินค้า — ตัวอย่างฝั่งหน้าจอ (กติกาเดียวกับ routeFor_ ใน Code.gs · ผลจริงตัดสินที่ server) */
+function catOwnerId(cat){return catMapLookup(SETTINGS.catOwner,cat)||''}
+function catOwnerUser(cat){const id=catOwnerId(cat),u=id&&USERS.find(x=>x.id===id);return (u&&u.active!==false&&tierOf(u)!=='SALES')?u:null}
+function routeByCat(gt,lineGroups){
+  const cnt={},first={};let n=0,top=null;
+  (lineGroups||[]).forEach(g=>{const u=g&&catOwnerUser(g);if(!u)return;
+    if(!cnt[u.id]){cnt[u.id]=0;first[u.id]={n:n++,cat:catKey(g)};}cnt[u.id]++;});
+  Object.keys(cnt).forEach(id=>{if(!top||cnt[id]>cnt[top]||(cnt[id]===cnt[top]&&first[id].n<first[top].n))top=id;});
+  if(top)return {id:top,name:catOwnerUser(first[top].cat).name,why:'category',cat:first[top].cat};
+  return autoRouteOf(gt);
+}
+const RESP_WHY_TH={assigned:'รับงานแล้ว',category:'ตามหมวดสินค้าที่ดูแล',setting:'ตั้งผู้รับตามกลุ่มงาน',scope:'ตามสิทธิ์กลุ่มสินค้า',manual:'ส่งต่อโดยทีมภายใน',pool:'ยังไม่มีผู้รับ — ทีม Sourcing'};
+/* ผู้รับผิดชอบเอกสาร (ทุกขั้น): ค่าจาก server (follow.resp) ก่อนเสมอ · ใบที่ยังไม่ซิงค์ = ผู้รับงาน หรือตัวอย่างตามหมวด */
+function respOf(q){
+  if(!q)return {id:'',name:'',why:'pool'};
+  const f=q._follow;
+  if(f&&f.resp!==undefined){
+    const u=f.resp&&USERS.find(x=>x.id===f.resp);
+    return {id:f.resp||'',name:f.respName||(u&&u.name)||f.resp||'ทีม Sourcing',why:f.resp?(f.respWhy||'category'):'pool',cat:f.respCat||''};
+  }
+  if(q.assignedTo){const u=USERS.find(x=>x.id===q.assignedTo);return {id:q.assignedTo,name:(u&&u.name)||q.assignedTo,why:'assigned',cat:''};}
+  if(q.routedWhy||q.routedTo){const u=USERS.find(x=>x.id===q.routedTo);return {id:q.routedTo||'',name:(u&&u.name)||q.routedName||'ทีม Sourcing',why:q.routedTo?q.routedWhy:'pool',cat:q.routedCat||''};}
+  const r=routeByCat((q.header||{}).groupType,(q.lines||[]).map(L=>L&&L.group));
+  return Object.assign({preview:true},r);
+}
+function respChip(q){
+  const r=respOf(q),me=CURRENT&&r.id&&r.id===CURRENT.id;
+  const why=(RESP_WHY_TH[r.why]||'')+(r.cat&&r.why==='category'?' · '+r.cat:'');
+  if(!r.id)return `<span class="route-tag pool" title="${esc(why)}">👥 ทีม Sourcing</span>`;
+  return `<span class="route-tag ${me?'me':''}" title="${esc(why)}">👤 ${me?'คุณ':esc(r.name)}</span><div class="hint" style="font-size:10.5px">${esc(why)}</div>`;
+}
+/* v5.4 "งานของฉัน" — server ตัดสินว่าใครรับผิดชอบ (follow.resp) และใครต้องทำต่อ (follow.actor.uids) · หน้าจอแค่กรอง */
+function isMyWork(q,uid){
+  uid=uid||(CURRENT&&CURRENT.id);if(!uid||!q)return false;
+  const f=followOf(q)||{},r=respOf(q);
+  if(r.id&&r.id===uid)return true;                                          // ผู้รับผิดชอบ (ตามหมวด / รับงาน)
+  if(((q.header||{}).salesUserId||'')===uid)return true;                    // Sales เจ้าของงาน
+  if(f.owner!=='DONE'&&f.actor&&Array.isArray(f.actor.uids)&&f.actor.uids.indexOf(uid)>=0)return true;   // รอฉันทำต่อ (อนุมัติ / ปล่อยราคา)
+  if(CURRENT&&uid===CURRENT.id&&!(f.actor&&f.actor.uids)&&f.owner==='MANAGEMENT'&&canApprove(q))return true;   // ใบยังไม่ซิงค์
+  return false;
+}
 function setSrRoute(gt,id){
   if(!SETTINGS.srRouting||typeof SETTINGS.srRouting!=='object')SETTINGS.srRouting={};
   if(id)SETTINGS.srRouting[gt]=id;else delete SETTINGS.srRouting[gt];
   saveSettings();toast(gt+' → '+(id?((USERS.find(u=>u.id===id)||{}).name||id):'อัตโนมัติตามกลุ่มสินค้า'),'good');render();
 }
+/* ============================================================ v5.4 หมวดสินค้า → กลุ่มสินค้า → ผู้รับผิดชอบ (หน้า ⚙️ ตั้งค่า)
+   ที่เดียวที่ตั้ง "ใครดูแลหมวดไหน" + "หมวดนี้คิดค่าคอมกลุ่มไหน" + ค่าเริ่มต้น Duty/Clr/%GP ของหมวด          */
+const CAT_GROUP_SUGGEST={'FLOATING':'Mounting'};   // ข้อแนะนำ (ไม่ตั้งให้เอง): ทุ่นลอยน้ำ = ระบบยึดแผง → กลุ่ม Mounting
+function catList(){return Object.keys(SETTINGS.groups||{}).filter(k=>catKey(k)!=='SUB GROUP').sort((a,b)=>a.localeCompare(b))}
+function catSuggest(cat){return CAT_GROUP_SUGGEST[catKey(cat)]||comCategoryLegacy(cat)}
+// ผู้ใช้จริงจากแท็บ Users (เมื่อซิงค์แล้ว) — ไม่นับบัญชีตัวอย่างในเครื่อง (sourcing1/sourcing2 …) กติกาเดียวกับ autoRouteOf
+function liveUsers(){const synced=USERS.some(u=>u.active===true);return USERS.filter(u=>synced?u.active===true:u.active!==false)}
+function ownerCandidates(){return liveUsers().filter(u=>tierOf(u)!=='SALES')
+  .sort((a,b)=>(normRole(a.role)==='Sourcing'?0:1)-(normRole(b.role)==='Sourcing'?0:1)||String(a.name).localeCompare(String(b.name)))}
+function scopeHolders(cat){const k=catKey(cat);
+  return liveUsers().filter(u=>normRole(u.role)==='Sourcing'&&Array.isArray(u.scope)&&u.scope.some(s=>catKey(s)===k));}
+function catSetupCard(){
+  const g=SETTINGS.groups||{},cats=catList(),grpKeys=Object.keys(SETTINGS.commission||{}),cand=ownerCandidates();
+  const nProd={};allProducts().forEach(p=>{const k=catKey(p.group);nProd[k]=(nProd[k]||0)+1;});
+  const byOwner={},noOwner=[];cats.forEach(c=>{const u=catOwnerUser(c);if(u)(byOwner[u.name]=byOwner[u.name]||[]).push(c);else noOwner.push(c);});
+  const tree=grpKeys.map(gk=>{const list=cats.filter(c=>comCategory(c)===gk);
+    return `<div class="cat-tree-g"><b>${esc(gk)}</b> <span class="hint">${list.length} หมวด</span><div class="cat-chips">${list.map(c=>{const u=catOwnerUser(c);
+      return `<span class="cat-chip ${u?'':'none'}" title="${esc(u?'ผู้รับผิดชอบ: '+u.name:'ยังไม่มีผู้รับผิดชอบ')}">${esc(c)}${u?' · '+esc(u.name):''}</span>`}).join('')||'<span class="hint">—</span>'}</div></div>`}).join('');
+  const rows=cats.map(c=>{const cg=comCategory(c),sug=catSuggest(c),own=catOwnerId(c),auto=own?null:routeByCat('',[c]);
+    const hold=scopeHolders(c).map(u=>u.name);
+    return `<tr>
+    <td style="font-weight:600">${esc(c)}<div class="hint">${nProd[catKey(c)]||0} สินค้า</div></td>
+    <td><select class="inp cat-sel" onchange="setCatGroup('${esc(c)}',this.value)">${grpKeys.map(k=>`<option ${k===cg?'selected':''}>${esc(k)}</option>`).join('')}</select>
+      ${sug!==cg?`<div class="hint" style="color:var(--amber)">แนะนำ: ${esc(sug)}</div>`:''}</td>
+    <td><select class="inp cat-sel" onchange="setCatOwner('${esc(c)}',this.value)"><option value="">— ยังไม่ระบุ —</option>
+      ${cand.map(u=>`<option value="${esc(u.id)}" ${own===u.id?'selected':''}>${esc(u.name)} · ${esc(roleTH(normRole(u.role)))}</option>`).join('')}</select>
+      ${own?'':`<div class="hint">${hold.length?'สิทธิ์กลุ่มเดิม: '+esc(hold.join(', ')):'ไม่มีใครมีสิทธิ์กลุ่มนี้'} → ${auto&&auto.id?'ส่งถึง '+esc(auto.name):'ทีม Sourcing'}</div>`}</td>
+    <td><div class="pct-wrap"><input class="cell-inp" type="number" step="any" value="${g[c].duty}" onchange="setGroup('${esc(c)}','duty',this.value)"></div></td>
+    <td><div class="pct-wrap"><input class="cell-inp" type="number" step="any" value="${g[c].clearance}" onchange="setGroup('${esc(c)}','clearance',this.value)"></div></td>
+    <td><div class="pct-wrap"><input class="cell-inp" type="number" step="any" value="${g[c].op}" onchange="setGroup('${esc(c)}','op',this.value)"></div></td></tr>`}).join('');
+  const nSug=cats.filter(c=>catSuggest(c)!==comCategory(c)).length;
+  return `<div class="card" style="margin-top:18px" id="catSetup"><div class="card-h"><h2>หมวดสินค้า · กลุ่มสินค้า · ผู้รับผิดชอบ</h2>
+    <span class="hint ch-hint">หมวดสินค้า (ย่อย) อยู่ในกลุ่มสินค้า (ใช้คิดค่าคอม) · SR และ QT วิ่งถึงผู้รับผิดชอบหมวดของรายการส่วนใหญ่ในใบ</span>
+    <div class="spacer"></div>
+    <button class="btn sm ghost" onclick="catOwnersFromScope()" title="หมวดที่มี Sourcing คนเดียวถือสิทธิ์กลุ่ม → ตั้งคนนั้นเป็นผู้รับผิดชอบ">ตั้งจากสิทธิ์กลุ่มเดิม</button>
+    ${nSug?`<button class="btn sm ghost" onclick="applyCatSuggest()">ใช้กลุ่มที่แนะนำ (${nSug})</button>`:''}
+    <button class="btn sm ghost" onclick="resetGroups()" title="คืนค่า Duty/Clr/%GP ของทุกหมวด">คืนค่า Duty/%GP</button></div>
+    <div class="card-b" style="padding:12px 16px 4px">
+      <div class="hint" style="margin-bottom:8px">👤 ${Object.entries(byOwner).map(([n,l])=>`<b>${esc(n)}</b> ${l.length} หมวด`).join(' · ')||'ยังไม่ได้ตั้งผู้รับผิดชอบ'}${noOwner.length?` · <span style="color:var(--amber)">ยังไม่ระบุ ${noOwner.length} หมวด (ใช้สิทธิ์กลุ่มเดิม / ทีม Sourcing)</span>`:''}</div>
+      <div class="cat-tree">${tree}</div></div>
+    <div class="card-b" style="padding:0"><div class="tw" style="border:none;max-height:520px;overflow:auto">
+      <table><thead><tr><th>หมวดสินค้า</th><th style="min-width:150px">กลุ่มสินค้า (คิดค่าคอม)</th><th style="min-width:200px">ผู้รับผิดชอบ</th><th>% Duty</th><th>% Clearance</th><th>% GP ตั้งต้น</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="hint" style="padding:10px 16px">เปลี่ยนผู้รับผิดชอบ: มีผลกับคำขอ/ใบเสนอราคาที่ส่งหรือแก้หมวดหลังจากนี้ (งานที่ส่งไปแล้วไม่ย้ายเอง — ใช้ปุ่ม “ส่งต่อ”) ·
+        เปลี่ยนกลุ่มสินค้า: มีผลกับรายการใหม่ และรายการเดิมที่ยังไม่เคยบันทึกกลุ่มค่าคอมไว้ (ระบบจะเตือนจำนวนก่อนเปลี่ยน)</div></div></div>`;
+}
+function setCatOwner(cat,id){
+  if(!SETTINGS.catOwner||typeof SETTINGS.catOwner!=='object')SETTINGS.catOwner={};
+  Object.keys(SETTINGS.catOwner).forEach(k=>{if(catKey(k)===catKey(cat))delete SETTINGS.catOwner[k];});
+  if(id)SETTINGS.catOwner[cat]=id;
+  saveSettings();toast(cat+' → '+(id?((USERS.find(u=>u.id===id)||{}).name||id):'ยังไม่ระบุ (ใช้สิทธิ์กลุ่มเดิม)'),'good');render();
+}
+/* ใบเสนอราคาที่ยังเปิดอยู่ ซึ่งมีรายการหมวดนี้แต่ไม่ได้บันทึกกลุ่มค่าคอมไว้ในบรรทัด → เกรดจะคิดใหม่ตามกลุ่มใหม่ */
+function catAffected(cat){const k=catKey(cat);
+  return QUOTES.filter(q=>!q.deleted&&q.docType!=='SR'&&['Won','Closed'].indexOf(q.status)<0&&(q.lines||[]).some(L=>!L.comGroup&&catKey(L.group)===k));}
+function setCatGroup(cat,v,skipAsk){
+  const old=comCategory(cat);if(v===old)return;
+  const aff=catAffected(cat);
+  if(aff.length&&!skipAsk){
+    confirmModal('เปลี่ยนกลุ่มค่าคอมของหมวด '+esc(cat)+'?',
+      `${esc(old)} → <b>${esc(v)}</b><br>มีใบเสนอราคาที่ยังเปิดอยู่ <b>${aff.length} ใบ</b> ที่รายการหมวดนี้ยังไม่ได้บันทึกกลุ่มค่าคอม — เกรดค่าคอมของใบเหล่านี้จะคิดตามกลุ่มใหม่
+       <div class="hint" style="margin-top:6px">${esc(aff.slice(0,8).map(q=>q.docNo||q.header.ref).join(', '))}${aff.length>8?' …':''}</div>`,
+      ()=>{closeModal();setCatGroup(cat,v,true)},'ยืนยันเปลี่ยนกลุ่ม');
+    render();return;
+  }
+  if(!SETTINGS.catGroup||typeof SETTINGS.catGroup!=='object')SETTINGS.catGroup={};
+  Object.keys(SETTINGS.catGroup).forEach(k=>{if(catKey(k)===catKey(cat))delete SETTINGS.catGroup[k];});
+  SETTINGS.catGroup[cat]=v;
+  saveSettings();toast(cat+' → กลุ่มค่าคอม '+v,'good');render();
+}
+function catOwnersFromScope(){
+  const done=[];
+  catList().forEach(c=>{if(catOwnerId(c))return;const h=scopeHolders(c);if(h.length===1){if(!SETTINGS.catOwner)SETTINGS.catOwner={};SETTINGS.catOwner[c]=h[0].id;done.push(c+' → '+h[0].name);}});
+  if(!done.length){toast('ไม่มีหมวดที่ตั้งได้อัตโนมัติ (ตั้งแล้ว หรือมีหลายคน/ไม่มีใครถือสิทธิ์กลุ่ม)','bad');return}
+  saveSettings();render();toast('ตั้งผู้รับผิดชอบ '+done.length+' หมวดจากสิทธิ์กลุ่มเดิม','good');
+}
+function applyCatSuggest(){
+  const ch=catList().filter(c=>catSuggest(c)!==comCategory(c));if(!ch.length)return;
+  const aff=new Set();ch.forEach(c=>catAffected(c).forEach(q=>aff.add(q.docNo||q.header.ref)));
+  confirmModal('ใช้กลุ่มสินค้าที่แนะนำ?',ch.map(c=>`${esc(c)}: ${esc(comCategory(c))} → <b>${esc(catSuggest(c))}</b>`).join('<br>')+
+    (aff.size?`<div class="hint" style="margin-top:6px;color:var(--amber)">มีผลกับเกรดค่าคอมของใบที่ยังเปิดอยู่ ${aff.size} ใบ</div>`:''),
+    ()=>{closeModal();if(!SETTINGS.catGroup)SETTINGS.catGroup={};ch.forEach(c=>{SETTINGS.catGroup[c]=catSuggest(c)});saveSettings();render();toast('ปรับกลุ่มสินค้า '+ch.length+' หมวดแล้ว','good');},'ยืนยัน');
+}
 function srRoutingCard(){
   const internal=USERS.filter(u=>u.active!==false&&tierOf(u)!=='SALES').sort((a,b)=>(normRole(a.role)==='Sourcing'?0:1)-(normRole(b.role)==='Sourcing'?0:1)||String(a.name).localeCompare(String(b.name)));
   const ov=SETTINGS.srRouting||{};
-  return `<div class="card" style="margin-top:18px"><div class="card-h"><h2>📥 คำขอราคาส่งถึงใคร (ตามกลุ่มงาน)</h2>
-    <span class="hint ch-hint">อัตโนมัติ = ตามกลุ่มสินค้าที่ Sourcing แต่ละคนดูแล (ปุ่ม 🔒 สิทธิ์กลุ่ม ในหน้าผู้ใช้) · เลือกชื่อ = ส่งถึงคนนั้นเสมอ</span></div>
+  return `<div class="card" style="margin-top:18px"><div class="card-h"><h2>📥 สำรอง: เมื่อรายการในใบไม่มีผู้ดูแลหมวด → ส่งตามกลุ่มงาน</h2>
+    <span class="hint ch-hint">ใช้หลังจาก “ผู้รับผิดชอบตามหมวดสินค้า” ด้านบน · อัตโนมัติ = ผู้ดูแลหมวดหลักของกลุ่มงาน แล้วจึงสิทธิ์กลุ่ม · เลือกชื่อ = ส่งถึงคนนั้น</span></div>
     <div class="card-b" style="padding:0"><div class="tw" style="border:none"><table><thead><tr><th>กลุ่มงาน</th><th>ส่งถึงตอนนี้</th><th style="min-width:180px">ตั้งผู้รับเอง</th></tr></thead><tbody>
     ${GROUP_TYPES.map(gt=>{const a=autoRouteOf(gt);return `<tr><td><span class="tag ${grpColor(gt)}">${esc(gt)}</span></td>
       <td>${a.id?`<b>${esc(a.name)}</b>`:'<span class="route-tag pool">👥 ทีม Sourcing</span>'}<div class="hint">${esc(ROUTE_WHY_TH[a.why]||'')}</div></td>
@@ -2275,6 +2420,7 @@ function stampComGrades(q){
     const gradeByCat={};
     Object.keys(c.com||{}).forEach(cat=>{gradeByCat[cat]=c.com[cat].grade;});
     (q.lines||[]).forEach(L=>{
+      if(!L.comGroup&&L.group)L.comGroup=comCategory(L.group);   // v5.4: ตรึงกลุ่มค่าคอม ณ วันบันทึก (เปลี่ยนการจัดกลุ่มภายหลังไม่ย้อนแก้ใบนี้)
       const cat=L.comGroup||comCategory(L.group);
       L.comGrade=gradeByCat[cat]||'';       // ตัวอักษรเท่านั้น
       L.comCat=cat;                          // ชื่อหมวด (ไม่ใช่ต้นทุน) — ให้ Sales จัดกลุ่มได้
@@ -2584,6 +2730,8 @@ function viewCosting(){
     <div class="card-h"><h2>ข้อมูลโครงการ</h2>
       <span class="tag orange mono" style="margin-left:6px">${esc(H.ref)}</span>
       ${editing.round>1?`<span class="tag blue">รอบที่ ${editing.round}</span>`:''}
+      ${editing.docType!=='SR'?`<span class="row-flex resp-box" style="gap:6px;margin-left:6px" title="ผู้รับผิดชอบใบนี้">${respChip(editing)}
+        ${perms().create?`<button class="btn tiny ghost no-print" onclick="openAssignQT()">เปลี่ยน</button>`:''}</span>`:''}
       <div class="spacer"></div>
       ${inApprovalStage(editing)?`<span class="row-flex" style="gap:5px">${approvalBadges(editing)}</span>`:''}
       <span class="tag ${STATUS_TAG[st]||'grey'}" title="สถานะเอกสาร">${esc(STATUS_TH[st]||st)}</span></div>
@@ -2700,6 +2848,26 @@ function hsetGroup(v){editing.header.groupType=v;
   }
   render();}
 /* v5.3 ดีลค่าคอมจาก Supplier — กล่องกรอกค่าคอม (เฉพาะฝ่ายในที่เห็นต้นทุน) */
+/* v5.4: ผู้รับผิดชอบใบเสนอราคา — ว่าง = ระบบเลือกตามหมวดสินค้าของรายการ (server) · เลือกคน = รับงาน/ส่งต่อ (คอลัมน์ AssignedTo เดิม) */
+function openAssignQT(){
+  if(!editing)return;
+  const r=respOf(editing),cur=editing.assignedTo||'';
+  const auto=routeByCat((editing.header||{}).groupType,(editing.lines||[]).map(L=>L&&L.group));
+  modal(`<div class="modal-h"><h3>ผู้รับผิดชอบใบเสนอราคา</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
+  <div class="modal-b"><div class="hint" style="margin-bottom:8px">ตอนนี้: <b>${esc(r.id?r.name:'ทีม Sourcing')}</b> · ${esc(RESP_WHY_TH[r.why]||'')}${r.cat?' '+esc(r.cat):''}</div>
+    <label class="lbl">ให้ใครรับผิดชอบ</label><select class="inp" id="asgTo">
+      <option value="">อัตโนมัติตามหมวดสินค้า → ${esc(auto.id?auto.name:'ทีม Sourcing')}${auto.cat?' ('+esc(auto.cat)+')':''}</option>
+      ${ownerCandidates().map(u=>`<option value="${esc(u.id)}" ${cur===u.id?'selected':''}>${esc(u.name)} · ${esc(roleTH(normRole(u.role)))}${CURRENT&&u.id===CURRENT.id?' (ฉัน)':''}</option>`).join('')}</select>
+    <div class="hint" style="margin-top:8px">มีผลเมื่อกดบันทึกใบ · ผู้รับผิดชอบเห็นใบนี้ในหน้า “ติดตามงาน” ของตัวเอง</div></div>
+  <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" onclick="setAssignQT(document.getElementById('asgTo').value)">ตกลง</button></div>`);
+}
+function setAssignQT(id){
+  if(!editing)return;const old=editing.assignedTo||'';id=id||'';closeModal();if(old===id)return;
+  const nm=x=>x?((USERS.find(u=>u.id===x)||{}).name||x):'อัตโนมัติตามหมวด';
+  editing.assignedTo=id||null;delete editing._follow;
+  markDirty();logAuditStatus(editing,'ผู้รับผิดชอบ',nm(old),nm(id));
+  render();toast('ผู้รับผิดชอบ: '+nm(id)+' — กดบันทึกเพื่อยืนยัน','good');
+}
 function supComBoxHTML(H){
   const sc=supComOf(H);
   const curOpts=[...new Set([H.currency||'THB','THB','USD','CNY'])];
@@ -4156,19 +4324,39 @@ function exportTeamCSV(){
 }
 
 /* ============================================================ FOLLOW-UP (no value, +project, +sales filter, customer link, no GP) */
-let fGroup='all',fStatus='all',fSales='all';
+let fGroup='all',fStatus='all',fSales='all',fWho='mine';
+/* v5.4: หน้าติดตามงาน = งานของฉันเท่านั้น (ผู้รับผิดชอบตามหมวด · Sales เจ้าของงาน · งานที่รอฉันอนุมัติ/ปล่อยราคา)
+   ผู้จัดการ (สิทธิ์อนุมัติ) สลับดูทั้งทีม หรือเลือกดูงานของแต่ละคนได้ */
+function followTeamView(){return !!perms().approve}
+function followWho(){return followTeamView()?fWho:'mine'}
+function followBase(){
+  const all=QUOTES.filter(q=>!q.deleted&&(q.docType==='QT'||!q.docType)),w=followWho();
+  if(w==='all')return all;
+  return all.filter(q=>isMyWork(q,w==='mine'?CURRENT.id:w));
+}
+function followWhoBar(){
+  const w=followWho();
+  if(!followTeamView())return `<div class="who-bar no-print"><span class="route-tag me">👤 งานของฉัน</span><span class="hint">แสดงเฉพาะใบที่คุณรับผิดชอบ (ตามหมวดสินค้า / รับงานแล้ว) หรือรอคุณทำต่อ</span></div>`;
+  const people=liveUsers().sort((a,b)=>(tierOf(a)==='SALES'?1:0)-(tierOf(b)==='SALES'?1:0)||String(a.name).localeCompare(String(b.name)));
+  return `<div class="who-bar no-print"><div class="seg"><button class="${w==='mine'?'on':''}" onclick="fWho='mine';render()">👤 งานของฉัน</button>
+    <button class="${w==='all'?'on':''}" onclick="fWho='all';render()">ทั้งทีม</button></div>
+    <select class="inp" style="width:auto;padding:7px 30px 7px 11px" onchange="fWho=this.value||'all';render()">
+      <option value="">ดูงานของ: เลือกคน</option>${people.map(u=>`<option value="${esc(u.id)}" ${w===u.id?'selected':''}>${esc(u.name)} · ${esc(roleTH(normRole(u.role)))}</option>`).join('')}</select>
+    ${w!=='mine'&&w!=='all'?`<span class="hint">งานที่ ${esc((USERS.find(u=>u.id===w)||{}).name||w)} รับผิดชอบหรือต้องทำต่อ</span>`:''}</div>`;
+}
 function viewFollowup(){
-  // BUSINESS RULE: Followup tracks QT only
-  let list=[...QUOTES].filter(q=>q.docType==='QT'||!q.docType);
+  // BUSINESS RULE: Followup tracks QT only · v5.4 เริ่มจาก "งานของฉัน"
+  let list=followBase();
   if(fGroup!=='all')list=list.filter(q=>(q.header.groupType||'Inverter')===fGroup);
   if(fStatus!=='all')list=list.filter(q=>qtStage(q)===fStatus);        // v5.2: กรองตามขั้นจริง (Pending = Sales เห็นราคาแล้วเท่านั้น)
   if(fSales!=='all')list=list.filter(q=>(q.header.sales||'—')===fSales);
   list.sort((a,b)=>byUrgency(a,b)||(b.header.reqDate||'').localeCompare(a.header.reqDate||''));   // v4.6: งานเร่งด่วนขึ้นก่อน
-  const scope=QUOTES.filter(q=>(q.docType==='QT'||!q.docType)&&(fGroup==='all'||q.header.groupType===fGroup));
+  const scope=followBase().filter(q=>fGroup==='all'||q.header.groupType===fGroup);
   const counts={NOPRICE:0};QT_STATUSES.forEach(s=>counts[s]=0);scope.forEach(q=>{const k=qtStage(q);counts[k]=(counts[k]||0)+1;});
   const tabs=['all',...QT_STATUSES.slice(0,QT_STATUSES.indexOf('Pending')),...(counts.NOPRICE||fStatus==='NOPRICE'?['NOPRICE']:[]),...QT_STATUSES.slice(QT_STATUSES.indexOf('Pending'))];
-  const salesList=[...new Set(QUOTES.filter(q=>q.docType==='QT'||!q.docType).map(q=>q.header.sales||'—').filter(s=>s))].sort();
+  const salesList=[...new Set(followBase().map(q=>q.header.sales||'—').filter(s=>s))].sort();
   return `
+  ${followWhoBar()}
   ${unassignedOwnersCard()}
   ${repairBanner(scope)}
   <div class="kpis">
@@ -4185,14 +4373,14 @@ function viewFollowup(){
     </div></div>
   <div class="card"><div class="card-h" style="padding:11px 18px"><h2>${list.length} งาน</h2>${lvSummary(list)}<span class="hint">งานเร่งด่วนขึ้นก่อน</span></div><div class="card-b" style="padding:0">
   ${list.length?`<div class="tw" style="border:none"><table><thead><tr>
-    <th>กลุ่ม</th><th>โครงการ</th><th>Ref</th><th>วันที่ขอ</th><th>ลูกค้า</th><th>Sales</th><th>รออยู่ที่</th><th>อัปเดต</th><th>รอบ</th>
+    <th>กลุ่ม</th><th>โครงการ</th><th>Ref</th><th>วันที่ขอ</th><th>ลูกค้า</th><th>Sales</th><th>ผู้รับผิดชอบ</th><th>รออยู่ที่</th><th>อัปเดต</th><th>รอบ</th>
     <th>สถานะ</th><th>หมายเหตุจาก Sales</th><th></th></tr></thead><tbody>
     ${list.map(q=>`<tr class="lv-${lvOf(q)}">
       <td><span class="tag ${grpColor(q.header.groupType)}">${esc(q.header.groupType||'Inverter')}</span></td>
       <td style="font-weight:600">${esc(q.header.title||q.header.project||'(ไม่มีชื่อ)')}</td>
       <td class="mono" style="font-size:11px">${esc(q.header.ref)}</td>
       <td style="font-size:12px">${q.header.reqDate||q.created}</td>
-      <td>${esc(q.header.customer||'—')}</td><td>${ownerTag(q)}</td>
+      <td>${esc(q.header.customer||'—')}</td><td>${ownerTag(q)}</td><td>${respChip(q)}</td>
       <td>${ballChip(q)} ${lvBadge(lvOf(q))}</td><td>${updateChip(q)}</td>
       <td>${q.round>1?`<span class="tag blue">R${q.round}</span>`:'R1'}</td>
       <td>${statusSelect(q)}</td>
@@ -4365,12 +4553,6 @@ function saveProduct(){
 function delProduct(code){CUSTOM=CUSTOM.filter(p=>p.code!==code);LS.set('customProducts',CUSTOM);delete PRICES[code];LS.set('prices',PRICES);render();toast('ลบ '+code,'good')}
 /* ============================================================ SETTINGS (editable commission) */
 function viewSettings(){
-  const g=SETTINGS.groups;
-  const rows=Object.keys(g).sort().map(name=>`<tr>
-    <td style="font-weight:600">${esc(name)}</td>
-    <td><div class="pct-wrap"><input class="cell-inp" type="number" step="any" value="${g[name].duty}" onchange="setGroup('${esc(name)}','duty',this.value)"></div></td>
-    <td><div class="pct-wrap"><input class="cell-inp" type="number" step="any" value="${g[name].clearance}" onchange="setGroup('${esc(name)}','clearance',this.value)"></div></td>
-    <td><div class="pct-wrap"><input class="cell-inp" type="number" step="any" value="${g[name].op}" onchange="setGroup('${esc(name)}','op',this.value)"></div></td></tr>`).join('');
   return `
   <div class="grid" style="grid-template-columns:1fr 1fr;gap:18px;align-items:start">
     <div class="card"><div class="card-h"><h2>ค่าพื้นฐาน (Default)</h2></div>
@@ -4395,10 +4577,7 @@ function viewSettings(){
       <button class="btn sm ghost" onclick="resetCommission()">คืนค่า</button></div>
       <div class="card-b" id="comBox">${commissionEditor()}</div></div>
   </div>
-  <div class="card" style="margin-top:18px"><div class="card-h"><h2>ค่า Default ตาม Group (Duty / Clearance / OP — หน่วย %)</h2>
-    <div class="spacer"></div><button class="btn sm ghost" onclick="resetGroups()">คืนค่าเริ่มต้น</button></div>
-    <div class="card-b" style="padding:0"><div class="tw" style="border:none;max-height:440px;overflow:auto">
-      <table><thead><tr><th>Group</th><th>% Duty</th><th>% Clearance</th><th>% OP/GP</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>
+  ${catSetupCard()}
   <div class="card" style="margin-top:18px"><div class="card-h"><h2>เรตแลกเงินตั้งต้น (ใช้กับใบใหม่)</h2>
     <div class="spacer"></div><span class="hint">ใบที่ทำไปแล้วตรึงเรตของตัวเองไว้ ไม่เปลี่ยนตามค่านี้</span></div>
     <div class="card-b grid" style="grid-template-columns:1fr 1fr">
@@ -4656,8 +4835,9 @@ function openScope(uid){
   const allG=Object.keys(SETTINGS.groups);
   const isAll=(u.scope==='all'||!u.scope);
   const set=new Set(isAll?allG:u.scope);
-  modal(`<div class="modal-h"><h3>กลุ่มสินค้าที่ ${esc(u.name)} เห็นได้</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
+  modal(`<div class="modal-h"><h3>หมวดสินค้าที่ ${esc(u.name)} เห็นได้</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
   <div class="modal-b">
+    <div class="hint" style="margin-bottom:8px">ใช้กำหนดว่าเห็นสินค้าหมวดไหนในการค้นหา/แคตตาล็อก · <b>ผู้รับผิดชอบงาน</b>ตั้งที่ ⚙️ ตั้งค่า → “หมวดสินค้า · กลุ่มสินค้า · ผู้รับผิดชอบ”</div>
     <div class="row-flex" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">
       <button class="btn tiny ghost" onclick="scopeAll('${uid}',true)">เลือกทั้งหมด</button>
       <button class="btn tiny ghost" onclick="scopeAll('${uid}',false)">ไม่เลือกเลย</button>
@@ -4920,7 +5100,8 @@ async function pullUsers(){
       if(r.hasPassword!==undefined&&u.hasPassword!==r.hasPassword){u.hasPassword=r.hasPassword;changed++;}
       if((u.lockedMinutes||0)!==(r.lockedMinutes||0)){u.lockedMinutes=r.lockedMinutes||0;changed++;}
       if(r.email!==undefined&&(u.email||'')!==r.email){u.email=r.email;changed++;}
-      if(r.active!==undefined&&(u.active!==false)!==(r.active!==false)){u.active=r.active!==false;changed++;}
+      // v5.4: ตั้งเป็น true/false ชัดเจนเสมอ — เดิมค่า null (บัญชีที่มีในเครื่องก่อนซิงค์) ไม่ถูกเปลี่ยนเป็น true ทำให้นับเป็น "ยังไม่ซิงค์"
+      if(r.active!==undefined&&u.active!==(r.active!==false)){u.active=r.active!==false;changed++;}
     }
   });
   if(changed){LS.set('users',USERS);initLogin();}

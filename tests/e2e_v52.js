@@ -51,7 +51,8 @@ ok('Lark Bot B ไม่เตือนงานซ่อมข้อมูล�
     await rt.fulfill({ status: 200, contentType: 'application/json', body }); });
   await p.goto(BASE + '/?app=index'); await p.waitForTimeout(300);
   await p.fill('#loginUser', 'pm'); await p.fill('#loginPass', 'pw123456'); await p.click('button:has-text("เข้าสู่ระบบ →")'); await p.waitForTimeout(2000);
-  await p.evaluate(() => { fStatus = 'Pending'; go('followup'); }); await p.waitForTimeout(500);
+  // v5.4: หน้าติดตามงานเริ่มที่ "งานของฉัน" — เทสต์นี้ตรวจภาพรวมทั้งทีมจึงสลับเป็น "ทั้งทีม" (ผู้จัดการทำได้)
+  await p.evaluate(() => { fWho = 'all'; fStatus = 'Pending'; go('followup'); }); await p.waitForTimeout(500);
   let txt = await p.textContent('#content');
   console.log('== 2) หน้าติดตามงาน ==');
   const tb = await p.textContent('#content tbody');
@@ -83,7 +84,7 @@ ok('Lark Bot B ไม่เตือนงานซ่อมข้อมูล�
     if (r.method() === 'POST') body = ctx.apiPost(r.postData()); else { const u = new URL(r.url()); const g = k => u.searchParams.get(k) || ''; body = ctx.apiGet(g('type'), g('token'), g('id') || g('since')); }
     await rt.fulfill({ status: 200, contentType: 'application/json', body }); });
   await ph.goto(BASE + '/?app=index'); await ph.fill('#loginUser', 'pm'); await ph.fill('#loginPass', 'pw123456'); await ph.click('button:has-text("เข้าสู่ระบบ →")'); await ph.waitForTimeout(2000);
-  await ph.evaluate(() => { fStatus = 'all'; go('followup'); }); await ph.waitForTimeout(500);
+  await ph.evaluate(() => { fWho = 'all'; fStatus = 'all'; go('followup'); }); await ph.waitForTimeout(500);   // v5.4: ดูทั้งทีม (เหมือนเดิม)
   const pos = () => ph.evaluate(() => { const t = document.querySelector('#content .tw'); return { y: window.scrollY, l: t ? t.scrollLeft : -1 }; });
   await ph.evaluate(() => { window.scrollTo(0, 300); const t = document.querySelector('#content .tw'); if (t) t.scrollLeft = 260; });
   const p0 = await pos();

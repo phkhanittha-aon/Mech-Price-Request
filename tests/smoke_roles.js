@@ -109,14 +109,15 @@ ok('ระหว่าง Sourcing ทำราคา: งานของ BOSS �
 ok('…และ Sales ยังไม่เห็นราคา', !svFor('boss').find(q => q.id === 'QT1').salesDetail);
 r = saveQT(T.src, 'QT1', 'Submitted', { detail: qtDetail('QT1', 'Submitted', { srId: 'SR1' }) });
 f = fol('boss', 'QT1');
-ok('ส่งขออนุมัติ: งานอยู่ที่ผู้จัดการ (MANAGEMENT) ไม่ใช่ Sales', f.owner === 'MANAGEMENT' && f.label === 'รอผู้จัดการอนุมัติ', f);
+// v5.0 (ตั้งใจ): ป้ายบอกระดับที่รอ (อนุมัติเรียงลำดับ) แทน "รอผู้จัดการอนุมัติ"
+ok('ส่งขออนุมัติ: งานอยู่ที่ผู้จัดการ (MANAGEMENT) ไม่ใช่ Sales — รอ Sourcing Manager ระดับ 1', f.owner === 'MANAGEMENT' && f.label === 'รอ Sourcing Manager อนุมัติ (ระดับ 1/2)' && f.step === 2, f);
 ok('ฝั่งผู้จัดการ (quotations): ใบนี้อยู่ในคิวของผู้อนุมัติ', (get('quotations', T.pm).quotations.find(q => q.id === 'QT1') || {}).follow.owner === 'MANAGEMENT');
 ok('ปล่อยราคาก่อนอนุมัติไม่ได้ (NOT_APPROVED)', post({ token: T.gm, action: 'release', id: 'QT1' }).error === 'NOT_APPROVED');
 ok('Sourcing อนุมัติไม่ได้', denied(post({ token: T.src, action: 'approve', id: 'QT1' })));
 r = post({ token: T.pm, action: 'approve', id: 'QT1' });
 ok('Procurement อนุมัติก่อน → Partial Approved (รอ BD)', r.ok && r.status === 'Partial Approved' && r.missing.join() === 'BD Mgr', r);
 ok('Procurement กดซ้ำ → ALREADY_APPROVED (ไม่นับซ้ำ)', post({ token: T.pm, action: 'approve', id: 'QT1' }).error === 'ALREADY_APPROVED');
-f = fol('boss', 'QT1'); ok('อนุมัติบางส่วน: ยังไม่ใช่งานของ Sales', f.owner === 'MANAGEMENT' && /รอ BD Mgr/.test(f.label), f);
+f = fol('boss', 'QT1'); ok('อนุมัติบางส่วน: ยังไม่ใช่งานของ Sales — รอ BD Manager ระดับ 2', f.owner === 'MANAGEMENT' && /รอ BD Manager/.test(f.label) && f.step === 3, f);
 r = post({ token: T.bd, action: 'approve', id: 'QT1' });
 ok('BD อนุมัติครบ → Approved', r.ok && r.status === 'Approved' && r.complete);
 f = fol('boss', 'QT1'); ok('อนุมัติแล้วแต่ยังไม่ปล่อย: งานอยู่ที่ผู้ปล่อยราคา · Sales ยังไม่เห็นราคา', f.owner === 'RELEASER' && !svFor('boss').find(q => q.id === 'QT1').salesDetail, f);
@@ -131,11 +132,19 @@ ok('PAIR (Sales อื่น) ไม่เห็นใบนี้เลย', !s
 ok('Sales Manager เห็นใบของทีม (ไม่เห็นต้นทุน)', svFor('smgr').some(q => q.id === 'QT1'));
 // GM อนุมัติแทน
 saveQT(T.src, 'QT2', 'Submitted');
+// v5.0 (ตั้งใจ): GM อนุมัติแทน "ทีละระดับ" เป็นค่าปกติ · ทั้ง 2 ระดับในครั้งเดียวต้องส่ง all:true (ปุ่ม "อนุมัติแทนทั้ง 2 ระดับ")
 r = post({ token: T.gm, action: 'approve', id: 'QT2' });
-ok('GM อนุมัติแทนได้ทั้ง 2 ขาในครั้งเดียว', r.ok && r.status === 'Approved' && r.complete);
+ok('GM อนุมัติแทนระดับที่รออยู่ (ระดับ 1) → Partial Approved', r.ok && r.status === 'Partial Approved' && r.next === 'BD Mgr', r);
+r = post({ token: T.gm, action: 'approve', id: 'QT2' });
+ok('GM กดอีกครั้งแทนระดับ 2 → Approved', r.ok && r.status === 'Approved' && r.complete);
+saveQT(T.src, 'QT2b', 'Submitted'); r = post({ token: T.gm, action: 'approve', id: 'QT2b', all: true });
+ok('GM อนุมัติแทนทั้ง 2 ระดับในครั้งเดียว (all)', r.ok && r.status === 'Approved' && r.complete);
 // อนุมัติพร้อมกัน 2 ฝ่าย (atomic) — ลำดับสลับ
-saveQT(T.src, 'QT3', 'Submitted'); post({ token: T.bd, action: 'approve', id: 'QT3' }); r = post({ token: T.pm, action: 'approve', id: 'QT3' });
-ok('ลำดับสลับ (BD ก่อน Procurement) ก็ได้ผลเดียวกัน · approvalRoles ไม่หาย', r.ok && r.status === 'Approved' && r.approvalRoles.sort().join() === 'BD Mgr,Procurement Mgr');
+// v5.0 (ตั้งใจ): ผู้ใช้กำหนดให้อนุมัติเรียงลำดับ — BD กดก่อน Sourcing Manager ไม่ได้อีกต่อไป (เดิมลำดับสลับได้)
+saveQT(T.src, 'QT3', 'Submitted'); r = post({ token: T.bd, action: 'approve', id: 'QT3' });
+ok('ลำดับสลับ (BD ก่อน Sourcing Manager) → ไม่ได้ (WAIT_PREVIOUS_LEVEL) · ไม่มีอะไรเปลี่ยน', !r.ok && r.error === 'WAIT_PREVIOUS_LEVEL' && cellOf('QT3', 'Status') === 'Submitted', r);
+post({ token: T.pm, action: 'approve', id: 'QT3' }); r = post({ token: T.bd, action: 'approve', id: 'QT3' });
+ok('ตามลำดับ → Approved · approvalRoles ครบไม่หาย', r.ok && r.status === 'Approved' && r.approvalRoles.join() === 'Procurement Mgr,BD Mgr');
 // follow-up ต่อ: ไม่อัปเดตเกินกำหนด → งานค้างของ Sales
 const det = JSON.parse(cellOf('QT1', 'Detail')); const old = new Date(Date.now() - 10 * 86400000).toISOString();
 det.statusChangedAt = old; det.statusLog = (det.statusLog || []).concat([{ s: 'Pending', at: old }]); rowOf('QT1')[qh.indexOf('Detail')] = JSON.stringify(det);

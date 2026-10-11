@@ -1,475 +1,13 @@
 [
   {
     "event": "SR_SUBMITTED",
-    "target": "SOURCING",
-    "title": "🆕 คำขอราคาใหม่เข้าคิว · SR-2610-003",
-    "botRequest": {
-      "url": "POST /open-apis/im/v1/messages?receive_id_type=chat_id",
-      "body": {
-        "receive_id": "oc_<LARK_CHAT_SOURCING>",
-        "msg_type": "interactive",
-        "content": "JSON.stringify(card) — ดู card ด้านล่าง",
-        "uuid": "<Id ของแถวในแท็บ NotifyQueue>"
-      }
-    },
-    "card": {
-      "config": {
-        "wide_screen_mode": true
-      },
-      "header": {
-        "template": "orange",
-        "title": {
-          "tag": "plain_text",
-          "content": "🆕 คำขอราคาใหม่เข้าคิว · SR-2610-003"
-        }
-      },
-      "elements": [
-        {
-          "tag": "div",
-          "fields": [
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "โครงการ: Factory Rooftop"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "ลูกค้า: CP Group"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "Sales: BOSS"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "จำนวนรายการ: 4 รายการ"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "โดย: BOSS"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "ต้องการราคาภายใน: 2026-10-20"
-              }
-            }
-          ]
-        },
-        {
-          "tag": "action",
-          "actions": [
-            {
-              "tag": "button",
-              "type": "primary",
-              "text": {
-                "tag": "plain_text",
-                "content": "เปิดคำขอราคา"
-              },
-              "url": "https://script.google.com/macros/s/TEST/exec?app=index&doc=SR-DEMO"
-            }
-          ]
-        }
-      ]
-    },
-    "webhookText": "🆕 คำขอราคาใหม่เข้าคิว · SR-2610-003\nโครงการ: Factory Rooftop\nลูกค้า: CP Group\nSales: BOSS\nจำนวนรายการ: 4 รายการ\nโดย: BOSS\nต้องการราคาภายใน: 2026-10-20\nhttps://script.google.com/macros/s/TEST/exec?app=index&doc=SR-DEMO"
-  },
-  {
-    "event": "QT_SUBMITTED",
-    "target": "APPROVERS",
-    "title": "🧾 ใบเสนอราคารออนุมัติ · QT-IN-2610-007",
-    "botRequest": {
-      "url": "POST /open-apis/im/v1/messages?receive_id_type=chat_id",
-      "body": {
-        "receive_id": "oc_<LARK_CHAT_APPROVERS>",
-        "msg_type": "interactive",
-        "content": "JSON.stringify(card) — ดู card ด้านล่าง",
-        "uuid": "<Id ของแถวในแท็บ NotifyQueue>"
-      }
-    },
-    "card": {
-      "config": {
-        "wide_screen_mode": true
-      },
-      "header": {
-        "template": "yellow",
-        "title": {
-          "tag": "plain_text",
-          "content": "🧾 ใบเสนอราคารออนุมัติ · QT-IN-2610-007"
-        }
-      },
-      "elements": [
-        {
-          "tag": "div",
-          "fields": [
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "โครงการ: Thaibev Solar Rooftop 1MW"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "ลูกค้า: Thai Beverage PCL"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "Sales: BOSS"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "มูลค่า: US$128,450.50"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "%GP: 18.6%"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "รอบ: R2"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "โดย: Chatraporn"
-              }
-            }
-          ]
-        },
-        {
-          "tag": "action",
-          "actions": [
-            {
-              "tag": "button",
-              "type": "primary",
-              "text": {
-                "tag": "plain_text",
-                "content": "เปิดเพื่ออนุมัติ"
-              },
-              "url": "https://script.google.com/macros/s/TEST/exec?app=index&doc=Q-DEMO"
-            }
-          ]
-        }
-      ]
-    },
-    "webhookText": "🧾 ใบเสนอราคารออนุมัติ · QT-IN-2610-007\nโครงการ: Thaibev Solar Rooftop 1MW\nลูกค้า: Thai Beverage PCL\nSales: BOSS\nมูลค่า: US$128,450.50\n%GP: 18.6%\nรอบ: R2\nโดย: Chatraporn\nhttps://script.google.com/macros/s/TEST/exec?app=index&doc=Q-DEMO"
-  },
-  {
-    "event": "QT_APPROVED",
-    "target": "SOURCING",
-    "title": "✅ อนุมัติราคาครบแล้ว · รอปล่อยราคา · QT-IN-2610-007",
-    "botRequest": {
-      "url": "POST /open-apis/im/v1/messages?receive_id_type=chat_id",
-      "body": {
-        "receive_id": "oc_<LARK_CHAT_SOURCING>",
-        "msg_type": "interactive",
-        "content": "JSON.stringify(card) — ดู card ด้านล่าง",
-        "uuid": "<Id ของแถวในแท็บ NotifyQueue>"
-      }
-    },
-    "card": {
-      "config": {
-        "wide_screen_mode": true
-      },
-      "header": {
-        "template": "green",
-        "title": {
-          "tag": "plain_text",
-          "content": "✅ อนุมัติราคาครบแล้ว · รอปล่อยราคา · QT-IN-2610-007"
-        }
-      },
-      "elements": [
-        {
-          "tag": "div",
-          "fields": [
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "โครงการ: Thaibev Solar Rooftop 1MW"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "ลูกค้า: Thai Beverage PCL"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "Sales: BOSS"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "มูลค่า: US$128,450.50"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "รอบ: R2"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "โดย: Chatraporn"
-              }
-            }
-          ]
-        },
-        {
-          "tag": "action",
-          "actions": [
-            {
-              "tag": "button",
-              "type": "primary",
-              "text": {
-                "tag": "plain_text",
-                "content": "เปิดใบเสนอราคา"
-              },
-              "url": "https://script.google.com/macros/s/TEST/exec?app=index&doc=Q-DEMO"
-            }
-          ]
-        }
-      ]
-    },
-    "webhookText": "✅ อนุมัติราคาครบแล้ว · รอปล่อยราคา · QT-IN-2610-007\nโครงการ: Thaibev Solar Rooftop 1MW\nลูกค้า: Thai Beverage PCL\nSales: BOSS\nมูลค่า: US$128,450.50\nรอบ: R2\nโดย: Chatraporn\nhttps://script.google.com/macros/s/TEST/exec?app=index&doc=Q-DEMO"
-  },
-  {
-    "event": "QT_APPROVED",
-    "target": "RELEASE",
-    "title": "✅ อนุมัติราคาครบแล้ว · รอปล่อยราคา · QT-IN-2610-007",
-    "botRequest": {
-      "url": "POST /open-apis/im/v1/messages?receive_id_type=chat_id",
-      "body": {
-        "receive_id": "oc_<LARK_CHAT_RELEASE>",
-        "msg_type": "interactive",
-        "content": "JSON.stringify(card) — ดู card ด้านล่าง",
-        "uuid": "<Id ของแถวในแท็บ NotifyQueue>"
-      }
-    },
-    "card": {
-      "config": {
-        "wide_screen_mode": true
-      },
-      "header": {
-        "template": "green",
-        "title": {
-          "tag": "plain_text",
-          "content": "✅ อนุมัติราคาครบแล้ว · รอปล่อยราคา · QT-IN-2610-007"
-        }
-      },
-      "elements": [
-        {
-          "tag": "div",
-          "fields": [
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "โครงการ: Thaibev Solar Rooftop 1MW"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "ลูกค้า: Thai Beverage PCL"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "Sales: BOSS"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "รอบ: R2"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "โดย: Chatraporn"
-              }
-            }
-          ]
-        },
-        {
-          "tag": "action",
-          "actions": [
-            {
-              "tag": "button",
-              "type": "primary",
-              "text": {
-                "tag": "plain_text",
-                "content": "เปิดใบเสนอราคา"
-              },
-              "url": "https://script.google.com/macros/s/TEST/exec?app=sales&doc=Q-DEMO"
-            }
-          ]
-        }
-      ]
-    },
-    "webhookText": "✅ อนุมัติราคาครบแล้ว · รอปล่อยราคา · QT-IN-2610-007\nโครงการ: Thaibev Solar Rooftop 1MW\nลูกค้า: Thai Beverage PCL\nSales: BOSS\nรอบ: R2\nโดย: Chatraporn\nhttps://script.google.com/macros/s/TEST/exec?app=sales&doc=Q-DEMO"
-  },
-  {
-    "event": "QT_RETURNED",
-    "target": "SOURCING",
-    "title": "↩️ ไม่อนุมัติ · ส่งกลับแก้ราคา · QT-IN-2610-007",
-    "botRequest": {
-      "url": "POST /open-apis/im/v1/messages?receive_id_type=chat_id",
-      "body": {
-        "receive_id": "oc_<LARK_CHAT_SOURCING>",
-        "msg_type": "interactive",
-        "content": "JSON.stringify(card) — ดู card ด้านล่าง",
-        "uuid": "<Id ของแถวในแท็บ NotifyQueue>"
-      }
-    },
-    "card": {
-      "config": {
-        "wide_screen_mode": true
-      },
-      "header": {
-        "template": "red",
-        "title": {
-          "tag": "plain_text",
-          "content": "↩️ ไม่อนุมัติ · ส่งกลับแก้ราคา · QT-IN-2610-007"
-        }
-      },
-      "elements": [
-        {
-          "tag": "div",
-          "fields": [
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "โครงการ: Thaibev Solar Rooftop 1MW"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "ลูกค้า: Thai Beverage PCL"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "Sales: BOSS"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "มูลค่า: US$128,450.50"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "รอบ: R2"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "โดย: Chatraporn"
-              }
-            }
-          ]
-        },
-        {
-          "tag": "note",
-          "elements": [
-            {
-              "tag": "plain_text",
-              "content": "ส่งกลับให้ Sourcing แก้ราคา — ต้องขออนุมัติใหม่ทั้งสองฝ่าย"
-            }
-          ]
-        },
-        {
-          "tag": "action",
-          "actions": [
-            {
-              "tag": "button",
-              "type": "primary",
-              "text": {
-                "tag": "plain_text",
-                "content": "เปิดใบเสนอราคา"
-              },
-              "url": "https://script.google.com/macros/s/TEST/exec?app=index&doc=Q-DEMO"
-            }
-          ]
-        }
-      ]
-    },
-    "webhookText": "↩️ ไม่อนุมัติ · ส่งกลับแก้ราคา · QT-IN-2610-007\nโครงการ: Thaibev Solar Rooftop 1MW\nลูกค้า: Thai Beverage PCL\nSales: BOSS\nมูลค่า: US$128,450.50\nรอบ: R2\nโดย: Chatraporn\nส่งกลับให้ Sourcing แก้ราคา — ต้องขออนุมัติใหม่ทั้งสองฝ่าย\nhttps://script.google.com/macros/s/TEST/exec?app=index&doc=Q-DEMO"
-  },
-  {
-    "event": "PRICE_RELEASED",
-    "target": "SALES",
-    "title": "📤 ปล่อยราคาแล้ว · พร้อมเสนอลูกค้า · QT-IN-2610-007",
-    "botRequest": {
-      "url": "POST /open-apis/im/v1/messages?receive_id_type=chat_id",
-      "body": {
-        "receive_id": "oc_<LARK_CHAT_SALES>",
-        "msg_type": "interactive",
-        "content": "JSON.stringify(card) — ดู card ด้านล่าง",
-        "uuid": "<Id ของแถวในแท็บ NotifyQueue>"
-      }
+    "bot": "Bot A MGS Price Request",
+    "title": "📥 คำขอราคาใหม่ → Sourcing — SR-2610-003",
+    "webhookBody": {
+      "msg_type": "interactive",
+      "card": "(ดู card ด้านล่าง)",
+      "timestamp": "<unix seconds>",
+      "sign": "<base64 HmacSHA256(timestamp + \"\\n\" + secret)>"
     },
     "card": {
       "config": {
@@ -479,7 +17,7 @@
         "template": "blue",
         "title": {
           "tag": "plain_text",
-          "content": "📤 ปล่อยราคาแล้ว · พร้อมเสนอลูกค้า · QT-IN-2610-007"
+          "content": "📥 คำขอราคาใหม่ → Sourcing — SR-2610-003"
         }
       },
       "elements": [
@@ -489,46 +27,67 @@
             {
               "is_short": true,
               "text": {
-                "tag": "plain_text",
-                "content": "โครงการ: Thaibev Solar Rooftop 1MW"
+                "tag": "lark_md",
+                "content": "**เลขที่**\nSR-2610-003"
               }
             },
             {
               "is_short": true,
               "text": {
-                "tag": "plain_text",
-                "content": "ลูกค้า: Thai Beverage PCL"
+                "tag": "lark_md",
+                "content": "**ลูกค้า**\nCP Group · Factory Rooftop 500 kW"
               }
             },
             {
               "is_short": true,
               "text": {
-                "tag": "plain_text",
-                "content": "Sales: BOSS"
+                "tag": "lark_md",
+                "content": "**ผู้ขอ**\n<at email=sourcing.manager@example.com></at>"
               }
             },
             {
               "is_short": true,
               "text": {
-                "tag": "plain_text",
-                "content": "รอบ: R2"
+                "tag": "lark_md",
+                "content": "**สถานะ**\nรอ Sourcing รับคำขอราคา"
               }
             },
             {
               "is_short": true,
               "text": {
-                "tag": "plain_text",
-                "content": "โดย: Chatraporn"
+                "tag": "lark_md",
+                "content": "**ผู้ดำเนินการ**\nผู้ขอ (ช่องด้านซ้าย)"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ครบกำหนด**\n14/10/2026"
               }
             }
           ]
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**ขั้นตอน**\n✅ ส่งคำขอ  ›  🔶 Sourcing ทำราคา  ›  ⚪ Sourcing Manager  ›  ⚪ BD Manager  ›  ⚪ ปล่อยราคา"
+          }
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**สินค้า**\n• MOUNTING-RAIL Aluminium rail 4.2 m — 320 pcs\n• MID-CLAMP 35mm — 640 pcs"
+          }
         },
         {
           "tag": "note",
           "elements": [
             {
               "tag": "plain_text",
-              "content": "ราคาอยู่ในแอป Sales — เห็นเฉพาะ Sales เจ้าของงานและผู้จัดการ"
+              "content": "โดย BOSS"
             }
           ]
         },
@@ -540,97 +99,7 @@
               "type": "primary",
               "text": {
                 "tag": "plain_text",
-                "content": "เปิดในแอป Sales"
-              },
-              "url": "https://script.google.com/macros/s/TEST/exec?app=sales&doc=Q-DEMO"
-            }
-          ]
-        }
-      ]
-    },
-    "webhookText": "📤 ปล่อยราคาแล้ว · พร้อมเสนอลูกค้า · QT-IN-2610-007\nโครงการ: Thaibev Solar Rooftop 1MW\nลูกค้า: Thai Beverage PCL\nSales: BOSS\nรอบ: R2\nโดย: Chatraporn\nราคาอยู่ในแอป Sales — เห็นเฉพาะ Sales เจ้าของงานและผู้จัดการ\nhttps://script.google.com/macros/s/TEST/exec?app=sales&doc=Q-DEMO"
-  },
-  {
-    "event": "SR_SUBMITTED",
-    "target": "REQUESTS",
-    "title": "🆕 คำขอราคาใหม่เข้าคิว · SR-2610-003",
-    "botRequest": {
-      "url": "POST /open-apis/im/v1/messages?receive_id_type=chat_id",
-      "body": {
-        "receive_id": "oc_<LARK_CHAT_REQUESTS>",
-        "msg_type": "interactive",
-        "content": "JSON.stringify(card) — ดู card ด้านล่าง",
-        "uuid": "<Id ของแถวในแท็บ NotifyQueue>"
-      }
-    },
-    "card": {
-      "config": {
-        "wide_screen_mode": true
-      },
-      "header": {
-        "template": "orange",
-        "title": {
-          "tag": "plain_text",
-          "content": "🆕 คำขอราคาใหม่เข้าคิว · SR-2610-003"
-        }
-      },
-      "elements": [
-        {
-          "tag": "div",
-          "fields": [
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "โครงการ: Factory Rooftop"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "ลูกค้า: CP Group"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "Sales: BOSS"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "จำนวนรายการ: 4 รายการ"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "โดย: BOSS"
-              }
-            },
-            {
-              "is_short": true,
-              "text": {
-                "tag": "plain_text",
-                "content": "ต้องการราคาภายใน: 2026-10-20"
-              }
-            }
-          ]
-        },
-        {
-          "tag": "action",
-          "actions": [
-            {
-              "tag": "button",
-              "type": "primary",
-              "text": {
-                "tag": "plain_text",
-                "content": "เปิดคำขอราคา"
+                "content": "เปิดรายการ SR-2610-003"
               },
               "url": "https://script.google.com/macros/s/TEST/exec?doc=SR-DEMO"
             }
@@ -638,30 +107,27 @@
         }
       ]
     },
-    "webhookText": "🆕 คำขอราคาใหม่เข้าคิว · SR-2610-003\nโครงการ: Factory Rooftop\nลูกค้า: CP Group\nSales: BOSS\nจำนวนรายการ: 4 รายการ\nโดย: BOSS\nต้องการราคาภายใน: 2026-10-20\nhttps://script.google.com/macros/s/TEST/exec?doc=SR-DEMO"
+    "text": "📥 คำขอราคาใหม่ → Sourcing — SR-2610-003 | เลขที่ SR-2610-003 | ลูกค้า CP Group · Factory Rooftop 500 kW | ผู้ขอ <at email=sourcing.manager@example.com></at> | สถานะ รอ Sourcing รับคำขอราคา | ผู้ดำเนินการ ผู้ขอ (ช่องด้านซ้าย) | ครบกำหนด 14/10/2026 | ขั้นตอน ✅ ส่งคำขอ  ›  🔶 Sourcing ทำราคา  ›  ⚪ Sourcing Manager  ›  ⚪ BD Manager  ›  ⚪ ปล่อยราคา | สินค้า • MOUNTING-RAIL Aluminium rail 4.2 m — 320 pcs • MID-CLAMP 35mm — 640 pcs | โดย BOSS | https://script.google.com/macros/s/TEST/exec?doc=SR-DEMO"
   },
   {
-    "event": "SLA_BREACH",
-    "target": "APPROVERS",
-    "title": "⛔ งานเกินกำหนด (SLA) · ผู้อนุมัติราคา",
-    "botRequest": {
-      "url": "POST /open-apis/im/v1/messages?receive_id_type=chat_id",
-      "body": {
-        "receive_id": "oc_<LARK_CHAT_APPROVERS>",
-        "msg_type": "interactive",
-        "content": "JSON.stringify(card) — ดู card ด้านล่าง",
-        "uuid": "<Id ของแถวในแท็บ NotifyQueue>"
-      }
+    "event": "SR_FORWARDED",
+    "bot": "Bot A MGS Price Request",
+    "title": "🔀 ส่งต่อคำขอราคา — SR-2610-003",
+    "webhookBody": {
+      "msg_type": "interactive",
+      "card": "(ดู card ด้านล่าง)",
+      "timestamp": "<unix seconds>",
+      "sign": "<base64 HmacSHA256(timestamp + \"\\n\" + secret)>"
     },
     "card": {
       "config": {
         "wide_screen_mode": true
       },
       "header": {
-        "template": "red",
+        "template": "wathet",
         "title": {
           "tag": "plain_text",
-          "content": "⛔ งานเกินกำหนด (SLA) · ผู้อนุมัติราคา"
+          "content": "🔀 ส่งต่อคำขอราคา — SR-2610-003"
         }
       },
       "elements": [
@@ -671,21 +137,73 @@
             {
               "is_short": true,
               "text": {
-                "tag": "plain_text",
-                "content": "งานที่เพิ่งเกินกำหนด: 1 งาน"
+                "tag": "lark_md",
+                "content": "**เลขที่**\nSR-2610-003"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ลูกค้า**\nCP Group · Factory Rooftop 500 kW"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ขอ**\n<at email=sourcing.manager@example.com></at>"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**สถานะ**\nรอ Sourcing รับคำขอราคา"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ดำเนินการ**\nผู้ขอ (ช่องด้านซ้าย)"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ครบกำหนด**\n14/10/2026"
               }
             }
           ]
         },
         {
-          "tag": "hr"
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**ขั้นตอน**\n✅ ส่งคำขอ  ›  🔶 Sourcing ทำราคา  ›  ⚪ Sourcing Manager  ›  ⚪ BD Manager  ›  ⚪ ปล่อยราคา"
+          }
         },
         {
           "tag": "div",
           "text": {
-            "tag": "plain_text",
-            "content": "⛔ QT-IN-2610-001 · PTT EV Station · รอผู้จัดการอนุมัติ (4 วัน)"
+            "tag": "lark_md",
+            "content": "**สินค้า**\n• MOUNTING-RAIL Aluminium rail 4.2 m — 320 pcs\n• MID-CLAMP 35mm — 640 pcs"
           }
+        },
+        {
+          "tag": "note",
+          "elements": [
+            {
+              "tag": "plain_text",
+              "content": "ส่งต่อให้ Napasorn"
+            },
+            {
+              "tag": "plain_text",
+              "content": "โดย BOSS"
+            }
+          ]
         },
         {
           "tag": "action",
@@ -695,28 +213,25 @@
               "type": "primary",
               "text": {
                 "tag": "plain_text",
-                "content": "เปิดระบบ"
+                "content": "เปิดรายการ SR-2610-003"
               },
-              "url": "https://script.google.com/macros/s/TEST/exec?app=index"
+              "url": "https://script.google.com/macros/s/TEST/exec?doc=SR-DEMO"
             }
           ]
         }
       ]
     },
-    "webhookText": "⛔ งานเกินกำหนด (SLA) · ผู้อนุมัติราคา\nงานที่เพิ่งเกินกำหนด: 1 งาน\n⛔ QT-IN-2610-001 · PTT EV Station · รอผู้จัดการอนุมัติ (4 วัน)\nhttps://script.google.com/macros/s/TEST/exec?app=index"
+    "text": "🔀 ส่งต่อคำขอราคา — SR-2610-003 | เลขที่ SR-2610-003 | ลูกค้า CP Group · Factory Rooftop 500 kW | ผู้ขอ <at email=sourcing.manager@example.com></at> | สถานะ รอ Sourcing รับคำขอราคา | ผู้ดำเนินการ ผู้ขอ (ช่องด้านซ้าย) | ครบกำหนด 14/10/2026 | ขั้นตอน ✅ ส่งคำขอ  ›  🔶 Sourcing ทำราคา  ›  ⚪ Sourcing Manager  ›  ⚪ BD Manager  ›  ⚪ ปล่อยราคา | สินค้า • MOUNTING-RAIL Aluminium rail 4.2 m — 320 pcs • MID-CLAMP 35mm — 640 pcs | ส่งต่อให้ Napasorn | โดย BOSS | https://script.google.com/macros/s/TEST/exec?doc=SR-DEMO"
   },
   {
-    "event": "DAILY_DIGEST",
-    "target": "APPROVERS",
-    "title": "📋 สรุปงานค้างประจำวัน · ผู้อนุมัติราคา",
-    "botRequest": {
-      "url": "POST /open-apis/im/v1/messages?receive_id_type=chat_id",
-      "body": {
-        "receive_id": "oc_<LARK_CHAT_APPROVERS>",
-        "msg_type": "interactive",
-        "content": "JSON.stringify(card) — ดู card ด้านล่าง",
-        "uuid": "<Id ของแถวในแท็บ NotifyQueue>"
-      }
+    "event": "SR_ACCEPTED",
+    "bot": "Bot A MGS Price Request",
+    "title": "🔧 Sourcing รับงานแล้ว · กำลังทำราคา — SR-2610-003",
+    "webhookBody": {
+      "msg_type": "interactive",
+      "card": "(ดู card ด้านล่าง)",
+      "timestamp": "<unix seconds>",
+      "sign": "<base64 HmacSHA256(timestamp + \"\\n\" + secret)>"
     },
     "card": {
       "config": {
@@ -726,7 +241,7 @@
         "template": "indigo",
         "title": {
           "tag": "plain_text",
-          "content": "📋 สรุปงานค้างประจำวัน · ผู้อนุมัติราคา"
+          "content": "🔧 Sourcing รับงานแล้ว · กำลังทำราคา — SR-2610-003"
         }
       },
       "elements": [
@@ -736,35 +251,69 @@
             {
               "is_short": true,
               "text": {
-                "tag": "plain_text",
-                "content": "งานค้างทั้งหมด: 2 งาน"
+                "tag": "lark_md",
+                "content": "**เลขที่**\nSR-2610-003"
               }
             },
             {
               "is_short": true,
               "text": {
-                "tag": "plain_text",
-                "content": "⛔ เกินกำหนด: 1 งาน"
+                "tag": "lark_md",
+                "content": "**ลูกค้า**\nCP Group · Factory Rooftop 500 kW"
               }
             },
             {
               "is_short": true,
               "text": {
-                "tag": "plain_text",
-                "content": "⚠ เฝ้าระวัง: 1 งาน"
+                "tag": "lark_md",
+                "content": "**ผู้ขอ**\n<at email=sourcing.manager@example.com></at>"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**สถานะ**\nรอ Sourcing รับคำขอราคา"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ดำเนินการ**\nผู้ขอ (ช่องด้านซ้าย)"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ครบกำหนด**\n14/10/2026"
               }
             }
           ]
         },
         {
-          "tag": "hr"
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**ขั้นตอน**\n✅ ส่งคำขอ  ›  🔶 Sourcing ทำราคา  ›  ⚪ Sourcing Manager  ›  ⚪ BD Manager  ›  ⚪ ปล่อยราคา"
+          }
         },
         {
           "tag": "div",
           "text": {
-            "tag": "plain_text",
-            "content": "⛔ QT-IN-2610-001 · PTT EV Station · รอผู้จัดการอนุมัติ (4 วัน)\n⚠ QT-IN-2610-004 · SCG Warehouse · รอผู้จัดการอนุมัติ (2 วัน)"
+            "tag": "lark_md",
+            "content": "**สินค้า**\n• MOUNTING-RAIL Aluminium rail 4.2 m — 320 pcs\n• MID-CLAMP 35mm — 640 pcs"
           }
+        },
+        {
+          "tag": "note",
+          "elements": [
+            {
+              "tag": "plain_text",
+              "content": "โดย BOSS"
+            }
+          ]
         },
         {
           "tag": "action",
@@ -774,14 +323,810 @@
               "type": "primary",
               "text": {
                 "tag": "plain_text",
-                "content": "เปิดระบบ"
+                "content": "เปิดรายการ SR-2610-003"
               },
-              "url": "https://script.google.com/macros/s/TEST/exec?app=index"
+              "url": "https://script.google.com/macros/s/TEST/exec?doc=SR-DEMO"
             }
           ]
         }
       ]
     },
-    "webhookText": "📋 สรุปงานค้างประจำวัน · ผู้อนุมัติราคา\nงานค้างทั้งหมด: 2 งาน\n⛔ เกินกำหนด: 1 งาน\n⚠ เฝ้าระวัง: 1 งาน\n⛔ QT-IN-2610-001 · PTT EV Station · รอผู้จัดการอนุมัติ (4 วัน)\n⚠ QT-IN-2610-004 · SCG Warehouse · รอผู้จัดการอนุมัติ (2 วัน)\nhttps://script.google.com/macros/s/TEST/exec?app=index"
+    "text": "🔧 Sourcing รับงานแล้ว · กำลังทำราคา — SR-2610-003 | เลขที่ SR-2610-003 | ลูกค้า CP Group · Factory Rooftop 500 kW | ผู้ขอ <at email=sourcing.manager@example.com></at> | สถานะ รอ Sourcing รับคำขอราคา | ผู้ดำเนินการ ผู้ขอ (ช่องด้านซ้าย) | ครบกำหนด 14/10/2026 | ขั้นตอน ✅ ส่งคำขอ  ›  🔶 Sourcing ทำราคา  ›  ⚪ Sourcing Manager  ›  ⚪ BD Manager  ›  ⚪ ปล่อยราคา | สินค้า • MOUNTING-RAIL Aluminium rail 4.2 m — 320 pcs • MID-CLAMP 35mm — 640 pcs | โดย BOSS | https://script.google.com/macros/s/TEST/exec?doc=SR-DEMO"
+  },
+  {
+    "event": "SR_CANCELLED",
+    "bot": "Bot A MGS Price Request",
+    "title": "🚫 ยกเลิกคำขอราคา — SR-2610-003",
+    "webhookBody": {
+      "msg_type": "interactive",
+      "card": "(ดู card ด้านล่าง)",
+      "timestamp": "<unix seconds>",
+      "sign": "<base64 HmacSHA256(timestamp + \"\\n\" + secret)>"
+    },
+    "card": {
+      "config": {
+        "wide_screen_mode": true
+      },
+      "header": {
+        "template": "grey",
+        "title": {
+          "tag": "plain_text",
+          "content": "🚫 ยกเลิกคำขอราคา — SR-2610-003"
+        }
+      },
+      "elements": [
+        {
+          "tag": "div",
+          "fields": [
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**เลขที่**\nSR-2610-003"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ลูกค้า**\nCP Group · Factory Rooftop 500 kW"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ขอ**\n<at email=sourcing.manager@example.com></at>"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**สถานะ**\nยกเลิกคำขอ"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ดำเนินการ**\nผู้ขอ (ช่องด้านซ้าย)"
+              }
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**สินค้า**\n• MOUNTING-RAIL Aluminium rail 4.2 m — 320 pcs\n• MID-CLAMP 35mm — 640 pcs"
+          }
+        },
+        {
+          "tag": "note",
+          "elements": [
+            {
+              "tag": "plain_text",
+              "content": "โดย BOSS"
+            }
+          ]
+        },
+        {
+          "tag": "action",
+          "actions": [
+            {
+              "tag": "button",
+              "type": "primary",
+              "text": {
+                "tag": "plain_text",
+                "content": "เปิดรายการ SR-2610-003"
+              },
+              "url": "https://script.google.com/macros/s/TEST/exec?doc=SR-DEMO"
+            }
+          ]
+        }
+      ]
+    },
+    "text": "🚫 ยกเลิกคำขอราคา — SR-2610-003 | เลขที่ SR-2610-003 | ลูกค้า CP Group · Factory Rooftop 500 kW | ผู้ขอ <at email=sourcing.manager@example.com></at> | สถานะ ยกเลิกคำขอ | ผู้ดำเนินการ ผู้ขอ (ช่องด้านซ้าย) | สินค้า • MOUNTING-RAIL Aluminium rail 4.2 m — 320 pcs • MID-CLAMP 35mm — 640 pcs | โดย BOSS | https://script.google.com/macros/s/TEST/exec?doc=SR-DEMO"
+  },
+  {
+    "event": "QT_SUBMITTED",
+    "bot": "Bot A MGS Price Request",
+    "title": "📊 ทำราคาเสร็จ · รอ Sourcing Manager อนุมัติ (ระดับ 1) — QT-IN-2610-007",
+    "webhookBody": {
+      "msg_type": "interactive",
+      "card": "(ดู card ด้านล่าง)",
+      "timestamp": "<unix seconds>",
+      "sign": "<base64 HmacSHA256(timestamp + \"\\n\" + secret)>"
+    },
+    "card": {
+      "config": {
+        "wide_screen_mode": true
+      },
+      "header": {
+        "template": "orange",
+        "title": {
+          "tag": "plain_text",
+          "content": "📊 ทำราคาเสร็จ · รอ Sourcing Manager อนุมัติ (ระดับ 1) — QT-IN-2610-007"
+        }
+      },
+      "elements": [
+        {
+          "tag": "div",
+          "fields": [
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**เลขที่**\nQT-IN-2610-007 · R2"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ลูกค้า**\nThai Beverage PCL · Thaibev Solar Rooftop 1MW"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ขอ**\n<at email=sourcing.manager@example.com></at>"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**สถานะ**\nรอ Sourcing Manager อนุมัติ (ระดับ 1/2)"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ดำเนินการ**\nผู้ขอ (ช่องด้านซ้าย)"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ครบกำหนด**\n13/10/2026"
+              }
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**ขั้นตอน**\n✅ ส่งคำขอ  ›  ✅ Sourcing ทำราคา  ›  🔶 Sourcing Manager  ›  ⚪ BD Manager  ›  ⚪ ปล่อยราคา"
+          }
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**สินค้า**\n• SG110CX-P2 Inverter 110 kW — 9 pcs\n• Logger3000 — 1 pcs"
+          }
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "💰 **มีราคาแล้ว** — ดูราคาบนเว็บ (เห็นเฉพาะผู้มีสิทธิ์ · Sales เห็นเมื่อปล่อยราคาแล้ว)"
+          }
+        },
+        {
+          "tag": "note",
+          "elements": [
+            {
+              "tag": "plain_text",
+              "content": "โดย Chatraporn"
+            }
+          ]
+        },
+        {
+          "tag": "action",
+          "actions": [
+            {
+              "tag": "button",
+              "type": "primary",
+              "text": {
+                "tag": "plain_text",
+                "content": "เปิดรายการ QT-IN-2610-007"
+              },
+              "url": "https://script.google.com/macros/s/TEST/exec?doc=Q-DEMO"
+            }
+          ]
+        }
+      ]
+    },
+    "text": "📊 ทำราคาเสร็จ · รอ Sourcing Manager อนุมัติ (ระดับ 1) — QT-IN-2610-007 | เลขที่ QT-IN-2610-007 · R2 | ลูกค้า Thai Beverage PCL · Thaibev Solar Rooftop 1MW | ผู้ขอ <at email=sourcing.manager@example.com></at> | สถานะ รอ Sourcing Manager อนุมัติ (ระดับ 1/2) | ผู้ดำเนินการ ผู้ขอ (ช่องด้านซ้าย) | ครบกำหนด 13/10/2026 | ขั้นตอน ✅ ส่งคำขอ  ›  ✅ Sourcing ทำราคา  ›  🔶 Sourcing Manager  ›  ⚪ BD Manager  ›  ⚪ ปล่อยราคา | สินค้า • SG110CX-P2 Inverter 110 kW — 9 pcs • Logger3000 — 1 pcs | 💰 มีราคาแล้ว — ดูราคาบนเว็บ (เห็นเฉพาะผู้มีสิทธิ์ · Sales เห็นเมื่อปล่อยราคาแล้ว) | โดย Chatraporn | https://script.google.com/macros/s/TEST/exec?doc=Q-DEMO"
+  },
+  {
+    "event": "QT_LEVEL1_APPROVED",
+    "bot": "Bot A MGS Price Request",
+    "title": "🏁 Sourcing Manager อนุมัติแล้ว · รอ BD Manager (ระดับ 2) — QT-IN-2610-007",
+    "webhookBody": {
+      "msg_type": "interactive",
+      "card": "(ดู card ด้านล่าง)",
+      "timestamp": "<unix seconds>",
+      "sign": "<base64 HmacSHA256(timestamp + \"\\n\" + secret)>"
+    },
+    "card": {
+      "config": {
+        "wide_screen_mode": true
+      },
+      "header": {
+        "template": "purple",
+        "title": {
+          "tag": "plain_text",
+          "content": "🏁 Sourcing Manager อนุมัติแล้ว · รอ BD Manager (ระดับ 2) — QT-IN-2610-007"
+        }
+      },
+      "elements": [
+        {
+          "tag": "div",
+          "fields": [
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**เลขที่**\nQT-IN-2610-007 · R2"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ลูกค้า**\nThai Beverage PCL · Thaibev Solar Rooftop 1MW"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ขอ**\n<at email=sourcing.manager@example.com></at>"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**สถานะ**\nรอ BD Manager อนุมัติ (ระดับ 2/2)"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ดำเนินการ**\nผู้ขอ (ช่องด้านซ้าย)"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ครบกำหนด**\n13/10/2026"
+              }
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**ขั้นตอน**\n✅ ส่งคำขอ  ›  ✅ Sourcing ทำราคา  ›  ✅ Sourcing Manager  ›  🔶 BD Manager  ›  ⚪ ปล่อยราคา"
+          }
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**สินค้า**\n• SG110CX-P2 Inverter 110 kW — 9 pcs\n• Logger3000 — 1 pcs"
+          }
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "💰 **มีราคาแล้ว** — ดูราคาบนเว็บ (เห็นเฉพาะผู้มีสิทธิ์ · Sales เห็นเมื่อปล่อยราคาแล้ว)"
+          }
+        },
+        {
+          "tag": "note",
+          "elements": [
+            {
+              "tag": "plain_text",
+              "content": "โดย Chatraporn"
+            }
+          ]
+        },
+        {
+          "tag": "action",
+          "actions": [
+            {
+              "tag": "button",
+              "type": "primary",
+              "text": {
+                "tag": "plain_text",
+                "content": "เปิดรายการ QT-IN-2610-007"
+              },
+              "url": "https://script.google.com/macros/s/TEST/exec?doc=Q-DEMO"
+            }
+          ]
+        }
+      ]
+    },
+    "text": "🏁 Sourcing Manager อนุมัติแล้ว · รอ BD Manager (ระดับ 2) — QT-IN-2610-007 | เลขที่ QT-IN-2610-007 · R2 | ลูกค้า Thai Beverage PCL · Thaibev Solar Rooftop 1MW | ผู้ขอ <at email=sourcing.manager@example.com></at> | สถานะ รอ BD Manager อนุมัติ (ระดับ 2/2) | ผู้ดำเนินการ ผู้ขอ (ช่องด้านซ้าย) | ครบกำหนด 13/10/2026 | ขั้นตอน ✅ ส่งคำขอ  ›  ✅ Sourcing ทำราคา  ›  ✅ Sourcing Manager  ›  🔶 BD Manager  ›  ⚪ ปล่อยราคา | สินค้า • SG110CX-P2 Inverter 110 kW — 9 pcs • Logger3000 — 1 pcs | 💰 มีราคาแล้ว — ดูราคาบนเว็บ (เห็นเฉพาะผู้มีสิทธิ์ · Sales เห็นเมื่อปล่อยราคาแล้ว) | โดย Chatraporn | https://script.google.com/macros/s/TEST/exec?doc=Q-DEMO"
+  },
+  {
+    "event": "QT_APPROVED",
+    "bot": "Bot A MGS Price Request",
+    "title": "✅ อนุมัติครบ 2 ระดับ · รอปล่อยราคา — QT-IN-2610-007",
+    "webhookBody": {
+      "msg_type": "interactive",
+      "card": "(ดู card ด้านล่าง)",
+      "timestamp": "<unix seconds>",
+      "sign": "<base64 HmacSHA256(timestamp + \"\\n\" + secret)>"
+    },
+    "card": {
+      "config": {
+        "wide_screen_mode": true
+      },
+      "header": {
+        "template": "green",
+        "title": {
+          "tag": "plain_text",
+          "content": "✅ อนุมัติครบ 2 ระดับ · รอปล่อยราคา — QT-IN-2610-007"
+        }
+      },
+      "elements": [
+        {
+          "tag": "div",
+          "fields": [
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**เลขที่**\nQT-IN-2610-007 · R2"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ลูกค้า**\nThai Beverage PCL · Thaibev Solar Rooftop 1MW"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ขอ**\n<at email=sourcing.manager@example.com></at>"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**สถานะ**\nรอปล่อยราคา"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ดำเนินการ**\nผู้ขอ (ช่องด้านซ้าย)"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ครบกำหนด**\n13/10/2026"
+              }
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**ขั้นตอน**\n✅ ส่งคำขอ  ›  ✅ Sourcing ทำราคา  ›  ✅ Sourcing Manager  ›  ✅ BD Manager  ›  🔶 ปล่อยราคา"
+          }
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**สินค้า**\n• SG110CX-P2 Inverter 110 kW — 9 pcs\n• Logger3000 — 1 pcs"
+          }
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "💰 **มีราคาแล้ว** — ดูราคาบนเว็บ (เห็นเฉพาะผู้มีสิทธิ์ · Sales เห็นเมื่อปล่อยราคาแล้ว)"
+          }
+        },
+        {
+          "tag": "note",
+          "elements": [
+            {
+              "tag": "plain_text",
+              "content": "โดย Chatraporn"
+            }
+          ]
+        },
+        {
+          "tag": "action",
+          "actions": [
+            {
+              "tag": "button",
+              "type": "primary",
+              "text": {
+                "tag": "plain_text",
+                "content": "เปิดรายการ QT-IN-2610-007"
+              },
+              "url": "https://script.google.com/macros/s/TEST/exec?doc=Q-DEMO"
+            }
+          ]
+        }
+      ]
+    },
+    "text": "✅ อนุมัติครบ 2 ระดับ · รอปล่อยราคา — QT-IN-2610-007 | เลขที่ QT-IN-2610-007 · R2 | ลูกค้า Thai Beverage PCL · Thaibev Solar Rooftop 1MW | ผู้ขอ <at email=sourcing.manager@example.com></at> | สถานะ รอปล่อยราคา | ผู้ดำเนินการ ผู้ขอ (ช่องด้านซ้าย) | ครบกำหนด 13/10/2026 | ขั้นตอน ✅ ส่งคำขอ  ›  ✅ Sourcing ทำราคา  ›  ✅ Sourcing Manager  ›  ✅ BD Manager  ›  🔶 ปล่อยราคา | สินค้า • SG110CX-P2 Inverter 110 kW — 9 pcs • Logger3000 — 1 pcs | 💰 มีราคาแล้ว — ดูราคาบนเว็บ (เห็นเฉพาะผู้มีสิทธิ์ · Sales เห็นเมื่อปล่อยราคาแล้ว) | โดย Chatraporn | https://script.google.com/macros/s/TEST/exec?doc=Q-DEMO"
+  },
+  {
+    "event": "QT_RETURNED",
+    "bot": "Bot A MGS Price Request",
+    "title": "↩️ ตีกลับแก้ราคา — QT-IN-2610-007",
+    "webhookBody": {
+      "msg_type": "interactive",
+      "card": "(ดู card ด้านล่าง)",
+      "timestamp": "<unix seconds>",
+      "sign": "<base64 HmacSHA256(timestamp + \"\\n\" + secret)>"
+    },
+    "card": {
+      "config": {
+        "wide_screen_mode": true
+      },
+      "header": {
+        "template": "red",
+        "title": {
+          "tag": "plain_text",
+          "content": "↩️ ตีกลับแก้ราคา — QT-IN-2610-007"
+        }
+      },
+      "elements": [
+        {
+          "tag": "div",
+          "fields": [
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**เลขที่**\nQT-IN-2610-007 · R2"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ลูกค้า**\nThai Beverage PCL · Thaibev Solar Rooftop 1MW"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ขอ**\n<at email=sourcing.manager@example.com></at>"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**สถานะ**\nรอ Sourcing จัดทำราคา"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ดำเนินการ**\nผู้ขอ (ช่องด้านซ้าย)"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ครบกำหนด**\n13/10/2026"
+              }
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**ขั้นตอน**\n✅ ส่งคำขอ  ›  🔶 Sourcing ทำราคา  ›  ⚪ Sourcing Manager  ›  ⚪ BD Manager  ›  ⚪ ปล่อยราคา"
+          }
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**สินค้า**\n• SG110CX-P2 Inverter 110 kW — 9 pcs\n• Logger3000 — 1 pcs"
+          }
+        },
+        {
+          "tag": "note",
+          "elements": [
+            {
+              "tag": "plain_text",
+              "content": "ส่งกลับให้ Sourcing แก้ราคา — ต้องขออนุมัติใหม่ตั้งแต่ระดับ 1"
+            },
+            {
+              "tag": "plain_text",
+              "content": "โดย Chatraporn"
+            }
+          ]
+        },
+        {
+          "tag": "action",
+          "actions": [
+            {
+              "tag": "button",
+              "type": "primary",
+              "text": {
+                "tag": "plain_text",
+                "content": "เปิดรายการ QT-IN-2610-007"
+              },
+              "url": "https://script.google.com/macros/s/TEST/exec?doc=Q-DEMO"
+            }
+          ]
+        }
+      ]
+    },
+    "text": "↩️ ตีกลับแก้ราคา — QT-IN-2610-007 | เลขที่ QT-IN-2610-007 · R2 | ลูกค้า Thai Beverage PCL · Thaibev Solar Rooftop 1MW | ผู้ขอ <at email=sourcing.manager@example.com></at> | สถานะ รอ Sourcing จัดทำราคา | ผู้ดำเนินการ ผู้ขอ (ช่องด้านซ้าย) | ครบกำหนด 13/10/2026 | ขั้นตอน ✅ ส่งคำขอ  ›  🔶 Sourcing ทำราคา  ›  ⚪ Sourcing Manager  ›  ⚪ BD Manager  ›  ⚪ ปล่อยราคา | สินค้า • SG110CX-P2 Inverter 110 kW — 9 pcs • Logger3000 — 1 pcs | ส่งกลับให้ Sourcing แก้ราคา — ต้องขออนุมัติใหม่ตั้งแต่ระดับ 1 | โดย Chatraporn | https://script.google.com/macros/s/TEST/exec?doc=Q-DEMO"
+  },
+  {
+    "event": "PRICE_RELEASED",
+    "bot": "Bot A MGS Price Request",
+    "title": "🎉 ปล่อยราคาแล้ว · Sales ดูราคาบนเว็บ — QT-IN-2610-007",
+    "webhookBody": {
+      "msg_type": "interactive",
+      "card": "(ดู card ด้านล่าง)",
+      "timestamp": "<unix seconds>",
+      "sign": "<base64 HmacSHA256(timestamp + \"\\n\" + secret)>"
+    },
+    "card": {
+      "config": {
+        "wide_screen_mode": true
+      },
+      "header": {
+        "template": "green",
+        "title": {
+          "tag": "plain_text",
+          "content": "🎉 ปล่อยราคาแล้ว · Sales ดูราคาบนเว็บ — QT-IN-2610-007"
+        }
+      },
+      "elements": [
+        {
+          "tag": "div",
+          "fields": [
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**เลขที่**\nQT-IN-2610-007 · R2"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ลูกค้า**\nThai Beverage PCL · Thaibev Solar Rooftop 1MW"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ขอ**\n<at email=sourcing.manager@example.com></at>"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**สถานะ**\nพร้อมเสนอลูกค้า"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ดำเนินการ**\nผู้ขอ (ช่องด้านซ้าย)"
+              }
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**ขั้นตอน**\n✅ ส่งคำขอ  ›  ✅ Sourcing ทำราคา  ›  ✅ Sourcing Manager  ›  ✅ BD Manager  ›  ✅ ปล่อยราคา"
+          }
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**สินค้า**\n• SG110CX-P2 Inverter 110 kW — 9 pcs\n• Logger3000 — 1 pcs"
+          }
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "💰 **มีราคาแล้ว** — ดูราคาบนเว็บ (เห็นเฉพาะผู้มีสิทธิ์ · Sales เห็นเมื่อปล่อยราคาแล้ว)"
+          }
+        },
+        {
+          "tag": "note",
+          "elements": [
+            {
+              "tag": "plain_text",
+              "content": "Sales เจ้าของงานเปิดดูราคาได้แล้วบนเว็บ (ราคาไม่แสดงในกลุ่ม)"
+            },
+            {
+              "tag": "plain_text",
+              "content": "โดย Chatraporn"
+            }
+          ]
+        },
+        {
+          "tag": "action",
+          "actions": [
+            {
+              "tag": "button",
+              "type": "primary",
+              "text": {
+                "tag": "plain_text",
+                "content": "เปิดรายการ QT-IN-2610-007"
+              },
+              "url": "https://script.google.com/macros/s/TEST/exec?doc=Q-DEMO"
+            }
+          ]
+        }
+      ]
+    },
+    "text": "🎉 ปล่อยราคาแล้ว · Sales ดูราคาบนเว็บ — QT-IN-2610-007 | เลขที่ QT-IN-2610-007 · R2 | ลูกค้า Thai Beverage PCL · Thaibev Solar Rooftop 1MW | ผู้ขอ <at email=sourcing.manager@example.com></at> | สถานะ พร้อมเสนอลูกค้า | ผู้ดำเนินการ ผู้ขอ (ช่องด้านซ้าย) | ขั้นตอน ✅ ส่งคำขอ  ›  ✅ Sourcing ทำราคา  ›  ✅ Sourcing Manager  ›  ✅ BD Manager  ›  ✅ ปล่อยราคา | สินค้า • SG110CX-P2 Inverter 110 kW — 9 pcs • Logger3000 — 1 pcs | 💰 มีราคาแล้ว — ดูราคาบนเว็บ (เห็นเฉพาะผู้มีสิทธิ์ · Sales เห็นเมื่อปล่อยราคาแล้ว) | Sales เจ้าของงานเปิดดูราคาได้แล้วบนเว็บ (ราคาไม่แสดงในกลุ่ม) | โดย Chatraporn | https://script.google.com/macros/s/TEST/exec?doc=Q-DEMO"
+  },
+  {
+    "event": "SLA_REMINDER",
+    "bot": "Bot B MGS Reminder",
+    "title": "⏰ งานค้างเกินกำหนด — QT-IN-2610-007",
+    "webhookBody": {
+      "msg_type": "interactive",
+      "card": "(ดู card ด้านล่าง)",
+      "timestamp": "<unix seconds>",
+      "sign": "<base64 HmacSHA256(timestamp + \"\\n\" + secret)>"
+    },
+    "card": {
+      "config": {
+        "wide_screen_mode": true
+      },
+      "header": {
+        "template": "yellow",
+        "title": {
+          "tag": "plain_text",
+          "content": "⏰ งานค้างเกินกำหนด — QT-IN-2610-007"
+        }
+      },
+      "elements": [
+        {
+          "tag": "div",
+          "fields": [
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**เลขที่**\nQT-IN-2610-007 · R2"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ลูกค้า**\nThai Beverage PCL · Thaibev Solar Rooftop 1MW"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ขอ**\n<at email=sourcing.manager@example.com></at>"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**สถานะ**\nรอ Sourcing Manager อนุมัติ (ระดับ 1/2)"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ผู้ดำเนินการ**\nผู้ขอ (ช่องด้านซ้าย)"
+              }
+            },
+            {
+              "is_short": true,
+              "text": {
+                "tag": "lark_md",
+                "content": "**ครบกำหนด**\n13/10/2026 · ⛔ เกินกำหนด 2 วันทำการ"
+              }
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**ขั้นตอน**\n✅ ส่งคำขอ  ›  ✅ Sourcing ทำราคา  ›  🔶 Sourcing Manager  ›  ⚪ BD Manager  ›  ⚪ ปล่อยราคา"
+          }
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "**สินค้า**\n• SG110CX-P2 Inverter 110 kW — 9 pcs\n• Logger3000 — 1 pcs"
+          }
+        },
+        {
+          "tag": "div",
+          "text": {
+            "tag": "lark_md",
+            "content": "💰 **มีราคาแล้ว** — ดูราคาบนเว็บ (เห็นเฉพาะผู้มีสิทธิ์ · Sales เห็นเมื่อปล่อยราคาแล้ว)"
+          }
+        },
+        {
+          "tag": "note",
+          "elements": [
+            {
+              "tag": "plain_text",
+              "content": "ค้างที่ขั้น “Sourcing Manager” มาแล้ว 4 วันทำการ (กำหนด 2 วัน)"
+            },
+            {
+              "tag": "plain_text",
+              "content": "โดย Chatraporn"
+            }
+          ]
+        },
+        {
+          "tag": "action",
+          "actions": [
+            {
+              "tag": "button",
+              "type": "primary",
+              "text": {
+                "tag": "plain_text",
+                "content": "เปิดรายการ QT-IN-2610-007"
+              },
+              "url": "https://script.google.com/macros/s/TEST/exec?doc=Q-DEMO"
+            }
+          ]
+        }
+      ]
+    },
+    "text": "⏰ งานค้างเกินกำหนด — QT-IN-2610-007 | เลขที่ QT-IN-2610-007 · R2 | ลูกค้า Thai Beverage PCL · Thaibev Solar Rooftop 1MW | ผู้ขอ <at email=sourcing.manager@example.com></at> | สถานะ รอ Sourcing Manager อนุมัติ (ระดับ 1/2) | ผู้ดำเนินการ ผู้ขอ (ช่องด้านซ้าย) | ครบกำหนด 13/10/2026 · ⛔ เกินกำหนด 2 วันทำการ | ขั้นตอน ✅ ส่งคำขอ  ›  ✅ Sourcing ทำราคา  ›  🔶 Sourcing Manager  ›  ⚪ BD Manager  ›  ⚪ ปล่อยราคา | สินค้า • SG110CX-P2 Inverter 110 kW — 9 pcs • Logger3000 — 1 pcs | 💰 มีราคาแล้ว — ดูราคาบนเว็บ (เห็นเฉพาะผู้มีสิทธิ์ · Sales เห็นเมื่อปล่อยราคาแล้ว) | ค้างที่ขั้น “Sourcing Manager” มาแล้ว 4 วันทำการ (กำหนด 2 วัน) | โดย Chatraporn | https://script.google.com/macros/s/TEST/exec?doc=Q-DEMO"
   }
 ]

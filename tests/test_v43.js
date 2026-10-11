@@ -29,7 +29,8 @@ table.forEach(([st, extra, want]) => { const f = F(Object.assign({ status: st },
 [['Draft', 'SALES'], ['Submitted', 'SOURCING'], ['Accepted', 'SOURCING'], ['Quoted', 'DONE'], ['Cancelled', 'DONE']]
   .forEach(([st, want]) => ok(`SR ${st} → ${want}`, F({ docType: 'SR', status: st }).owner === want));
 ok('SR ที่มี QT ผูกแล้ว → DONE แม้สถานะยังเป็น Submitted', F({ docType: 'SR', status: 'Submitted', quoteIds: ['Q9'] }).owner === 'DONE');
-ok('Partial Approved บอกว่ารอฝั่งไหน', /BD Mgr/.test(F({ status: 'Partial Approved', approvalRoles: ['Procurement Mgr'] }).label));
+// v5.0 (ตั้งใจ): อนุมัติเรียงลำดับ ป้ายบอก "ระดับ" และชื่อที่แสดง BD Manager แทนชื่อ role ดิบ BD Mgr
+ok('Partial Approved บอกว่ารอฝั่งไหน (ระดับ 2 BD Manager)', /รอ BD Manager อนุมัติ \(ระดับ 2\/2\)/.test(F({ status: 'Partial Approved', approvalRoles: ['Procurement Mgr'] }).label));
 
 console.log('\n== 2) งานก่อนปล่อยราคา ต้องไม่เป็นงานค้างของ Sales (หัวใจ Phase 1) ==');
 ['Requested', 'In Progress', 'Submitted', 'Partial Approved', 'Approved'].forEach(st => {

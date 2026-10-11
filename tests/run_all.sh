@@ -14,7 +14,7 @@ run() {   # run "หัวข้อ" "ชื่อเทสต์" คำสั�
   NAMES+=("$topic|$name"); RESULTS+=("$st|$n_pass|$n_fail|$((SECONDS - t0))s|$log")
   printf '%-4s  %-34s %-26s %4s ok %3s fail  %s\n' "$st" "$topic" "$name" "$n_pass" "$n_fail" "$((SECONDS - t0))s"
 }
-echo "MGS Pricing — Phase 6 verification · $(date '+%Y-%m-%d %H:%M') · $(git rev-parse --short HEAD 2>/dev/null)"
+echo "MGS Pricing — v5.0 verification · $(date '+%Y-%m-%d %H:%M') · $(git rev-parse --short HEAD 2>/dev/null)"
 echo "logs: $OUT"; echo
 run "1 Smoke ทุก role / สิทธิ์ / projection" "smoke_roles"        node tests/smoke_roles.js "$ROOT"
 run "1 Smoke ทุก role / สิทธิ์ / projection" "test_backend"       node tests/test_backend.js Code.gs
@@ -32,6 +32,8 @@ run "6 Blob hash ก่อน/หลัง"                 "blob_hash"         
 run "7 localStorage + ชีทจาก production"   "compat_production"  node tests/compat_production.js "$ROOT"
 run "· Lark (dry-run)"                    "test_v47"           node tests/test_v47.js "$ROOT"
 run "· Lark ลิงก์เปิดเอกสาร"                 "e2e_v47(browser)"   node tests/e2e_v47.js "$ROOT"
+run "8 v5.0 ส่งถึง Sourcing / อนุมัติ 2 ระดับ" "test_v50"           node tests/test_v50.js "$ROOT"
+run "8 v5.0 แถบขั้นตอน / มือถือ"            "e2e_v50(browser)"   node tests/e2e_v50.js "$ROOT" "$OUT"
 run "· Layout ทุกหน้า ทุกจอ"                 "layout_audit"       node tests/layout_audit.js "$ROOT" "$OUT"
 # audit_roles เป็นตัวเดินทุกเมนูทุก role (ไม่พิมพ์ PASS) → ตกถ้ามี JavaScript error ในหน้าใดหน้าหนึ่ง
 for i in "${!NAMES[@]}"; do if [[ "${NAMES[$i]}" == *"audit_roles"* ]]; then IFS='|' read -r _ _ _ _ alog <<< "${RESULTS[$i]}";

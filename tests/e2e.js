@@ -58,8 +58,9 @@ async function newUser(browser, id) {
   // 1) dashboard approval cards
   let txt = await proc.textContent('#content');
   ok('Procurement dashboard shows approval queue', txt.includes('รออนุมัติราคา (2)'), txt.slice(0, 200));
-  ok('badge: รอฝั่ง Procurement อนุมัติ', txt.includes('รอฝั่ง Procurement อนุมัติ'));
-  ok('badge: รอฝั่ง BD อนุมัติ', txt.includes('รอฝั่ง BD อนุมัติ'));
+  // v5.0 (ตั้งใจ): อนุมัติ 2 ระดับเรียงลำดับ — ป้ายเดิม "รอฝั่ง Procurement/BD อนุมัติ" เปลี่ยนเป็นป้ายระดับ
+  ok('badge: ⏳ ระดับ 1 รอ Sourcing Manager', txt.includes('⏳ ระดับ 1 รอ Sourcing Manager'));
+  ok('badge: ○ ระดับ 2 BD Manager (ยังไม่ถึง)', txt.includes('○ ระดับ 2 BD Manager'));
   ok('big GP% visible on cards (22% & 9%)', (await proc.textContent('.agrid')).includes('22%') && (await proc.textContent('.agrid')).includes('9%'));
   ok('BD Manager (alias role) is a manager in UI', await bd.evaluate(() => perms().approve && canSeeCost(CURRENT) && CURRENT.role === 'BD Mgr'));
   await proc.screenshot({ path: OUT + '/1_dashboard_procurement.png', fullPage: false });
@@ -73,13 +74,13 @@ async function newUser(browser, id) {
   await bd.waitForTimeout(+process.env.POLLWAIT||31500);
   ok('BD dashboard auto-updated (no sync click) → Partial Approved', await bd.evaluate(() => statusOf(QUOTES.find(q => q.id === 'Q1')) === 'Partial Approved'));
   txt = await bd.textContent('#content');
-  ok('BD card shows ✓ Procurement อนุมัติแล้ว', txt.includes('Procurement อนุมัติแล้ว'));
+  ok('BD card shows ✓ ระดับ 1 Sourcing Manager + ปุ่มอนุมัติระดับ 2', txt.includes('✓ ระดับ 1 Sourcing Manager') && txt.includes('อนุมัติ ระดับ 2'));   // v5.0 (ตั้งใจ): ป้ายระดับ
   ok('live pill shows', (await bd.textContent('#liveTxt')).includes('Live'));
   await bd.screenshot({ path: OUT + '/2_dashboard_bd_after_poll.png' });
 
   // 3) BD approves from preview → Approved, both approvals kept
   await bd.evaluate(() => openQuote('Q1')); await bd.waitForTimeout(600);
-  await bd.click('button:has-text("อนุมัติในนาม")'); await bd.waitForTimeout(800);
+  await bd.click('button:has-text("อนุมัติ ระดับ 2")'); await bd.waitForTimeout(800);   // v5.0 (ตั้งใจ): ป้ายปุ่มเดิม "อนุมัติในนาม BD Mgr"
   ok('BD approve → Approved with BOTH roles', await bd.evaluate(() => { const q = QUOTES.find(q => q.id === 'Q1'); return q.status === 'Approved' && q.approvalRoles.join() === 'Procurement Mgr,BD Mgr'; }));
 
   // 4) Sourcing: internal view after approval + cost structure columns

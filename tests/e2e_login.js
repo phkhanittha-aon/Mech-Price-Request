@@ -38,7 +38,8 @@ const appShown = p => p.evaluate(() => !document.getElementById('app').classList
   console.log('== Index: เส้นทาง Google ==');
   let p = await open(b, '/', 'bd@mglobalsourcing.net');
   ok('BD Mgr เปิดหน้า → เข้าระบบอัตโนมัติด้วยอีเมล Google (ไม่ต้องกรอก)', await appShown(p) && await p.evaluate(() => CURRENT && CURRENT.id === 'bd'));
-  ok('หน้าแรกของผู้อนุมัติ = รออนุมัติ', await p.evaluate(() => route) === 'approvals' && (await p.textContent('#content')).includes('รอคุณอนุมัติ (1)'));
+  // v5.0 (ตั้งใจ): อนุมัติเรียงลำดับ — ใบที่ยังรอระดับ 1 ไม่นับเป็น "รอคุณ" ของ BD แต่อยู่ในกลุ่ม "อยู่ระหว่างอนุมัติ"
+  ok('หน้าแรกของผู้อนุมัติ = รออนุมัติ (BD: ใบยังรอระดับ 1 → อยู่ระหว่างอนุมัติ)', await p.evaluate(() => route) === 'approvals' && (await p.textContent('#content')).includes('รอคุณอนุมัติ (0)') && (await p.textContent('#content')).includes('อยู่ระหว่างอนุมัติ (1)'));
   await p.screenshot({ path: OUT + '/p2_approvals_home.png' });
   // role เปลี่ยนกลางทาง
   urow('bd')[col('Role')] = 'Sourcing';
@@ -58,7 +59,7 @@ const appShown = p => p.evaluate(() => !document.getElementById('app').classList
   p = await open(b, '/', 'stranger@gmail.com');
   const who = await p.textContent('#loginWho');
   ok('อีเมลไม่มีสิทธิ์ → หน้า login แสดงอีเมลที่ตรวจพบ + วิธีแก้', !(await appShown(p)) && who.includes('stranger@gmail.com') && who.includes('ยังไม่มีสิทธิ์'), who);
-  ok('หน้า login แสดง APP_VERSION + build', /v4\.[4-9]/.test(await p.textContent('#buildStamp')));
+  ok('หน้า login แสดง APP_VERSION + build', /v\d+\.\d/.test(await p.textContent('#buildStamp'))   /* v5.0 (ตั้งใจ): เดิมล็อก v4.x */);
   await p.screenshot({ path: OUT + '/p2_login_unknown_email.png' });
   await p.fill('#loginUser', 'sourcing1'); await p.fill('#loginPass', 'pw123456'); await p.click('button:has-text("เข้าสู่ระบบ →")'); await p.waitForTimeout(1500);
   ok('เข้าด้วยชื่อผู้ใช้ + รหัสผ่านแทนได้', await appShown(p) && await p.evaluate(() => CURRENT.id === 'sourcing1'));

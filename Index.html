@@ -429,6 +429,38 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
 .abadge.wait{background:var(--amber-soft);color:var(--amber);border-color:rgba(201,138,18,.35)}
 .abadge.mine{background:var(--amber);color:#fff}
 .abadge.warn{background:var(--red-soft);color:var(--red)}
+.abadge.todo{background:var(--surface-2);color:var(--muted);border-color:var(--line)}
+.abadge-arrow{color:var(--muted);font-size:12px;padding:0 1px}
+.ac-badges{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.ac-acts{display:flex;flex-direction:column;gap:6px;justify-content:center;flex:0 0 auto;max-width:132px}
+.ac-acts .btn{white-space:normal;line-height:1.25;text-align:center}
+@media(max-width:520px){.ac-acts{flex:none;align-self:stretch;flex-direction:row;max-width:none}.ac-acts .btn{flex:1;padding:11px 8px;font-size:14px}
+  .acard{flex-direction:column;gap:8px;padding:12px;min-width:0}.agrid>.acard{min-width:0}.acard .ac-body{width:100%}
+  .acard .ac-gp{flex:none;align-self:stretch;flex-direction:row;align-items:baseline;justify-content:flex-start;gap:6px;padding:6px 12px}
+  .acard .ac-gp b{font-size:20px}.abadge-arrow{display:none}}
+/* ---- v5.0 stepper: ส่งคำขอ → Sourcing ทำราคา → Sourcing Manager → BD Manager → ปล่อยราคา ---- */
+.flow-steps{display:flex;list-style:none;margin:0;padding:0}
+.flow-steps li{flex:1 1 0;position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;min-width:0;font-size:11.5px;color:var(--muted)}
+.flow-steps li::before{content:'';position:absolute;top:12px;left:-50%;right:50%;height:2px;background:var(--line-2)}
+.flow-steps li:first-child::before{display:none}
+.flow-steps li.done::before,.flow-steps li.now::before{background:var(--green)}
+.flow-steps .dot{position:relative;z-index:1;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;font-weight:700;background:var(--surface);border:2px solid var(--line-2);color:var(--muted)}
+.flow-steps li.done .dot{background:var(--green);border-color:var(--green);color:#fff}
+.flow-steps li.now .dot{background:var(--orange);border-color:var(--orange);color:#fff;box-shadow:0 0 0 4px var(--orange-soft)}
+.flow-steps li.now{color:var(--ink);font-weight:700}
+.flow-steps .nm{margin-top:6px;line-height:1.25;padding:0 2px;overflow-wrap:anywhere}
+.flow-meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px;font-size:12.5px;color:var(--ink-2)}
+.flow-meta .st{font-weight:700;color:var(--ink)}
+.flow-meta .over{color:var(--red);font-weight:700}.flow-meta .watch{color:var(--amber);font-weight:700}
+.acard .flow-meta{margin-top:4px;font-size:11.5px}
+.flow.compact .nm{display:none}
+.flow.compact .dot{width:16px;height:16px;font-size:9px;border-width:2px}
+.flow.compact .flow-steps li::before{top:7px}
+.flow.compact .flow-steps li.now .dot{box-shadow:0 0 0 3px var(--orange-soft)}
+@media(max-width:720px){.flow-steps .nm{font-size:10.5px}.flow-steps .dot{width:22px;height:22px;font-size:10.5px}.flow-steps li::before{top:10px}.flow-meta{font-size:12px}}
+.route-tag{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:2px 8px;border-radius:20px;background:var(--blue-soft);color:var(--blue);font-weight:600;white-space:nowrap}
+.route-tag.me{background:var(--orange);color:#fff}
+.route-tag.pool{background:var(--surface-2);color:var(--ink-2)}
 /* ---- approval cards (Dashboard) ---- */
 .agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(330px,100%),1fr));gap:10px}
 @media(max-width:520px){.acard{flex-wrap:wrap}.ac-gp{flex:0 0 72px}.ac-btn{width:100%}}
@@ -584,8 +616,8 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='4.9';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
-const BUILD='2026-10-10 · build 4.9 · Lark webhook per group';
+const APP_VERSION='5.0';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const BUILD='2026-10-10 · build 5.0 · คำขอราคาแบบ Food + อนุมัติ 2 ระดับ';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
@@ -597,14 +629,15 @@ const ROLE_TIER={'GM':'ADMIN','Admin':'ADMIN','Procurement Mgr':'MANAGEMENT','BD
 const ROLE_ALIASES={'gm':'GM','general manager':'GM','admin':'Admin','administrator':'Admin',
   'procurement mgr':'Procurement Mgr','procurement manager':'Procurement Mgr','procurement mgr.':'Procurement Mgr',
   'bd mgr':'BD Mgr','bd manager':'BD Mgr','bd mgr.':'BD Mgr','business development manager':'BD Mgr',
+  'sourcing manager':'Procurement Mgr','sourcing mgr':'Procurement Mgr','sourcing mgr.':'Procurement Mgr',   // v5.0
   'sourcing':'Sourcing','sales':'Sales','sales manager':'Sales Manager','sales mgr':'Sales Manager','sales mgr.':'Sales Manager'};
 // v4.2: รายการ role ที่เลือกได้ในหน้าจัดการผู้ใช้ (ต้องตรงกับ ROLE_MATRIX ใน Code.gs)
 const ROLE_OPTIONS=[
   {group:'ผู้บริหาร (Manager) — เห็นต้นทุน + อนุมัติ',roles:['GM','Admin','Procurement Mgr','BD Mgr']},
   {group:'ทีม Sourcing — เห็นต้นทุน + ทำราคา',roles:['Sourcing']},
   {group:'ทีมขาย — ใช้แอป Sales (ไม่เห็นต้นทุน)',roles:['Sales Manager','Sales']}];
-const ROLE_DESC={'GM':'อนุมัติแทนได้ทั้ง 2 ฝ่าย · จัดการผู้ใช้','Admin':'จัดการผู้ใช้ + ตั้งค่า','Procurement Mgr':'อนุมัติฝั่ง Procurement',
-  'BD Mgr':'อนุมัติฝั่ง BD','Sourcing':'ทำราคา / รับคำขอราคา','Sales Manager':'เห็นงานของ Sales ทุกคน (ไม่มีต้นทุน)','Sales':'ขอราคา + ติดตามงานของตัวเอง'};
+const ROLE_DESC={'GM':'อนุมัติแทนได้ทุกระดับ · จัดการผู้ใช้','Admin':'จัดการผู้ใช้ + ตั้งค่า','Procurement Mgr':'Sourcing Manager — อนุมัติระดับ 1',
+  'BD Mgr':'BD Manager — อนุมัติระดับ 2','Sourcing':'ทำราคา / รับคำขอราคา','Sales Manager':'เห็นงานของ Sales ทุกคน (ไม่มีต้นทุน)','Sales':'ขอราคา + ติดตามงานของตัวเอง'};
 function normRole(role){
   const raw=String(role||'').trim();
   if(ROLE_TIER[raw])return raw;
@@ -824,11 +857,17 @@ const SR_STATUSES=['Draft','Submitted','Accepted','Quoted','Cancelled'];
 const QT_STATUSES=['Requested','In Progress','Submitted','Partial Approved','Approved','Pending','Won','Closed'];
 const QT_DEFAULT_STATUS='In Progress';
 
-/* ---- 1. Dual approval: ต้องได้ทั้ง 2 ขาถึงจะเป็น Approved ---- */
-// BUSINESS RULE: ใบเสนอราคาต้องผ่านทั้ง Procurement Mgr และ BD Mgr
+/* ---- 1. อนุมัติ 2 ระดับ "เรียงลำดับ" (v5.0) — ต้องตรงกับ REQUIRED_APPROVAL_ROLES / APPROVAL_OVERRIDE_ROLES ใน Code.gs ---- */
+// BUSINESS RULE: ลำดับใน array = ลำดับระดับ · ระดับ 1 Sourcing Manager (role Procurement Mgr) → ระดับ 2 BD Manager
+//                BD Manager อนุมัติก่อนระดับ 1 ไม่ได้ (server ตอบ WAIT_PREVIOUS_LEVEL)
 const REQUIRED_APPROVAL_ROLES=['Procurement Mgr','BD Mgr'];
-// BUSINESS RULE: GM อนุมัติแทนได้ทั้ง 2 ขาในครั้งเดียว (override) — ลบ 'GM' ออกถ้าไม่ต้องการ
+// BUSINESS RULE: GM อนุมัติแทนได้ทุกระดับ — ทีละระดับ หรือ "แทนทั้ง 2 ระดับ" ในครั้งเดียว · บันทึกในประวัติว่าอนุมัติแทน
 const APPROVAL_OVERRIDE_ROLES=['GM'];
+/* v5.0: ชื่อที่แสดงของ role (ค่าในแท็บ Users ยังเป็นชื่อมาตรฐานเดิม — ต้องตรงกับ ROLE_LABEL ใน Code.gs) */
+const ROLE_LABEL={'Procurement Mgr':'Sourcing Manager','BD Mgr':'BD Manager'};
+function roleTH(r){return ROLE_LABEL[r]||r||''}
+/* v5.0: ขั้นตอนของคำขอราคา — ตรงกับ FLOW_STEPS ใน Code.gs (row.follow.step) และแถบขั้นตอนในการ์ด Lark */
+const FLOW_STEPS=['ส่งคำขอ','Sourcing ทำราคา','Sourcing Manager','BD Manager','ปล่อยราคา','ได้ราคาแล้ว'];
 
 // BUSINESS RULE: บทบาทไหนตั้งสถานะอะไรได้บ้าง (Manager ได้ทุกสถานะ และถูกบันทึก audit เสมอ)
 // BUSINESS RULE (แก้ตามคำสั่ง): สถานะโครงการเปลี่ยนได้โดย "ทีม Sourcing" เท่านั้น
@@ -874,8 +913,8 @@ const PRICE_VISIBLE_STATUSES=['Approved','Pending','Won','Closed'];
 /* SR ใช้คำของ "คำขอราคา" (สถานะชื่อเดียวกันในชีท แต่ความหมายต่างจากใบเสนอราคา) */
 const SR_STATUS_TH={'Draft':'ร่างคำขอ','Submitted':'รอ Sourcing รับคำขอ','Accepted':'Sourcing รับคำขอแล้ว','Quoted':'จัดทำใบเสนอราคาแล้ว','Cancelled':'ยกเลิกคำขอ'};
 function statusTH(st,docType){return (docType==='SR'&&SR_STATUS_TH[st])||STATUS_TH[st]||st}
-const STATUS_TH={'Requested':'รอรับงาน','In Progress':'Sourcing กำลังจัดทำราคา','Submitted':'รอผู้จัดการอนุมัติ',
-  'Partial Approved':'อนุมัติแล้วบางส่วน','Approved':'อนุมัติแล้ว · รอปล่อยราคา','Pending':'พร้อมเสนอลูกค้า',
+const STATUS_TH={'Requested':'รอรับงาน','In Progress':'Sourcing กำลังจัดทำราคา','Submitted':'รอ Sourcing Manager อนุมัติ',
+  'Partial Approved':'รอ BD Manager อนุมัติ','Approved':'อนุมัติแล้ว · รอปล่อยราคา','Pending':'พร้อมเสนอลูกค้า',
   'Won':'ปิดการขายได้','Closed':'ปิดงาน','Draft':'ร่าง','Accepted':'รับงานแล้ว','Quoted':'ทำราคาแล้ว','Cancelled':'ยกเลิก'};
 
 /* ============================================================ STATUS MIGRATION (จุดเดียวที่แปลงสถานะ)
@@ -1254,7 +1293,7 @@ function lastUpdate(q){return (q&&q.salesUpdate&&q.salesUpdate.at)?q.salesUpdate
    กติกาหลัก: งานที่ยังไม่ปล่อยราคาให้เจ้าของงาน "ไม่ใช่งานค้างของ Sales" — เป็นของ Sourcing / ผู้จัดการ / ผู้ปล่อยราคา
    ============================================================ */
 const OWNER_WHO={SOURCING:'sourcing',MANAGEMENT:'mgr',RELEASER:'gate',REPAIR:'repair',SALES:'sales',DONE:'done'};
-const OWNER_SHORT={SOURCING:'Sourcing',MANAGEMENT:'ผู้จัดการ',RELEASER:'ผู้ปล่อยราคา',REPAIR:'Sourcing (เตรียมข้อมูล)',SALES:'Sales',DONE:'—'};
+const OWNER_SHORT={SOURCING:'Sourcing',MANAGEMENT:'ผู้อนุมัติ',RELEASER:'ผู้ปล่อยราคา',REPAIR:'Sourcing (เตรียมข้อมูล)',SALES:'Sales',DONE:'—'};
 const OWNER_COLOR={SOURCING:'orange',MANAGEMENT:'amber',RELEASER:'blue',REPAIR:'orange',SALES:'green',DONE:'grey'};
 const LEVEL_TH={over:CFG.level.over.th,watch:CFG.level.watch.th,ok:''};
 function localFollow(q){
@@ -1265,8 +1304,21 @@ function localFollow(q){
   else if(st==='Approved')owner='RELEASER';
   else if(st==='Pending'){const o=q.header&&q.header.salesUserId;owner=(o&&(q.releasedTo||[]).indexOf(o)>=0)?'SALES':'RELEASER';}
   else owner='DONE';
-  return {owner,ownerLabel:owner,label:{SOURCING:'รอ Sourcing จัดทำราคา',MANAGEMENT:'รอผู้จัดการอนุมัติ',RELEASER:'รอปล่อยราคา',SALES:'พร้อมเสนอลูกค้า',DONE:'ปิดงานแล้ว'}[owner],
+  const a=owner==='MANAGEMENT'?approvalState(q):null;
+  const lbl=a?('รอ '+roleTH(a.next||REQUIRED_APPROVAL_ROLES[0])+' อนุมัติ (ระดับ '+(a.level||1)+'/'+REQUIRED_APPROVAL_ROLES.length+')')
+    :{SOURCING:'รอ Sourcing จัดทำราคา',RELEASER:'รอปล่อยราคา',SALES:'พร้อมเสนอลูกค้า',DONE:'ปิดงานแล้ว'}[owner];
+  return {owner,ownerLabel:owner,label:lbl,step:localStep(q,owner),
     actionable:owner!=='SALES'&&owner!=='DONE',waitingDays:null,slaDays:0,level:'ok',slaBreached:false,local:true};
+}
+/* v5.0: ขั้นตอนเมื่อยังไม่มีค่าจาก server (ออฟไลน์ / ใบใหม่) — กติกาเดียวกับ stepOf_ ใน Code.gs */
+function localStep(q,owner){
+  const st=statusOf(q);
+  if(q.docType==='SR')return owner==='DONE'?(st==='Cancelled'?-1:2):owner==='SALES'?0:1;
+  if(owner==='SOURCING')return 1;
+  if(owner==='MANAGEMENT'){const a=approvalState(q);return 1+(a.level||1)}
+  if(owner==='RELEASER'||owner==='REPAIR')return 4;
+  if(owner==='SALES')return 5;
+  return (st==='Closed'&&!(q.releasedTo||[]).length)?-1:5;
 }
 function followOf(q){
   if(!q)return localFollow({});
@@ -1284,6 +1336,31 @@ function isOverdueFollow(q){
 }
 function waitTxt(f){return (f&&f.waitingDays!=null&&f.owner!=='SALES'&&f.owner!=='DONE')?(f.waitingDays+' วันทำการ'):''}
 function levelBadge(f){return lvBadge(f&&f.level)}
+/* ============================================================ STEPPER (v5.0) — คำขอราคา "อยู่ขั้นไหน · รอใคร · ครบกำหนดเมื่อไร"
+   ค่ามาจาก server ที่เดียว (row.follow.step / actor / due — followState_ ใน Code.gs) ชุดเดียวกับการ์ด Lark และแอป Sales
+   SR ที่ทำใบเสนอราคาแล้ว → แสดงความคืบหน้าของใบเสนอราคาล่าสุดที่ผูกอยู่ */
+const TH_MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+function fmtDueTH(ymd){const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(ymd||'');return m?(+m[3])+' '+TH_MON[+m[2]-1]+' '+String(+m[1]+543).slice(2):''}
+function flowSource(q){
+  if(q&&q.docType==='SR'){const qs=linkedQTsOf(q).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));if(qs.length)return qs[0];}
+  return q;
+}
+function flowStepOf(q){const f=followOf(q);return (f&&typeof f.step==='number')?f.step:localStep(q,f.owner)}
+function flowStepper(q,opt){
+  opt=opt||{};const src=flowSource(q),f=followOf(src),step=flowStepOf(src);
+  if(step==null||step<0)return opt.compact?'':`<div class="flow"><span class="tag grey">🚫 ${esc(f.label||'ยกเลิก')}</span></div>`;
+  const items=FLOW_STEPS.slice(0,5).map((n,i)=>{const st=(i<step||step>=5)?'done':i===step?'now':'todo';
+    return `<li class="${st}"><span class="dot">${st==='done'?'✓':i+1}</span><span class="nm">${esc(n)}</span></li>`}).join('');
+  const head=src!==q?`<div class="hint" style="margin-bottom:6px">ทำเป็นใบเสนอราคา <b class="mono">${esc(src.docNo||src.header.ref||'')}</b> แล้ว — ความคืบหน้าของใบนั้น</div>`:'';
+  return `<div class="flow ${opt.compact?'compact':''}">${head}<ol class="flow-steps" aria-label="ขั้นตอนคำขอราคา">${items}</ol>${opt.compact?'':flowMeta(src)}</div>`;
+}
+/* บรรทัด "สถานะ · ผู้ดำเนินการ · ครบกำหนด" (ใช้ใต้ stepper และในการ์ดอนุมัติ) */
+function flowMeta(q,opt){
+  opt=opt||{};const f=followOf(q),step=flowStepOf(q);
+  if(step==null||step<0||step>=5)return opt.short?'':`<div class="flow-meta"><span>${esc(f.label||'')}</span></div>`;
+  const who=f.actor&&f.actor.label?f.actor.label:'',due=f.due?fmtDueTH(f.due):'';
+  return `<div class="flow-meta">${opt.short?'':`<span class="st">${esc(f.label||'')}</span>`}${who?`<span>👤 <b>${esc(who)}</b></span>`:''}${due?`<span class="${f.level==='over'?'over':f.level==='watch'?'watch':''}">📅 ครบกำหนด ${esc(due)}</span>`:''}${(f.waitingDays||0)>0?`<span>⏳ รอ ${esc(waitTxt(f))}</span>`:''}</div>`;
+}
 /* ---- ระดับความเร่งด่วน (มาจาก server: follow.level) — ใช้ทุกตาราง/การ์ดให้เหมือนกัน ---- */
 function lvOf(q){if(!q||q.deleted)return 'ok';const f=followOf(q);return (f.owner==='DONE'||!CFG.level[f.level])?'ok':f.level}
 function lvRank(q){return CFG.level[lvOf(q)].rank}
@@ -1299,6 +1376,75 @@ function lvSummary(list){
 /* รออยู่ที่ใคร — สรุปจาก followOf() */
 /* ให้สถานะ SR สอดคล้องกับใบเสนอราคาที่ผูกอยู่จริง — กันกรณี "ปิดการขายแล้ว แต่ SR ยังรอรับงาน" */
 function linkedQTsOf(sr){return (QUOTES||[]).filter(x=>x.srId===sr.id&&!x.deleted&&x.docType!=='SR');}
+/* ============================================================ ROUTING (v5.0) — คำขอราคาวิ่งถึง Sourcing ตามกลุ่มสินค้า
+   server ตัดสินที่เดียว (applyRoute_/routeFor_ ใน Code.gs) แล้วเก็บใน SR: routedTo / routedName / routedWhy
+   ฝั่งนี้แค่แสดงผล + ส่งต่อ + "ดูตัวอย่าง" ผลของการตั้งค่า (คะแนนชุดเดียวกับ server) */
+const GROUP_TYPE_GROUPS={'Inverter':['INVERTER','MICRO INVERTER','OPTIMIZER','DATA LOGGER','MONITORING','ENERGY METER','SENSOR','RAPID SHUTDOWN','SOLAREDGE','CURRENT TRANFORMER'],
+  'Mounting':['MOUNTING','CARPORT','WALKWAY','FLOATING'],'DC Cable':['DC CABLE','CONNECTOR'],'EV Charger':['EV CHARGER','EV CHARGE'],
+  'ESS':['ENERGY STORAGE','BATTERY'],'Residential':['INVERTER','BATTERY','PV MODULE']};
+const ROUTE_WHY_TH={setting:'ตั้งค่าผู้รับตามกลุ่มงาน',scope:'ตามกลุ่มสินค้าที่ดูแล (Scope)',manual:'ส่งต่อโดยทีมภายใน',pool:'ยังไม่ระบุคน — ใครในทีมรับก่อนได้งาน'};
+function routeOf(q){
+  if(!q||q.docType!=='SR'||!(q.routedWhy||q.routedTo))return null;
+  const u=USERS.find(x=>x.id===q.routedTo);
+  return {id:q.routedTo||'',name:(u&&u.name)||q.routedName||q.routedTo||'',why:q.routedWhy||''};
+}
+function routeTag(q){
+  const r=routeOf(q);
+  if(!r)return '<span class="hint">—</span>';
+  if(!r.id)return `<span class="route-tag pool" title="${esc(ROUTE_WHY_TH.pool)}">👥 ทีม Sourcing</span>`;
+  const me=!!CURRENT&&r.id===CURRENT.id;
+  return `<span class="route-tag ${me?'me':''}" title="${esc(ROUTE_WHY_TH[r.why]||'')}">📥 ${me?'ส่งถึงคุณ':esc(r.name)}</span>`;
+}
+function routedToMe(q){const r=routeOf(q);return !!(r&&CURRENT&&(r.id===CURRENT.id||(!r.id&&normRole(CURRENT.role)==='Sourcing')))}
+/* ตัวอย่างผู้รับอัตโนมัติ (คะแนนเดียวกับ routeFor_ ใน Code.gs — ผลจริงตัดสินที่ server) */
+function autoRouteOf(gt){
+  const ov=(SETTINGS.srRouting||{})[gt],o=ov&&USERS.find(u=>u.id===ov&&u.active!==false&&tierOf(u)!=='SALES');
+  if(o)return {id:o.id,name:o.name,why:'setting'};
+  const up=x=>String(x||'').toUpperCase().replace(/\s+/g,' ').trim(),groups=GROUP_TYPE_GROUPS[gt]||[up(gt)];
+  let best=null,bs=0,tie=false;
+  const synced=USERS.some(u=>u.active===true);                   // มีข้อมูลจากแท็บ Users แล้ว → ใช้เฉพาะผู้ใช้จริงบน server (ไม่นับบัญชีตัวอย่างในเครื่อง)
+  USERS.filter(u=>(synced?u.active===true:u.active!==false)&&normRole(u.role)==='Sourcing').forEach(u=>{
+    const sc0=(u.scope==='all'||!u.scope)?'all':(Array.isArray(u.scope)?u.scope.map(up):'all');
+    let sc=0;
+    if(sc0==='all')sc=1;else{if(sc0.indexOf(groups[0])>=0)sc+=10;groups.slice(1).forEach(g=>{if(sc0.indexOf(g)>=0)sc+=1});}
+    if(sc>bs){best=u;bs=sc;tie=false}else if(sc>0&&sc===bs)tie=true;
+  });
+  return (best&&!tie)?{id:best.id,name:best.name,why:'scope'}:{id:'',name:'ทีม Sourcing',why:'pool'};
+}
+function setSrRoute(gt,id){
+  if(!SETTINGS.srRouting||typeof SETTINGS.srRouting!=='object')SETTINGS.srRouting={};
+  if(id)SETTINGS.srRouting[gt]=id;else delete SETTINGS.srRouting[gt];
+  saveSettings();toast(gt+' → '+(id?((USERS.find(u=>u.id===id)||{}).name||id):'อัตโนมัติตามกลุ่มสินค้า'),'good');render();
+}
+function srRoutingCard(){
+  const internal=USERS.filter(u=>u.active!==false&&tierOf(u)!=='SALES').sort((a,b)=>(normRole(a.role)==='Sourcing'?0:1)-(normRole(b.role)==='Sourcing'?0:1)||String(a.name).localeCompare(String(b.name)));
+  const ov=SETTINGS.srRouting||{};
+  return `<div class="card" style="margin-top:18px"><div class="card-h"><h2>📥 คำขอราคาส่งถึงใคร (ตามกลุ่มงาน)</h2>
+    <span class="hint ch-hint">อัตโนมัติ = ตามกลุ่มสินค้าที่ Sourcing แต่ละคนดูแล (ปุ่ม 🔒 สิทธิ์กลุ่ม ในหน้าผู้ใช้) · เลือกชื่อ = ส่งถึงคนนั้นเสมอ</span></div>
+    <div class="card-b" style="padding:0"><div class="tw" style="border:none"><table><thead><tr><th>กลุ่มงาน</th><th>ส่งถึงตอนนี้</th><th style="min-width:180px">ตั้งผู้รับเอง</th></tr></thead><tbody>
+    ${GROUP_TYPES.map(gt=>{const a=autoRouteOf(gt);return `<tr><td><span class="tag ${grpColor(gt)}">${esc(gt)}</span></td>
+      <td>${a.id?`<b>${esc(a.name)}</b>`:'<span class="route-tag pool">👥 ทีม Sourcing</span>'}<div class="hint">${esc(ROUTE_WHY_TH[a.why]||'')}</div></td>
+      <td><select class="inp" onchange="setSrRoute('${esc(gt)}',this.value)"><option value="">— อัตโนมัติตามกลุ่มสินค้า —</option>
+        ${internal.map(u=>`<option value="${esc(u.id)}" ${ov[gt]===u.id?'selected':''}>${esc(u.name)} · ${esc(roleTH(normRole(u.role)))}</option>`).join('')}</select></td></tr>`}).join('')}
+    </tbody></table></div><div class="hint" style="padding:10px 16px">คำขอที่ส่งแล้วไม่ย้ายตาม — ใช้ปุ่ม “ส่งต่อ” ในหน้าคำขอราคา (SR) · ผลจริงตัดสินที่ server ตอน Sales กดส่งคำขอ</div></div></div>`;
+}
+function openForwardSR(id){
+  const q=QUOTES.find(x=>x.id===id);if(!q||q.docType!=='SR')return;
+  const r=routeOf(q)||{};
+  const opts=USERS.filter(u=>u.active!==false&&tierOf(u)!=='SALES'&&u.id!==r.id)
+    .sort((a,b)=>(normRole(a.role)==='Sourcing'?0:1)-(normRole(b.role)==='Sourcing'?0:1));
+  modal(`<div class="modal-h"><h3>ส่งต่อคำขอราคา ${esc(q.docNo||'')}</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b"><div class="hint" style="margin-bottom:8px">ตอนนี้ส่งถึง: ${routeTag(q)} · ผู้รับคนใหม่จะถูก @แท็กในกลุ่ม Lark</div>
+      <label class="lbl">ส่งต่อให้</label><select class="inp" id="fwdTo">${opts.map(u=>`<option value="${esc(u.id)}">${esc(u.name)} · ${esc(roleTH(normRole(u.role)))}</option>`).join('')}</select></div>
+    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" onclick="forwardSR('${esc(id)}')">ส่งต่อ</button></div>`);
+}
+function forwardSR(id){
+  const q=QUOTES.find(x=>x.id===id),el=document.getElementById('fwdTo');if(!q||!el||!el.value)return;
+  const u=USERS.find(x=>x.id===el.value);
+  q.routedTo=el.value;q.routedName=u?u.name:el.value;q.routedWhy='manual';q.routedManual=true;   // server ตรวจสิทธิ์ + ผู้รับอีกชั้น
+  q.isSynced=false;logAction(q.id,'Forwarded request',null,'ส่งต่อให้ '+q.routedName);
+  LS.set('quotes',QUOTES);syncCloud(q);closeModal();toast('ส่งต่อ '+(q.docNo||'คำขอ')+' ให้ '+q.routedName+' แล้ว','good');render();
+}
 function srAwaitingIntake(q){return q.docType==='SR'&&q.status==='Submitted'&&!q.deleted&&!linkedQTsOf(q).length;}   // SR ที่ยังไม่มีใบเสนอราคาผูกเท่านั้น = ยังรอรับงานจริง
 function ballOf(q){
   const f=followOf(q),st=statusOf(q);
@@ -1385,25 +1531,37 @@ function quoteApproved(q){return PRICE_VISIBLE_STATUSES.includes(statusOf(q))}
 /* ---- 1. Dual approval helpers ---- */
 function approvalState(q){
   const roles=Array.isArray(q.approvalRoles)?q.approvalRoles:[];
-  const override=roles.some(r=>APPROVAL_OVERRIDE_ROLES.indexOf(r)>=0);
+  const override=roles.some(r=>APPROVAL_OVERRIDE_ROLES.indexOf(r)>=0);     // ข้อมูลเก่า v4.x: GM แทนครบทุกระดับ
   const missing=override?[]:REQUIRED_APPROVAL_ROLES.filter(r=>roles.indexOf(r)<0);
-  return {roles:roles,override:override,missing:missing,complete:missing.length===0};
+  const next=missing[0]||'';                                                // v5.0: ระดับที่รออยู่ (เรียงลำดับ)
+  return {roles:roles,override:override,missing:missing,complete:missing.length===0,next:next,
+    level:next?REQUIRED_APPROVAL_ROLES.indexOf(next)+1:0};
 }
-function inApprovalStage(q){return ['Submitted','Partial Approved'].indexOf(q.status||QT_DEFAULT_STATUS)>=0}
+function isGMApprover(){return !!CURRENT&&APPROVAL_OVERRIDE_ROLES.indexOf(normRole(CURRENT.role))>=0}
+/* ป้ายปุ่มอนุมัติ: "อนุมัติ ระดับ 1" / GM: "อนุมัติแทน Sourcing Manager (ระดับ 1)" */
+function approveBtnLabel(q){const a=approvalState(q);return isGMApprover()?('อนุมัติแทน ระดับ '+a.level):('อนุมัติ ระดับ '+a.level)}
+/* ปุ่มอนุมัติ (+ ปุ่ม "แทนทั้ง 2 ระดับ" ของ GM เมื่อยังเหลือมากกว่า 1 ระดับ) — ใช้ทุกหน้าจอ */
+function approveButtons(q,cls){
+  if(!canApprove(q))return '';
+  const a=approvalState(q),stop='event.stopPropagation();';
+  return `<button class="btn sm ${cls||''}" style="background:var(--green)" onclick="${stop}approve('${q.id}')" title="${esc((isGMApprover()?'GM อนุมัติแทน ':'อนุมัติในนาม ')+roleTH(a.next)+' (ระดับ '+a.level+')')}">✓ ${esc(approveBtnLabel(q))}</button>`+
+    (isGMApprover()&&a.missing.length>1?`<button class="btn sm ghost ${cls||''}" onclick="${stop}approve('${q.id}',true)" title="บันทึกว่า GM อนุมัติแทนทั้ง Sourcing Manager และ BD Manager">✓✓ แทนทั้ง ${a.missing.length} ระดับ</button>`:'');
+}
+function inApprovalStage(q){return !!q&&q.docType!=='SR'&&['Submitted','Partial Approved'].indexOf(q.status||QT_DEFAULT_STATUS)>=0}   // v5.0: SR สถานะ Submitted ไม่ใช่ใบรออนุมัติ
 function canApprove(q){
   if(!q||q.docType==='SR'||!CURRENT)return false;
   if(!inApprovalStage(q))return false;
-  const r=CURRENT.role;
-  if(REQUIRED_APPROVAL_ROLES.indexOf(r)<0&&APPROVAL_OVERRIDE_ROLES.indexOf(r)<0)return false;
-  return (q.approvalRoles||[]).indexOf(r)<0;      // อนุมัติซ้ำบทบาทเดิมไม่ได้
+  const r=normRole(CURRENT.role),a=approvalState(q);
+  if(!a.next)return false;
+  if(APPROVAL_OVERRIDE_ROLES.indexOf(r)>=0)return true;         // GM อนุมัติแทนได้ทุกระดับ
+  return r===a.next;                                             // v5.0: เฉพาะระดับที่รออยู่ (เรียงลำดับ)
 }
 function approvalChips(q){
   const a=approvalState(q);
-  const roles=a.roles;
-  return REQUIRED_APPROVAL_ROLES.map(r=>{
-    const done=a.override||roles.indexOf(r)>=0;
-    return `<span class="tag ${done?'green':'grey'}" style="font-size:11px">${done?'✓':'○'} ${esc(r)}</span>`;
-  }).join(' ')+(a.override?` <span class="tag blue" style="font-size:11px">GM override</span>`:'');
+  return REQUIRED_APPROVAL_ROLES.map((r,i)=>{
+    const done=a.override||a.roles.indexOf(r)>=0,now=r===a.next;
+    return `<span class="tag ${done?'green':now?'amber':'grey'}" style="font-size:11px">${done?'✓':now?'⏳':'○'} ระดับ ${i+1} ${esc(roleTH(r))}</span>`;
+  }).join(' ')+(a.override?` <span class="tag blue" style="font-size:11px">GM อนุมัติแทน</span>`:'');
 }
 /* ============================================================ PRICE VISIBILITY (v4.1)
    กติกาเดียว อ่านจบในฟังก์ชันเดียว — ตรงกับ projectRow_() ใน Code.gs ทุกข้อ
@@ -1411,16 +1569,18 @@ function approvalChips(q){
    2) Sales → SR ไม่มีราคา · QT เห็นเฉพาะสถานะ Approved/Pending/Won/Closed
               และต้องเป็นผู้ปล่อยราคา (NON/delegate) หรือถูกปล่อยราคาให้แล้ว (releasedTo)
    ============================================================ */
-/* v4.1: ป้ายอนุมัติ 2 ฝ่าย อ่านออกในแวบเดียว — "รอฝั่ง Procurement อนุมัติ" / "✓ BD อนุมัติแล้ว" */
-const APPROVAL_SIDE_TH={'Procurement Mgr':'Procurement','BD Mgr':'BD'};
+/* v5.0: ป้ายอนุมัติ 2 ระดับ อ่านออกในแวบเดียว — "✓ ระดับ 1 Sourcing Manager" → "⏳ ระดับ 2 รอ BD Manager" (GM แทน = บอกไว้) */
 function approvalBadges(q){
   const a=approvalState(q);
-  if(a.override)return '<span class="abadge ok">✓ GM อนุมัติแทนทั้ง 2 ฝ่าย</span>';
-  return REQUIRED_APPROVAL_ROLES.map(r=>{
-    const done=a.roles.indexOf(r)>=0,side=APPROVAL_SIDE_TH[r]||r;
-    const mine=!done&&CURRENT&&CURRENT.role===r;
-    return `<span class="abadge ${done?'ok':mine?'mine':'wait'}" title="${esc(r)}">${done?('✓ '+side+' อนุมัติแล้ว'):('⏳ รอฝั่ง '+side+' อนุมัติ')}</span>`;
-  }).join('');
+  if(a.override)return '<span class="abadge ok">✓ GM อนุมัติแทนครบทุกระดับ</span>';
+  const byOf=r=>(q.approvals||[]).filter(x=>(x.levelRole||x.role)===r).pop();
+  return REQUIRED_APPROVAL_ROLES.map((r,i)=>{
+    const done=a.roles.indexOf(r)>=0,now=r===a.next,by=done?byOf(r):null;
+    const mine=now&&canApprove(q);
+    const txt=done?('✓ ระดับ '+(i+1)+' '+roleTH(r)+(by&&by.onBehalfOf?' (GM แทน)':''))
+      :now?('⏳ ระดับ '+(i+1)+' รอ '+roleTH(r)):('○ ระดับ '+(i+1)+' '+roleTH(r));
+    return `<span class="abadge ${done?'ok':mine?'mine':now?'wait':'todo'}" title="${esc(r)}${by?' · '+esc(by.by||'')+' '+esc(fmtTime(by.at)):''}">${esc(txt)}</span>`;
+  }).join('<span class="abadge-arrow">›</span>');
 }
 /* การ์ดอนุมัติสำหรับผู้จัดการ: %GP ตัวใหญ่ + ป้าย 2 ฝ่าย + ปุ่มอนุมัติได้จากหน้าการ์ด */
 function approvalCard(q){
@@ -1435,8 +1595,9 @@ function approvalCard(q){
       <div class="ac-nums"><span>ยอดขาย <b class="mono">${money(t.total,curOf(q))}</b></span><span>ต้นทุน <b class="mono">${money(t.cost,curOf(q))}</b></span>
         <span>กำไร <b class="mono" style="color:var(--green)">${money(t.profit,curOf(q))}</b></span></div>
       <div class="ac-badges">${approvalBadges(q)}${q.needsApproval?'<span class="abadge warn">⚠ ต่ำกว่าเกณฑ์</span>':''}</div>
+      ${flowMeta(q,{short:true})}
     </div>
-    ${mine?`<button class="btn sm ac-btn" onclick="event.stopPropagation();approve('${q.id}')">✓ อนุมัติ</button>`:''}
+    ${mine?`<div class="ac-acts">${approveButtons(q,'ac-btn')}</div>`:''}
   </div>`;
 }
 function canSeePrice(q,user){
@@ -2073,13 +2234,14 @@ function viewDashboard(){
       <h2 style="margin-left:6px">${srPending} คำขอราคา (SR) รอรับงาน</h2>
       <div class="spacer"></div><button class="btn sm ghost" onclick="go('srqueue')">ดูทั้งหมด →</button></div>
     <div class="card-b" style="padding:0"><div class="tw" style="border:none"><table><thead><tr>
-      <th>SR No</th><th>โปรเจค / ลูกค้า</th><th>Sales</th><th>กลุ่ม</th><th>ต้องการภายใน</th><th></th></tr></thead><tbody>
+      <th>SR No</th><th>โปรเจค / ลูกค้า</th><th>Sales</th><th>กลุ่ม</th><th>ส่งถึง</th><th>ต้องการภายใน</th><th></th></tr></thead><tbody>
       ${srWaiting.map(q=>`<tr>
         <td class="mono" style="font-size:11px;font-weight:600">${esc(q.docNo||q.header.ref||'—')}</td>
         <td><div style="font-weight:600">${esc(q.header.title||q.header.customer||'(ไม่มีชื่อ)')}</div>
           <div class="hint">${esc(q.header.customer||'')}</div></td>
         <td style="font-size:12px">${ownerTag(q)}</td>
         <td><span class="tag ${grpColor(q.header.groupType)}" style="font-size:10px">${esc(q.header.groupType||'—')}</span></td>
+        <td>${routeTag(q)}</td>
         <td style="font-size:12px">${esc(q.header.needBy||'—')}</td>
         <td>${perms().create?`<button class="btn tiny" onclick="takeSRAndCost('${q.id}')">รับงาน &amp; ทำราคา</button>`:''}</td></tr>`).join('')}
     </tbody></table></div></div></div>`:''}
@@ -2087,7 +2249,7 @@ function viewDashboard(){
   ${showAppr?`<div class="card" style="border-left:4px solid var(--amber);margin-bottom:14px">
     <div class="card-h" style="padding:12px 18px"><span style="font-size:20px">🗳</span>
       <h2 style="margin-left:6px">รออนุมัติราคา (${inAppr.length})</h2>
-      <span class="hint" style="margin-left:8px">${perms().approve?('รอคุณ ('+esc(CURRENT.role)+') '+inAppr.filter(canApprove).length+' ใบ'):'ต้องผ่านทั้ง Procurement และ BD'}</span>
+      <span class="hint" style="margin-left:8px">${perms().approve?('รอคุณ ('+esc(roleTH(CURRENT.role))+') '+inAppr.filter(canApprove).length+' ใบ'):'อนุมัติ 2 ระดับ: Sourcing Manager → BD Manager'}</span>
       <div class="spacer"></div><span class="live-pill on" title="หน้านี้อัปเดตอัตโนมัติ">● Live</span></div>
     <div class="card-b"><div class="agrid">${inAppr.slice(0,8).map(approvalCard).join('')}</div>
       ${inAppr.length>8?`<div class="hint" style="margin-top:8px">และอีก ${inAppr.length-8} ใบ — ดูทั้งหมดที่ <a href="javascript:void(0)" onclick="qFilter='Submitted';go('quotes')">ใบเสนอราคา</a></div>`:''}</div></div>`:''}
@@ -2132,7 +2294,7 @@ function workloadCard(){
   if(!open.length)return '';
   const over=open.filter(x=>x.f.level==='over').length,watch=open.filter(x=>x.f.level==='watch').length;
   const mine=myOwnerKeys();
-  const tiles=[['SOURCING','Sourcing จัดทำราคา'],['MANAGEMENT','รอผู้จัดการอนุมัติ'],['RELEASER','รอปล่อยราคา'],['SALES','Sales ค้างอัปเดต']].map(([k,l])=>{
+  const tiles=[['SOURCING','Sourcing จัดทำราคา'],['MANAGEMENT','รออนุมัติ 2 ระดับ'],['RELEASER','รอปล่อยราคา'],['SALES','Sales ค้างอัปเดต']].map(([k,l])=>{
     const xs=open.filter(x=>x.f.owner===k||(k==='SOURCING'&&x.f.owner==='REPAIR'));
     const o=xs.filter(x=>x.f.level==='over').length;
     return `<div class="wl-tile ${mine.indexOf(k)>=0?'mine':''}"><span>${l}</span><b>${xs.length}</b>${o?`<i class="lvb over">⛔ เกินกำหนด ${o}</i>`:'<i class="hint">ตามกำหนด</i>'}</div>`;
@@ -2164,13 +2326,13 @@ function viewApprovals(){
   const all=latestQuotes(QUOTES).filter(q=>!q.deleted&&inApprovalStage(q));
   const mine=all.filter(canApprove),others=all.filter(q=>!canApprove(q));
   const byWait=byUrgency;
-  const recent=latestQuotes(QUOTES).filter(q=>!q.deleted&&(q.approvals||[]).some(a=>a.role===CURRENT.role&&a.act==='อนุมัติ'))
+  const recent=latestQuotes(QUOTES).filter(q=>!q.deleted&&(q.approvals||[]).some(a=>a.role===CURRENT.role))
     .sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||''))).slice(0,6);
   return `<div class="card" style="margin-bottom:14px;border-left:4px solid var(--amber)"><div class="card-h"><h2>รอคุณอนุมัติ (${mine.length})</h2>
-      <span class="hint" style="margin-left:8px">ในนาม ${esc(CURRENT.role)} · งานเร่งด่วนขึ้นก่อน</span>${lvSummary(mine)}<div class="spacer"></div><span class="live-pill on">● Live</span></div>
+      <span class="hint" style="margin-left:8px">ในนาม ${esc(roleTH(CURRENT.role))}${isGMApprover()?' (อนุมัติแทนได้ทุกระดับ)':''} · งานเร่งด่วนขึ้นก่อน</span>${lvSummary(mine)}<div class="spacer"></div><span class="live-pill on">● Live</span></div>
     <div class="card-b">${mine.length?`<div class="agrid">${mine.sort(byWait).map(approvalCard).join('')}</div>`
       :'<div class="empty" style="padding:22px"><div style="font-size:28px">✅</div>ไม่มีใบที่รอคุณอนุมัติ</div>'}</div></div>
-  ${others.length?`<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>รออีกฝ่ายอนุมัติ (${others.length})</h2><span class="hint" style="margin-left:8px">คุณอนุมัติแล้ว หรือไม่ใช่ฝั่งของคุณ</span></div>
+  ${others.length?`<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>อยู่ระหว่างอนุมัติ (${others.length})</h2><span class="hint" style="margin-left:8px">คุณอนุมัติระดับของคุณแล้ว หรือยังไม่ถึงระดับของคุณ</span></div>
     <div class="card-b"><div class="agrid">${others.sort(byWait).map(approvalCard).join('')}</div></div></div>`:''}
   ${recent.length?`<div class="card"><div class="card-h"><h2>ที่คุณอนุมัติล่าสุด</h2></div><div class="card-b" style="padding:0"><div class="tw" style="border:none"><table><tbody>
     ${recent.map(q=>`<tr style="cursor:pointer" onclick="openQuote('${q.id}')"><td class="mono" style="font-size:11px">${esc(q.docNo||q.header.ref||'')}</td>
@@ -3359,8 +3521,8 @@ function viewPreview(){
         <button class="${!internal?'on':''}" onclick="previewMode='cust';render()">สำหรับลูกค้า</button></div>`
       :`<span class="tag green">✓ อนุมัติแล้ว · เวอร์ชันสำหรับลูกค้า</span>`}
     <span class="hint" id="qLive" style="font-size:11.5px"></span>
-    <div class="row-flex">${canApprove(q)?`<button class="btn sm" style="background:var(--green)" onclick="approve('${q.id}')">✓ อนุมัติในนาม ${esc(CURRENT.role)}</button>`
-      :((perms().approve&&q.docType!=='SR')?`<span class="tag ${inApprovalStage(q)?'amber':'grey'}" style="font-size:11px" title="${esc(inApprovalStage(q)?('บทบาท '+CURRENT.role+' อนุมัติใบนี้ไปแล้ว'):('อนุมัติได้เฉพาะตอนสถานะ ส่งตรวจ/อนุมัติบางส่วน · สถานะปัจจุบัน: '+(STATUS_TH[statusOf(q)]||statusOf(q))))}">${inApprovalStage(q)?('✓ '+esc(CURRENT.role)+' อนุมัติแล้ว'):('อนุมัติไม่ได้ · '+esc(STATUS_TH[statusOf(q)]||statusOf(q)))}</span>`:'')}
+    <div class="row-flex">${canApprove(q)?approveButtons(q)
+      :((perms().approve&&q.docType!=='SR')?`<span class="tag ${inApprovalStage(q)?'amber':'grey'}" style="font-size:11px" title="${esc(inApprovalStage(q)?approvalWhyNot(q):('อนุมัติได้เฉพาะตอนสถานะ รออนุมัติ · สถานะปัจจุบัน: '+(STATUS_TH[statusOf(q)]||statusOf(q))))}">${inApprovalStage(q)?esc(approvalWhyNot(q)):('อนุมัติไม่ได้ · '+esc(STATUS_TH[statusOf(q)]||statusOf(q)))}</span>`:'')}
       ${canRelease(q)?`<button class="btn sm" style="background:var(--blue)" onclick="releasePrice('${q.id}')">🔓 ปล่อยราคาให้ ${esc(salesNameOf(q)||'Sales')}</button>`:''}
       ${(perms().approve&&quoteApproved(q))?`<button class="btn sm ghost" onclick="openRelease('${q.id}')" title="แชร์ให้ผู้ใช้เพิ่มเติมนอกเหนือจากเจ้าของงาน">แชร์เพิ่ม</button>`:''}
       <button class="btn sm ghost" onclick="duplicateQuote('${q.id}')">⧉ ทำรอบใหม่</button>
@@ -3370,9 +3532,10 @@ function viewPreview(){
           :`<span class="tag red">รออนุมัติลบ</span>`)
         :`<button class="btn sm ghost" style="color:var(--red)" onclick="requestDelete('${q.id}')">🗑 ${perms().approve?'ลบใบนี้':'ขอลบ'}</button>`}
       <button class="btn sm" onclick="window.print()">🖨 พิมพ์ / PDF</button></div></div>
+  <div class="no-print card" style="margin-bottom:12px"><div class="card-b" style="padding:12px 16px">${flowStepper(q)}</div></div>
   ${inApprovalStage(q)?`<div class="no-print card" style="border-left:4px solid var(--amber);margin-bottom:12px"><div class="card-b" style="padding:11px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-    <b style="font-size:13px">การอนุมัติ 2 ฝ่าย:</b> ${approvalBadges(q)}
-    <span class="hint">${apv.complete?'ครบแล้ว':'ยังรอ '+apv.missing.join(' และ ')}</span>
+    <b style="font-size:13px">อนุมัติ 2 ระดับ:</b> <span class="ac-badges">${approvalBadges(q)}</span>
+    <span class="hint">${apv.complete?'ครบแล้ว':'รอ '+esc(roleTH(apv.next))+' (ระดับ '+apv.level+')'}</span>
     ${internal?`<span style="margin-left:auto" class="row-flex"><span class="hint">%GP รวม</span>${gpBig(t.gp,H.groupType)}</span>`:''}</div></div>`:''}
   ${((q.status||'')==='Approved')?`<div class="no-print card" style="border-left:4px solid var(--blue);background:var(--blue-soft);margin-bottom:12px"><div class="card-b" style="padding:11px 16px;font-size:13px">
     🔒 อนุมัติครบแล้ว — รอ <b>${esc(gatekeeperName())}</b> กด “ปล่อยราคา” เพื่อส่งต่อให้ <b>${esc(salesNameOf(q)||'Sales เจ้าของงาน')}</b></div></div>`:''}
@@ -3448,58 +3611,76 @@ function fmtTime(iso){if(!iso)return'-';const d=new Date(iso);if(isNaN(d.getTime
    v4.1: ส่งให้ server อนุมัติแบบ atomic (action 'approve') — server อ่าน approvalRoles ล่าสุดจาก Sheet เอง
    แก้ปัญหา Procurement กับ BD กดอนุมัติจากเครื่องตัวเองใกล้ ๆ กัน แล้วการอนุมัติของอีกฝ่ายหาย */
 const APPROVE_ERR_TH={NOT_IN_APPROVAL:'ใบนี้ไม่ได้อยู่ในขั้นตอนอนุมัติแล้ว (มีคนเปลี่ยนสถานะก่อนหน้า)',
-  ALREADY_APPROVED:'บทบาทของคุณอนุมัติใบนี้ไปแล้ว',ROLE_CANNOT_APPROVE:'บทบาทของคุณไม่มีสิทธิ์อนุมัติ',
+  ALREADY_APPROVED:'คุณอนุมัติระดับของคุณไปแล้ว',WAIT_PREVIOUS_LEVEL:'ยังไม่ถึงระดับของคุณ — ต้องให้ Sourcing Manager (ระดับ 1) อนุมัติก่อน',ROLE_CANNOT_APPROVE:'บทบาทของคุณไม่มีสิทธิ์อนุมัติ',
   NO_DETAIL:'ข้อมูลใบนี้บน Sheet ไม่สมบูรณ์ — กดซิงค์แล้วลองใหม่',ACCESS_DENIED:'ไม่มีสิทธิ์อนุมัติ'};
+/* เหตุผลที่กดอนุมัติไม่ได้ตอนนี้ (แสดงแทนปุ่ม) */
+function approvalWhyNot(q){
+  const a=approvalState(q),r=normRole(CURRENT.role);
+  if(a.complete)return 'อนุมัติครบแล้ว';
+  if(a.roles.indexOf(r)>=0)return '✓ คุณอนุมัติระดับ '+(REQUIRED_APPROVAL_ROLES.indexOf(r)+1)+' แล้ว · รอ '+roleTH(a.next);
+  if(REQUIRED_APPROVAL_ROLES.indexOf(r)>=0)return '⏳ รอ '+roleTH(a.next)+' (ระดับ '+a.level+') ก่อน';
+  return 'รอ '+roleTH(a.next)+' (ระดับ '+a.level+')';
+}
 function approveCheck(q){
   if(!inApprovalStage(q)){toast('ใบนี้ไม่ได้อยู่ในขั้นตอนอนุมัติ (สถานะ '+(STATUS_TH[statusOf(q)]||statusOf(q))+')','bad');return false}
-  const role=CURRENT.role;
-  if(REQUIRED_APPROVAL_ROLES.indexOf(role)<0&&APPROVAL_OVERRIDE_ROLES.indexOf(role)<0){
-    toast('บทบาท '+role+' ไม่มีสิทธิ์อนุมัติ (ต้องเป็น '+REQUIRED_APPROVAL_ROLES.join(' หรือ ')+')','bad');return false}
-  if((q.approvalRoles||[]).indexOf(role)>=0){toast('บทบาท '+role+' อนุมัติใบนี้ไปแล้ว','bad');return false}
+  const role=normRole(CURRENT.role),a=approvalState(q);
+  if(REQUIRED_APPROVAL_ROLES.indexOf(role)<0&&!isGMApprover()){
+    toast('บทบาท '+roleTH(role)+' ไม่มีสิทธิ์อนุมัติ (ต้องเป็น Sourcing Manager / BD Manager / GM)','bad');return false}
+  if(!a.next){toast('ใบนี้อนุมัติครบแล้ว','bad');return false}
+  if(!isGMApprover()&&a.roles.indexOf(role)>=0){toast('คุณอนุมัติระดับของคุณไปแล้ว','bad');return false}
+  if(!isGMApprover()&&role!==a.next){toast('ยังไม่ถึงระดับของคุณ — รอ '+roleTH(a.next)+' (ระดับ '+a.level+') อนุมัติก่อน','bad');return false}
   return true;
 }
 let _approving=false;
-async function approve(id){
+async function approve(id,all){
   const q=QUOTES.find(x=>x.id===id);if(!q||_approving)return;
   if(!approveCheck(q))return;
-  if(!cloudReady()){approveLocal(id);return}               // ออฟไลน์ล้วน → แบบเดิม (เข้าคิว + conflict guard)
+  if(!cloudReady()){approveLocal(id,all);return}           // ออฟไลน์ล้วน → แบบเดิม (เข้าคิว + conflict guard)
   _approving=true;toast('กำลังบันทึกการอนุมัติ…','');
   try{
-    const r=await postCloud({action:'approve',id});
+    const r=await postCloud({action:'approve',id,all:!!all});
     if(r.ok&&r.data){
       const d=r.data;
       const m=mergeRemoteRow({id,detail:d.detail,updatedAt:d.updatedAt,by:CURRENT.name,follow:d.follow},{force:true});
       if(!m)await refreshQuote(id,{force:true});
       LS.set('quotes',QUOTES);_flashIds[id]=Date.now();
+      const lv=(d.approvedLevels||[]).map(x=>REQUIRED_APPROVAL_ROLES.indexOf(x)+1).join(' + ');
       toast(d.complete
-        ?'อนุมัติครบ 2 ฝ่ายแล้ว — '+gatekeeperName()+' จะเห็นราคาก่อนแล้วกดปล่อยให้ Sales'
-        :'บันทึกการอนุมัติของ '+CURRENT.role+' แล้ว · ยังรอ: '+(d.missing||[]).join(', '),'good');
+        ?'อนุมัติครบ 2 ระดับแล้ว — '+gatekeeperName()+' จะเห็นราคาก่อนแล้วกดปล่อยให้ Sales'
+        :'อนุมัติระดับ '+(lv||'1')+' แล้ว · ถัดไป: '+(d.nextLabel||roleTH(d.next)||'—')+' (ระดับ '+(d.level||2)+')','good');
       renderNav();render();return;
     }
-    if(/unknown action/i.test(r.error||'')){approveLocal(id);return}   // Code.gs รุ่นเก่า
+    if(/unknown action/i.test(r.error||'')){approveLocal(id,all);return}   // Code.gs รุ่นเก่า
     await refreshQuote(id);renderNav();render();
-    toast((APPROVE_ERR_TH[r.error]||('อนุมัติไม่สำเร็จ — '+errText(r)))+' — แสดงข้อมูลล่าสุดแล้ว','bad');
+    const wf=(r.data&&r.data.waitingForLabel)||r.waitingForLabel;
+    toast((r.error==='WAIT_PREVIOUS_LEVEL'&&wf?('ยังไม่ถึงระดับของคุณ — รอ '+wf+' อนุมัติก่อน'):(APPROVE_ERR_TH[r.error]||('อนุมัติไม่สำเร็จ — '+errText(r))))+' — แสดงข้อมูลล่าสุดแล้ว','bad');
   }finally{_approving=false}
 }
-function approveLocal(id){
+function approveLocal(id,all){
   const q=QUOTES.find(x=>x.id===id);if(!q||!approveCheck(q))return;
-  const role=CURRENT.role;
+  const role=normRole(CURRENT.role),gm=isGMApprover(),at=new Date().toISOString();
 
   const old=q.status||QT_DEFAULT_STATUS;
   if(!Array.isArray(q.approvalRoles))q.approvalRoles=[];
   if(!Array.isArray(q.approvals))q.approvals=[];
-  q.approvalRoles.push(role);
-  q.approvals.push({by:CURRENT.name,role:role,act:'อนุมัติ',at:new Date().toISOString()});
+  const a0=approvalState(q);
+  const fill=gm?(all?a0.missing.slice():[a0.next]):[role];      // v5.0: กติกาเดียวกับ approve_ ใน Code.gs
+  fill.forEach(lv=>{
+    if(q.approvalRoles.indexOf(lv)<0)q.approvalRoles.push(lv);
+    const x={by:CURRENT.name,userId:CURRENT.id,role:role,level:REQUIRED_APPROVAL_ROLES.indexOf(lv)+1,levelRole:lv,act:gm?'อนุมัติแทน '+roleTH(lv):'อนุมัติ',at:at};
+    if(gm)x.onBehalfOf=lv;
+    q.approvals.push(x);
+  });
 
   const a=approvalState(q);
   updateStatus(q,a.complete?'Approved':'Partial Approved');
   if(a.complete)q.needsApproval=false;
   q.isSynced=false;
-  logAction(q.id,'Approved by '+role,null,old+' → '+q.status+(a.complete?'':' (รอ '+a.missing.join(', ')+')'));
+  logAction(q.id,(gm?'GM อนุมัติแทน ':'Approved ')+fill.map(r=>'ระดับ '+(REQUIRED_APPROVAL_ROLES.indexOf(r)+1)+' '+roleTH(r)).join(' + '),null,old+' → '+q.status+(a.complete?'':' (รอ '+roleTH(a.next)+')'));
   LS.set('quotes',QUOTES);
   toast(a.complete
-    ? 'อนุมัติครบ 2 ฝ่ายแล้ว — '+gatekeeperName()+' จะเห็นราคาก่อนแล้วกดปล่อยให้ Sales'
-    : 'บันทึกการอนุมัติของ '+role+' แล้ว · ยังรอ: '+a.missing.join(', '),'good');
+    ? 'อนุมัติครบ 2 ระดับแล้ว — '+gatekeeperName()+' จะเห็นราคาก่อนแล้วกดปล่อยให้ Sales'
+    : 'อนุมัติแล้ว · ถัดไป: '+roleTH(a.next)+' (ระดับ '+a.level+')','good');
   syncCloud(q);renderNav();render();
 }
 
@@ -3577,7 +3758,7 @@ function setSumFilter(v){sumSalesFilter=(sumSalesFilter===v?'all':v);render()}
 /* ---- Weekly follow-up Kanban: จัดใบเป็นคอลัมน์ตามสถานะ (ข้อมูลชุดเดียวกับตารางสรุป) ---- */
 const KANBAN_COLS=[
   {key:'In Progress', label:'Sourcing กำลังจัดทำราคา',    match:q=>['Requested','In Progress'].indexOf(statusOf(q))>=0, color:'var(--orange)'},
-  {key:'Submitted',   label:'รอผู้จัดการอนุมัติ',  match:q=>['Submitted','Partial Approved'].indexOf(statusOf(q))>=0, color:'var(--amber)'},
+  {key:'Submitted',   label:'รออนุมัติ 2 ระดับ',  match:q=>['Submitted','Partial Approved'].indexOf(statusOf(q))>=0, color:'var(--amber)'},
   {key:'Approved',    label:'รอปล่อยราคา',         match:q=>statusOf(q)==='Approved', color:'var(--blue)'},
   {key:'Pending',     label:'พร้อมเสนอลูกค้า',   match:q=>statusOf(q)==='Pending', color:'var(--green)'},
   {key:'Won',         label:'ปิดการขายได้',        match:q=>statusOf(q)==='Won', color:'var(--green)'},
@@ -4059,6 +4240,7 @@ function viewSettings(){
           ${salesUsers().filter(u=>u.id!==gatekeeperId()).map(u=>`<option value="${esc(u.id)}" ${SETTINGS.releaseDelegateId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select>
         <div class="hint">ผู้รับมอบหมายจะเห็นราคาและกดปล่อยราคาได้เช่นเดียวกับ ${esc(gatekeeperName())} — ล้างค่าเมื่อกลับมาทำงานปกติ</div></div>
     </div></div>
+  ${srRoutingCard()}
   <div class="card" style="margin-top:18px"><div class="card-h"><h2>รายชื่อพนักงานขาย (Sales)</h2>
     <div class="spacer"></div><span class="hint">ใช้เป็น Dropdown ในหน้าทำใบเสนอราคา</span></div>
     <div class="card-b">
@@ -4181,7 +4363,7 @@ function saveSettings(){
    ============================================================ */
 function roleSelectHTML(cur,onchange){
   return `<select class="inp" style="padding:6px 28px 6px 9px;font-size:12.5px;width:auto" onchange="${onchange}">
-    ${ROLE_OPTIONS.map(g=>`<optgroup label="${esc(g.group)}">${g.roles.map(r=>`<option value="${esc(r)}" ${r===cur?'selected':''}>${esc(r)}</option>`).join('')}</optgroup>`).join('')}
+    ${ROLE_OPTIONS.map(g=>`<optgroup label="${esc(g.group)}">${g.roles.map(r=>`<option value="${esc(r)}" ${r===cur?'selected':''}>${esc(r)}${ROLE_LABEL[r]?' ('+esc(ROLE_LABEL[r])+')':''}</option>`).join('')}</optgroup>`).join('')}
     ${ROLE_TIER[cur]?'':`<option selected value="${esc(cur||'')}">${esc(cur||'(ไม่ระบุ)')} — ไม่รู้จัก</option>`}</select>`;
 }
 function salesAppUrl(u){return (SETTINGS.cloudUrl||CLOUD_URL)+'?app=sales'+(u?'&u='+encodeURIComponent(u.email||u.id):'')}
@@ -5194,7 +5376,7 @@ function salesStatusBadge(s){
     Cancelled:'<span class="tag grey">ยกเลิก</span>',
     'Requested':'<span class="tag orange">รอ Sourcing รับงาน</span>',
     'In Progress':'<span class="tag orange">Sourcing กำลังทำราคา</span>',
-    'Partial Approved':'<span class="tag amber">อนุมัติแล้ว 1 ฝ่าย</span>',
+    'Partial Approved':'<span class="tag amber">ผ่านระดับ 1 · รอ BD Manager</span>',
     'Approved':'<span class="tag blue">รอปล่อยราคา</span>',
     'Pending':'<span class="tag amber">ได้ราคาแล้ว รอติดตาม</span>',
     'Won':'<span class="tag green">ปิดการขายได้</span>',
@@ -5218,7 +5400,7 @@ const SALES_BUCKETS=[
   {key:'costing', title:'รอ Sourcing จัดทำราคา',  hint:'ส่งคำขอแล้ว รอ Sourcing ส่งราคากลับ', color:'orange', icon:'⏳',
    match:q=> (q.docType==='SR' && ['Draft','Submitted','Accepted'].indexOf(q.status||'Submitted')>=0)
           || (q.docType!=='SR' && ['Requested','In Progress'].indexOf(q.status||QT_DEFAULT_STATUS)>=0)},
-  {key:'approval',title:'รอผู้จัดการอนุมัติ',   hint:'Sourcing ทำราคาเสร็จแล้ว รอผู้จัดการอนุมัติ', color:'amber', icon:'🧾',
+  {key:'approval',title:'รออนุมัติ 2 ระดับ',   hint:'Sourcing ทำราคาเสร็จแล้ว รอ Sourcing Manager → BD Manager อนุมัติ', color:'amber', icon:'🧾',
    match:q=> q.docType!=='SR' && ['Submitted','Partial Approved'].indexOf(q.status||'')>=0},
   {key:'release', title:'รอปล่อยราคา',          hint:'อนุมัติครบแล้ว รอผู้ปล่อยราคาส่งให้ Sales', color:'blue', icon:'🔒',
    match:q=> q.docType!=='SR' && (q.status||'')==='Approved'},
@@ -5672,12 +5854,13 @@ function suSRcard(){
   return `<div class="card no-print" style="border-left:4px solid var(--orange);margin-bottom:14px">
     <div class="card-h" style="padding:12px 18px"><h2>📬 คำขอราคา (SR) รอรับงาน — ${list.length} รายการ</h2></div>
     <div class="card-b" style="padding:0"><div class="tw" style="border:none"><table><thead><tr>
-      <th>SR No</th><th>โปรเจค / ลูกค้า</th><th>Sales</th><th>กลุ่ม</th><th>ต้องการภายใน</th><th></th></tr></thead><tbody>
+      <th>SR No</th><th>โปรเจค / ลูกค้า</th><th>Sales</th><th>กลุ่ม</th><th>ส่งถึง</th><th>ต้องการภายใน</th><th></th></tr></thead><tbody>
       ${list.map(q=>`<tr>
         <td class="mono" style="font-size:11px;font-weight:600">${esc(q.docNo||q.header.ref||'—')}</td>
         <td><div style="font-weight:600">${esc(q.header.title||q.header.customer||'(ไม่มีชื่อ)')}</div><div class="hint">${esc(q.header.customer||'')}</div></td>
         <td style="font-size:12px">${ownerTag(q)}</td>
         <td><span class="tag ${grpColor(q.header.groupType)}" style="font-size:10px">${esc(q.header.groupType||'—')}</span></td>
+        <td>${routeTag(q)}</td>
         <td style="font-size:12px">${esc(q.header.needBy||'—')}</td>
         <td>${perms().create?`<button class="btn tiny" onclick="takeSRAndCost('${q.id}')">รับงาน &amp; ทำราคา</button>`:''}</td></tr>`).join('')}
     </tbody></table></div></div></div>`;
@@ -5707,9 +5890,13 @@ function suRows(){
 }
 
 /* ============================================================ SR QUEUE (Sourcing) */
+let srqMine=null;   // v5.0: 'mine' = เฉพาะคำขอที่ส่งถึงฉัน (ค่าเริ่มต้นของ Sourcing) · 'all'
 function viewSRQueue(){
-  const list=QUOTES.filter(q=>q.docType==='SR'&&!q.deleted)
-    .sort((a,b)=>byUrgency(a,b)||(b.created||'').localeCompare(a.created||''));   // v4.6: งานเร่งด่วนขึ้นก่อน
+  if(srqMine===null)srqMine=normRole(CURRENT.role)==='Sourcing'?'mine':'all';
+  const all=QUOTES.filter(q=>q.docType==='SR'&&!q.deleted)
+    .sort((a,b)=>(routedToMe(b)&&b.status==='Submitted'?1:0)-(routedToMe(a)&&a.status==='Submitted'?1:0)||byUrgency(a,b)||(b.created||'').localeCompare(a.created||''));   // v4.6: งานเร่งด่วนขึ้นก่อน · v5.0: ส่งถึงฉันขึ้นก่อน
+  const mineN=all.filter(q=>routedToMe(q)&&q.status==='Submitted').length;
+  const list=srqMine==='mine'?all.filter(q=>routedToMe(q)||(q.assignedTo&&q.assignedTo===CURRENT.id)):all;
   const pending=list.filter(q=>q.status==='Submitted').length;
   const accepted=list.filter(q=>q.status==='Accepted').length;
   const quoted=list.filter(q=>q.status==='Quoted').length;
@@ -5720,9 +5907,11 @@ function viewSRQueue(){
     ${kpi('จัดทำใบเสนอราคาแล้ว',quoted,'มีใบเสนอราคาผูกแล้ว','green')}
     ${kpi('SR ทั้งหมด',list.length,'รวมทุกสถานะ','grid')}
   </div>
-  <div class="card"><div class="card-h" style="padding:11px 18px"><h2>คำขอราคา (SR)</h2>${lvSummary(list)}<span class="hint">งานเร่งด่วนขึ้นก่อน · SLA ${SLA_TXT('SOURCING')} วันทำการ</span></div><div class="card-b" style="padding:0">
+  <div class="card"><div class="card-h" style="padding:11px 18px"><h2>คำขอราคา (SR)</h2>
+    <div class="seg"><button class="${srqMine==='mine'?'on':''}" onclick="srqMine='mine';render()">📥 ส่งถึงฉัน${mineN?' ('+mineN+')':''}</button><button class="${srqMine==='all'?'on':''}" onclick="srqMine='all';render()">ทั้งหมด</button></div>
+    ${lvSummary(list)}<span class="hint">งานเร่งด่วนขึ้นก่อน · SLA ${SLA_TXT('SOURCING')} วันทำการ</span></div><div class="card-b" style="padding:0">
   ${list.length?`<div class="tw" style="border:none"><table><thead><tr>
-    <th>SR No</th><th>วันที่สร้าง</th><th>โปรเจค / ลูกค้า</th><th>Sales</th><th>กลุ่ม</th>
+    <th>SR No</th><th>วันที่สร้าง</th><th>โปรเจค / ลูกค้า</th><th>Sales</th><th>กลุ่ม</th><th>ส่งถึง</th>
     <th>ต้องการภายใน</th><th>สถานะ</th><th>QT ที่สร้าง</th><th></th></tr></thead><tbody>
     ${list.map(q=>{
       const st=q.status||'Submitted';
@@ -5736,6 +5925,7 @@ function viewSRQueue(){
           <div style="font-size:11px;color:var(--muted)">${esc(q.header.customer||'')}</div></td>
         <td style="font-size:12px">${esc(q.header.sales||'—')}</td>
         <td><span class="tag ${grpColor(q.header.groupType)}">${esc(q.header.groupType||'—')}</span></td>
+        <td>${routeTag(q)}${q.assignedTo?`<div class="hint">รับงาน: ${esc(assigneeName(q)||'—')}</div>`:''}</td>
         <td style="font-size:12px">${needBy}</td>
         <td><span class="tag ${STATUS_TAG[st]||'grey'}">${esc(statusTH(st,'SR'))}</span> ${lvBadge(lvOf(q))}${(followOf(q).waitingDays||0)>0&&waitTxt(followOf(q))?`<div class="hint">รอมาแล้ว ${waitTxt(followOf(q))}</div>`:''}</td>
         <td style="font-size:12px">${linkedQTs.length?linkedQTs.map(x=>`<span class="mono" style="font-size:10px;background:var(--surface-2);padding:2px 5px;border-radius:4px;margin:1px;cursor:pointer" onclick="openQuote('${x.id}')">${esc(x.docNo||x.header.ref||'—')}</span>`).join(' '):'—'}</td>
@@ -5743,11 +5933,12 @@ function viewSRQueue(){
           ${st==='Submitted'?`<button class="btn tiny" onclick="takeSRAndCost('${q.id}')">รับงาน &amp; ทำราคา</button>
             <button class="btn tiny ghost" onclick="acceptSR('${q.id}')" title="รับงานไว้ก่อน ยังไม่ทำราคาตอนนี้">รับงานอย่างเดียว</button>`:''}
           ${(st==='Accepted'||st==='Quoted')?`<button class="btn tiny ghost" onclick="createQTFromSR('${q.id}')">+ สร้าง QT</button>`:''}
+          ${(st==='Submitted'&&perms().create)?`<button class="btn tiny ghost" onclick="openForwardSR('${q.id}')" title="ส่งคำขอนี้ให้ Sourcing คนอื่น">ส่งต่อ</button>`:''}
           <button class="btn tiny ghost" onclick="openQuote('${q.id}')">ดู</button>
         </div></td>
       </tr>`;
     }).join('')}
-  </tbody></table></div>`:emptyState('ไม่มีคำขอราคา','Sales ยังไม่ได้ส่ง SR มา')}
+  </tbody></table></div>`:emptyState(srqMine==='mine'?'ไม่มีคำขอที่ส่งถึงคุณ':'ไม่มีคำขอราคา',srqMine==='mine'?'กด “ทั้งหมด” เพื่อดูคำขอของทั้งทีม':'Sales ยังไม่ได้ส่ง SR มา')}
   </div></div>`;
 }
 // 2.6: one click = assign to me + move SR forward + open the costing screen pre-filled with the Sales lines

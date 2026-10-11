@@ -24,6 +24,12 @@
  *       (ทุกคนจะกลายเป็นเจ้าของสคริปต์) จึงใช้ได้แค่แสดงผลวินิจฉัยเท่านั้น
  *     · ทุก request ดึง role / สถานะ Active ใหม่จากแท็บ Users (เดิมใช้ role ที่จำไว้ตอนล็อกอิน นานสุด 12 ชม.)
  *     · เปิดลิงก์หลัก (ไม่มี ?app=) → server เลือกหน้าให้ตามสิทธิ์ของอีเมลนั้น: Sales → แอป Sales, ทีมภายใน → ระบบทำราคา
+ *  H) v5.0 (คำขอราคาแบบ Food Price Request):
+ *     · คำขอราคา (SR) วิ่งถึง Sourcing ตามกลุ่มสินค้าอัตโนมัติ — routeSR_() อ่าน Scope ของผู้ใช้ Sourcing ในแท็บ Users
+ *       (ตั้งทับรายกลุ่มได้ที่ Settings.srRouting) เก็บใน Detail: routedTo / routedName / routedWhy / routedAt (ไม่มีคอลัมน์ใหม่)
+ *     · อนุมัติ 2 ระดับแบบเรียงลำดับ: ระดับ 1 Sourcing Manager (role Procurement Mgr) → ระดับ 2 BD Manager
+ *       BD Manager กดก่อนระดับ 1 ไม่ได้ (WAIT_PREVIOUS_LEVEL) · GM อนุมัติแทนได้ทีละระดับ หรือทั้งหมด (p.all) — บันทึกว่า "อนุมัติแทน"
+ *     · row.follow มี step / actor / due — ทุกหน้าจอแสดง "อยู่ขั้นไหน · รอใคร · ครบกำหนดเมื่อไร" จากค่าเดียวกัน
  *  * v4.2: รัน setup() หนึ่งครั้ง เพื่อเพิ่มคอลัมน์ Email / Active ในแท็บ Users แล้ว Deploy → New version
  *
  * สิ่งที่เปลี่ยนจาก v2.1 (สำคัญ — ต้องอัปเดต HTML ทั้ง 2 ไฟล์พร้อมกัน)
@@ -42,7 +48,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '4.9';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '5.0';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -129,6 +135,7 @@ var ROLE_ALIASES = {
   'gm':'GM', 'general manager':'GM',
   'admin':'Admin', 'administrator':'Admin',
   'procurement mgr':'Procurement Mgr', 'procurement manager':'Procurement Mgr', 'procurement mgr.':'Procurement Mgr',
+  'sourcing manager':'Procurement Mgr', 'sourcing mgr':'Procurement Mgr', 'sourcing mgr.':'Procurement Mgr',   // v5.0: ผู้อนุมัติระดับ 1
   'bd mgr':'BD Mgr', 'bd manager':'BD Mgr', 'bd mgr.':'BD Mgr', 'business development manager':'BD Mgr',
   'sourcing':'Sourcing', 'sales':'Sales',
   'sales manager':'Sales Manager', 'sales mgr':'Sales Manager', 'sales mgr.':'Sales Manager'
@@ -140,6 +147,9 @@ function normRole_(role) {
   return ROLE_ALIASES[raw.toLowerCase().replace(/\s+/g, ' ')] || 'Sales';
 }
 function capsOf_(role) { return ROLE_MATRIX[normRole_(role)] || DEFAULT_CAPS; }
+/** v5.0: ชื่อที่แสดงของ role (ค่าในชีทยังเป็นชื่อมาตรฐานเดิม) */
+var ROLE_LABEL = { 'Procurement Mgr':'Sourcing Manager', 'BD Mgr':'BD Manager' };
+function roleLabel_(role) { return ROLE_LABEL[role] || role; }
 
 /** BUSINESS RULE: tier ที่ได้ข้อมูลเต็ม (Cost / Profit / GP / Detail) เสมอ ทุกสถานะ — ไม่มีการ strip
  *  เฉพาะ tier SALES เท่านั้นที่ถูกตัดต้นทุน */
@@ -148,9 +158,22 @@ function seesFullData_(sess) {
   return !!(sess && sess.caps && FULL_DATA_TIERS.indexOf(sess.caps.tier) >= 0 && sess.caps.viewCost);
 }
 
-/* ---- dual approval (ต้องตรงกับ REQUIRED_APPROVAL_ROLES / APPROVAL_OVERRIDE_ROLES ใน Index.html) ---- */
+/* ---- อนุมัติ 2 ระดับ "เรียงลำดับ" (v5.0) — ต้องตรงกับ REQUIRED_APPROVAL_ROLES / APPROVAL_OVERRIDE_ROLES ใน Index.html
+ * ลำดับใน array = ลำดับระดับ: [0] ระดับ 1 Sourcing Manager · [1] ระดับ 2 BD Manager
+ * approvalRoles ในใบ = ระดับที่ผ่านแล้ว (ชื่อ role ของระดับนั้น) · approvals = ใครกดจริง (GM อนุมัติแทนมี onBehalfOf)
+ * ข้อมูลเก่า: approvalRoles มี 'GM' = GM อนุมัติแทนครบทุกระดับ (รุ่น v4.x) ยังอ่านได้เหมือนเดิม */
 var REQUIRED_APPROVAL_ROLES = ['Procurement Mgr', 'BD Mgr'];
-var APPROVAL_OVERRIDE_ROLES = ['GM'];      // GM อนุมัติแทนได้ทั้ง 2 ขาในครั้งเดียว
+var APPROVAL_OVERRIDE_ROLES = ['GM'];      // GM อนุมัติแทนได้ทุกระดับ (ทีละระดับ หรือทั้งหมดในครั้งเดียว)
+var APPROVAL_LEVEL_TH = { 'Procurement Mgr':'Sourcing Manager', 'BD Mgr':'BD Manager' };
+/** สถานะการอนุมัติจาก approvalRoles → { done, next (role ระดับถัดไป), level (1-based ของระดับถัดไป, 0 = ครบ), complete } */
+function approvalStep_(roles) {
+  roles = (Object.prototype.toString.call(roles) === '[object Array]') ? roles : [];
+  var legacyOverride = roles.some(function (r) { return APPROVAL_OVERRIDE_ROLES.indexOf(r) >= 0; });
+  var missing = legacyOverride ? [] : REQUIRED_APPROVAL_ROLES.filter(function (r) { return roles.indexOf(r) < 0; });
+  var next = missing.length ? missing[0] : '';
+  return { done:roles.slice(), missing:missing, next:next, level:next ? REQUIRED_APPROVAL_ROLES.indexOf(next) + 1 : 0,
+           complete:!missing.length, legacyOverride:legacyOverride };
+}
 var PRICE_STATES = ['Approved', 'Pending', 'Won', 'Closed'];
 
 /* ============================================================ CONFIG — ค่าตั้งต้นรวมไว้ที่เดียว
@@ -244,7 +267,7 @@ function diagHtml_() {
       var guard = c.indexOf('window.__booted=true') > 0;
       add('ไฟล์ HTML "' + f[0] + '"', complete && c.indexOf(f[1]) > 0,
         (c.length / 1024).toFixed(0) + ' KB · ' + (complete ? 'ครบถึง &lt;/html&gt;' : '<b style="color:#bb3b2f">ไม่ครบ — ไฟล์ถูกตัดท้าย ให้วางใหม่ทั้งไฟล์</b>') +
-        ' · ' + (c.indexOf(f[1]) > 0 ? 'เวอร์ชัน ' + f[1] : '<b style="color:#bb3b2f">ไม่ใช่เวอร์ชัน 4.2</b>') + (guard ? '' : ' · ไม่มี boot guard'));
+        ' · ' + (c.indexOf(f[1]) > 0 ? 'เวอร์ชัน ' + f[1] : '<b style="color:#bb3b2f">ไม่ใช่เวอร์ชัน ' + APP_VERSION + ' — วางไฟล์ใหม่ทั้งไฟล์</b>') + (guard ? '' : ' · ไม่มี boot guard'));
     } catch (e) {
       add('ไฟล์ HTML "' + f[0] + '"', false, 'ไม่พบไฟล์ชื่อ <b>' + f[0] + '</b> (ต้องตั้งชื่อตรงตัวพิมพ์ ไม่ต้องใส่ .html) — ' + String(e));
     }
@@ -467,7 +490,7 @@ function auth_(token) {
 }
 
 /** ข้อมูลผู้ใช้ปัจจุบัน (role สด ๆ จากแท็บ Users) — แนบไปกับทุกคำตอบอ่านข้อมูล ให้ client รู้ทันทีถ้าสิทธิ์ถูกเปลี่ยน */
-function meOf_(sess) { return { id:sess.userId, name:sess.name, email:sess.email || '', role:sess.role, tier:sess.caps.tier, caps:sess.caps }; }
+function meOf_(sess) { return { id:sess.userId, name:sess.name, email:sess.email || '', role:sess.role, roleLabel:roleLabel_(sess.role), tier:sess.caps.tier, caps:sess.caps }; }
 /** Admin ปลดล็อกบัญชีที่กรอกรหัสผิดเกินกำหนด (ไม่ต้องตั้งรหัสใหม่) */
 function unlockUser_(p, sess) {
   if (!p.id) return { ok:false, error:'missing id' };
@@ -615,6 +638,16 @@ function saveQuote_(p, sess) {
   }
   var prevStatus = row ? String(sh.getRange(row, idx['Status']).getValue() || '') : '';   // v4.7: ใช้ตัดสินว่าต้องแจ้งเตือนไหม
   var stamp = nowISO_();
+  var route = null;
+  if (String(p.docType || '') === 'SR' && p.detail) {
+    // v5.0: SR ที่บันทึกจากระบบทำราคา (รับงาน / ส่งต่อ / สร้างแทน Sales) — ผู้รับคำขอตัดสินที่ server เหมือน saveSR_
+    try {
+      var srDoc = JSON.parse(p.detail), srPrev = null;
+      if (row && idx.Detail) { try { srPrev = JSON.parse(String(sh.getRange(row, idx.Detail).getValue() || '{}')); } catch (e) { srPrev = null; } }
+      route = applyRoute_(srDoc, srPrev, sess, peopleCtx_());
+      p.detail = JSON.stringify(srDoc);
+    } catch (e) { route = null; }
+  }
   var detail = safeDetail_(p.detail);
   var salesText = '';
   if (p.salesDetail) {
@@ -639,8 +672,10 @@ function saveQuote_(p, sess) {
   if (salesText) vals.SalesDetail = salesText;
   var savedRow = writeRow_(sh, idx, row, vals);
   logRow_('save', p.docNo || p.ref || '', p.id, sess.name, detail.note + (p.force ? ' (force)' : ''));
-  larkHook_(sh, idx, savedRow, prevStatus, vals.Status, sess);
-  return { ok:true, id:p.id, trimmed:detail.trimmed, updatedAt:stamp, follow:followForRow_(sh, idx, savedRow) };
+  larkHook_(sh, idx, savedRow, prevStatus, vals.Status, sess, (route && route.forwarded && vals.Status === 'Submitted') ? { event:'SR_FORWARDED' } : null);
+  var out = { ok:true, id:p.id, trimmed:detail.trimmed, updatedAt:stamp, follow:followForRow_(sh, idx, savedRow) };
+  if (route) { try { var rd = JSON.parse(p.detail); out.routedTo = rd.routedTo || ''; out.routedName = rd.routedName || ''; out.routedWhy = rd.routedWhy || ''; } catch (e) {} }
+  return out;
 }
 
 /** Sales สร้าง/แก้คำขอราคา (SR) ได้ — server บังคับเจ้าของงานและตัดฟิลด์ต้นทุนทิ้งเสมอ */
@@ -702,6 +737,7 @@ function saveSR_(p, sess) {
       warranty: L.warranty || '', lead: L.lead || ''
     };
   });
+  var route = applyRoute_(doc, prev, sess, peopleCtx_());     // v5.0: ส่งถึง Sourcing ตามกลุ่มสินค้า (Sales ปลอมผู้รับไม่ได้)
   var stamp = nowISO_();
   doc.updatedAt = stamp;
   var d = safeDetail_(JSON.stringify(doc));
@@ -720,8 +756,10 @@ function saveSR_(p, sess) {
     Detail:d.text, SalesDetail:sd.text
   });
   logRow_('saveSR', doc.docNo || '', p.id, sess.name, '');
-  larkHook_(sh, idx, srRow, prev ? (prev.status || '') : '', doc.status || 'Submitted', sess);
-  return { ok:true, id:p.id, docNo:doc.docNo, updatedAt:stamp, follow:followForRow_(sh, idx, srRow) };
+  larkHook_(sh, idx, srRow, prev ? (prev.status || '') : '', doc.status || 'Submitted', sess,
+            (route.forwarded && doc.status === 'Submitted') ? { event:'SR_FORWARDED' } : null);
+  return { ok:true, id:p.id, docNo:doc.docNo, updatedAt:stamp, follow:followForRow_(sh, idx, srRow),
+           routedTo:doc.routedTo || '', routedName:doc.routedName || '', routedWhy:doc.routedWhy || '' };
 }
 
 /** เลขเอกสารถัดไป เช่น SR-2610-007 (อ่านจากคอลัมน์ DocNo ทั้งชีท — เรียกใต้ ScriptLock เท่านั้น) */
@@ -849,13 +887,14 @@ function stampStatus_(d, status, at) {
   if (d.statusLog.length > 40) d.statusLog = d.statusLog.slice(-40);
 }
 
-/** อนุมัติ 2 ฝ่ายแบบ atomic (อยู่ใต้ ScriptLock ของ handle_)
- *  อ่าน approvalRoles ล่าสุดจาก Sheet → เติม role ของผู้กด → คำนวณสถานะใหม่ → เขียนกลับในครั้งเดียว
- *  แก้ปัญหา: Procurement กับ BD กดอนุมัติจากเครื่องตัวเองใกล้ ๆ กัน แล้วอีกฝ่ายเขียนทับ approvalRoles หายไป 1 ขา */
+/** อนุมัติ 2 ระดับแบบเรียงลำดับ + atomic (อยู่ใต้ ScriptLock ของ handle_) — v5.0
+ *  ระดับ 1 Sourcing Manager (Procurement Mgr) → ระดับ 2 BD Manager · ข้ามลำดับไม่ได้ (WAIT_PREVIOUS_LEVEL)
+ *  GM อนุมัติแทนได้ทุกระดับ: ปกติ = ระดับที่รออยู่ 1 ระดับ · p.all = ทุกระดับที่เหลือในครั้งเดียว — บันทึก onBehalfOf ทุกครั้ง
+ *  อ่าน approvalRoles ล่าสุดจาก Sheet → เติมระดับที่ผ่าน → คำนวณสถานะใหม่ → เขียนกลับในครั้งเดียว (กดพร้อมกันก็ไม่หาย) */
 function approve_(p, sess) {
   if (!p.id) return { ok:false, error:'missing id' };
-  var role = sess.role;
-  if (REQUIRED_APPROVAL_ROLES.indexOf(role) < 0 && APPROVAL_OVERRIDE_ROLES.indexOf(role) < 0)
+  var role = sess.role, isGM = APPROVAL_OVERRIDE_ROLES.indexOf(role) >= 0;
+  if (REQUIRED_APPROVAL_ROLES.indexOf(role) < 0 && !isGM)
     return { ok:false, error:'ROLE_CANNOT_APPROVE', code:403, need:REQUIRED_APPROVAL_ROLES.concat(APPROVAL_OVERRIDE_ROLES) };
   var sh = sheet_(SH.QUOTES), idx = headerIndex_(sh);
   var row = findRow_(sh, idx, 'Id', p.id);
@@ -869,31 +908,42 @@ function approve_(p, sess) {
   var d; try { d = JSON.parse(String(cell_(cur, idx, 'Detail') || '{}')); } catch (e) { d = null; }
   if (!d || !d.id || d._oversize) return { ok:false, error:'NO_DETAIL', code:409 };
   var roles = (Object.prototype.toString.call(d.approvalRoles) === '[object Array]') ? d.approvalRoles.slice() : [];
-  if (roles.indexOf(role) >= 0) return { ok:false, error:'ALREADY_APPROVED', code:409, approvalRoles:roles, serverStatus:status };
-  roles.push(role);
-
-  var override = roles.some(function (r) { return APPROVAL_OVERRIDE_ROLES.indexOf(r) >= 0; });
-  var missing = override ? [] : REQUIRED_APPROVAL_ROLES.filter(function (r) { return roles.indexOf(r) < 0; });
-  var complete = missing.length === 0;
-  var newStatus = complete ? 'Approved' : 'Partial Approved';
+  var before = approvalStep_(roles);
+  if (!isGM) {
+    if (roles.indexOf(role) >= 0) return { ok:false, error:'ALREADY_APPROVED', code:409, approvalRoles:roles, serverStatus:status };
+    if (before.next && role !== before.next)
+      return { ok:false, error:'WAIT_PREVIOUS_LEVEL', code:409, waitingFor:before.next, waitingForLabel:roleLabel_(before.next),
+               level:before.level, approvalRoles:roles, serverStatus:status };
+  }
+  var fill = isGM ? (p.all ? before.missing.slice() : (before.next ? [before.next] : [])) : [role];
   var stamp = nowISO_();
   var approvals = (Object.prototype.toString.call(d.approvals) === '[object Array]') ? d.approvals.slice() : [];
-  approvals.push({ by:sess.name, role:role, act:'อนุมัติ', at:stamp });
-
+  fill.forEach(function (lvRole) {
+    if (roles.indexOf(lvRole) < 0) roles.push(lvRole);
+    var a = { by:sess.name, userId:sess.userId, role:role, level:REQUIRED_APPROVAL_ROLES.indexOf(lvRole) + 1, levelRole:lvRole,
+              act:isGM ? 'อนุมัติแทน ' + roleLabel_(lvRole) : 'อนุมัติ', at:stamp };
+    if (isGM) a.onBehalfOf = lvRole;
+    approvals.push(a);
+  });
+  var after = approvalStep_(roles), complete = after.complete;
+  var newStatus = complete ? 'Approved' : 'Partial Approved';
   var patch = { approvalRoles:roles, approvals:approvals, status:newStatus, _sv:3,
                 stage:complete ? 'Approved' : 'Submitted', followStatus:'Pending',
                 rev:(Number(d.rev) || 0) + 1, updated:todayStr_() };
   if (complete) patch.needsApproval = false;
+  var lvTxt = fill.map(function (r) { return 'ระดับ ' + (REQUIRED_APPROVAL_ROLES.indexOf(r) + 1) + ' ' + roleLabel_(r); }).join(' + ');
   var audit = { timestamp:stamp, user:sess.name, role:role,
-                action:'Approved by ' + role + ': ' + status + ' → ' + newStatus + (complete ? '' : ' (รอ ' + missing.join(', ') + ')') };
+                action:(isGM ? 'GM อนุมัติแทน ' : 'Approved ') + lvTxt + ': ' + status + ' → ' + newStatus +
+                       (complete ? '' : ' (รอ ' + after.missing.map(roleLabel_).join(', ') + ')') };
   var detailText = patchDetailCells_(sh, idx, row, patch, audit, stamp);
   var vals = { Status:newStatus, Stage:patch.stage, FollowStatus:'Pending',
                Updated:todayStr_(), UpdatedAt:stamp, By:sess.name };
   if (complete) vals.NeedsApproval = '';
   writeRow_(sh, idx, row, vals);
-  logRow_('approve', String(cell_(cur, idx, 'DocNo') || ''), p.id, sess.name, role + ' → ' + newStatus);
+  logRow_('approve', String(cell_(cur, idx, 'DocNo') || ''), p.id, sess.name, role + ' [' + fill.join('+') + '] → ' + newStatus);
   larkHook_(sh, idx, row, status, newStatus, sess);
-  return { ok:true, id:p.id, status:newStatus, approvalRoles:roles, missing:missing,
+  return { ok:true, id:p.id, status:newStatus, approvalRoles:roles, missing:after.missing, approvedLevels:fill,
+           next:after.next, nextLabel:after.next ? roleLabel_(after.next) : '', level:after.level,
            complete:complete, updatedAt:stamp, detail:detailText, follow:followForRow_(sh, idx, row) };
 }
 
@@ -936,14 +986,8 @@ function gatekeeperId_() {
       }
     }
   } catch (e) {}
-  // 1) ค่าที่ตั้งไว้ ถ้าตรงกับผู้ใช้จริง
-  for (var a = 0; a < users.length; a++) if (users[a].id === set && set) return set;
-  // 2) ผู้ใช้ฝ่ายขายที่ชื่อ NON
-  for (var b = 0; b < users.length; b++) {
-    if (users[b].role === 'Sales' && users[b].name.trim().toUpperCase() === 'NON') return users[b].id;
-  }
-  // 3) ค่าที่ตั้งไว้ (แม้หา user ไม่เจอ) หรือ default
-  return set || 'sales_non';
+  // 1) ค่าที่ตั้งไว้ ถ้าตรงกับผู้ใช้จริง → 2) ผู้ใช้ฝ่ายขายที่ชื่อ NON → 3) ค่าที่ตั้งไว้ (แม้หา user ไม่เจอ) หรือ default
+  return gateFromList_(set, users);
 }
 
 /** ผู้ปล่อยราคาสำรอง (delegate) — ใช้ตอน NON ลา ตั้งค่าจากหน้าตั้งค่าของแอปหลัก */
@@ -995,9 +1039,10 @@ function getQuotations_(sess, opts) {
  *  PERF: เดิมเรียก isReleaser_() ต่อแถว ทำให้อ่าน Users/Settings ซ้ำหลายร้อยรอบ */
 function projectionCtx_(sess, opts) {
   var full = seesFullData_(sess);
-  var gate = full ? '' : gatekeeperId_();
-  var delegate = full ? '' : releaseDelegateId_();
-  return { full:full, gate:gate, salesView:!!(opts && opts.salesView),
+  var people = peopleCtx_();                              // v5.0: อ่าน Users + Settings ครั้งเดียว ใช้ทั้งผู้ปล่อยราคาและชื่อผู้ดำเนินการ
+  var gate = full ? '' : people.gate;
+  var delegate = full ? '' : people.delegate;
+  return { full:full, gate:gate, salesView:!!(opts && opts.salesView), people:people,
            iAmReleaser:!full && (sess.userId === gate || (!!delegate && sess.userId === delegate)),
            followCfg:followCfg_(), nowMs:Date.now() };       // อ่าน Settings ครั้งเดียวต่อ request (ห้าม I/O ในลูป)
 }
@@ -1026,7 +1071,11 @@ function projectRow_(r, idx, sess, ctx) {
     deleted:String(cell_(r, idx, 'Deleted')).toUpperCase() === 'TRUE'
   };
   var fi = followInfo_(r, idx);
-  base.follow = followState_(fi, ctx.followCfg, ctx.nowMs);
+  base.follow = followActors_(followState_(fi, ctx.followCfg, ctx.nowMs), ctx.people);
+  if (fi.docType === 'SR' && fi.routedTo !== undefined) {           // v5.0: SR ส่งถึงใคร (ไม่มีราคา — ทุก role เห็นได้)
+    var det0 = String(cell_(r, idx, 'Detail') || '');
+    base.routedTo = fi.routedTo; base.routedName = topStr_(det0, 'routedName'); base.routedWhy = topStr_(det0, 'routedWhy');
+  }
   // ใบ Pending รุ่นเก่าที่มีราคาฉบับ Sales แล้วแต่ยังไม่ได้ปล่อยให้เจ้าของงาน → ผู้ปล่อยราคากดยืนยันได้
   var legacyRelease = base.follow.owner === 'RELEASER' && String(base.status) === 'Pending';
 
@@ -1081,6 +1130,116 @@ function projectRow_(r, idx, sess, ctx) {
   return base;
 }
 
+/* ============================================================ ROUTING (v5.0) — คำขอราคาวิ่งถึง Sourcing ตามกลุ่มสินค้า
+ * ใช้โครงสร้างที่มีอยู่แล้ว: คอลัมน์ Scope ของผู้ใช้ role Sourcing ในแท็บ Users (กลุ่มสินค้าที่แต่ละคนดูแล)
+ * ลำดับการตัดสิน (routeFor_):
+ *   1) Settings.srRouting[กลุ่มงาน] = Id ผู้ใช้ (ตั้งจากหน้า ⚙️ ตั้งค่า) — ใช้ก่อนเสมอถ้าผู้ใช้นั้นยัง Active และไม่ใช่ฝ่ายขาย
+ *   2) คะแนนจาก Scope: กลุ่มหลักของกลุ่มงาน +10 · กลุ่มรอง +1 · กลุ่มสินค้าของรายการในคำขอ +3 ต่อรายการ · Scope "ทุกกลุ่ม" = 1
+ *      ได้คะแนนสูงสุดคนเดียว → ส่งถึงคนนั้น · เสมอกัน/ไม่มีใครตรง → ส่งถึง "ทีม Sourcing" (ทุกคนเห็น ใครรับก่อนได้งาน)
+ * ผลเก็บใน Detail ของ SR (ไม่มีคอลัมน์ใหม่): routedTo / routedName / routedWhy (setting|scope|manual|pool) / routedAt / routedBy */
+var GROUP_TYPE_GROUPS = {
+  'Inverter':    ['INVERTER', 'MICRO INVERTER', 'OPTIMIZER', 'DATA LOGGER', 'MONITORING', 'ENERGY METER', 'SENSOR', 'RAPID SHUTDOWN', 'SOLAREDGE', 'CURRENT TRANFORMER'],
+  'Mounting':    ['MOUNTING', 'CARPORT', 'WALKWAY', 'FLOATING'],
+  'DC Cable':    ['DC CABLE', 'CONNECTOR'],
+  'EV Charger':  ['EV CHARGER', 'EV CHARGE'],
+  'ESS':         ['ENERGY STORAGE', 'BATTERY'],
+  'Residential': ['INVERTER', 'BATTERY', 'PV MODULE']
+};
+var ROUTE_WHY_TH = { setting:'ตั้งค่าผู้รับตามกลุ่มงาน', scope:'ตามกลุ่มสินค้าที่ดูแล', manual:'ส่งต่อโดยทีมภายใน', pool:'ส่งถึงทีม Sourcing' };
+function upGroup_(g) { return String(g || '').toUpperCase().replace(/\s+/g, ' ').trim(); }
+/** Scope ในชีท → 'all' หรือ array ของกลุ่ม (ตัวพิมพ์ใหญ่) — รองรับ JSON array / "all" / คั่นด้วยจุลภาค */
+function parseScope_(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (!s || s.toLowerCase() === 'all' || s === '"all"') return 'all';
+  var arr = null;
+  try { var j = JSON.parse(s); if (Object.prototype.toString.call(j) === '[object Array]') arr = j; else if (j === 'all') return 'all'; } catch (e) {}
+  if (!arr) arr = s.split(',');
+  arr = arr.map(upGroup_).filter(function (x) { return x; });
+  return arr.length ? arr : 'all';
+}
+/** ผู้ปล่อยราคาจากรายชื่อผู้ใช้ (กติกาเดียวกับ gatekeeperId_) */
+function gateFromList_(set, users) {
+  for (var a = 0; a < users.length; a++) if (set && users[a].id === set) return set;
+  for (var b = 0; b < users.length; b++) if (users[b].role === 'Sales' && String(users[b].name).trim().toUpperCase() === 'NON') return users[b].id;
+  return set || 'sales_non';
+}
+/** ผู้ใช้ทุกคน + การตั้งค่าที่ใช้ตัดสิน "ใครต้องทำต่อ" — อ่าน Users + Settings ครั้งเดียวต่อ request (ห้ามเรียกในลูป) */
+function peopleCtx_() {
+  var out = { list:[], byId:{}, routing:{}, gate:'', delegate:'' };
+  try {
+    var sh = sheet_(SH.USERS), idx = headerIndex_(sh), last = sh.getLastRow();
+    if (last >= 2) sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues().forEach(function (r) {
+      var id = String(cell_(r, idx, 'Id') || '').trim(); if (!id) return;
+      var role = normRole_(cell_(r, idx, 'Role'));
+      var u = { id:id, name:String(cell_(r, idx, 'Name') || id), role:role, tier:capsOf_(role).tier,
+                email:String(cell_(r, idx, 'Email') || '').trim().toLowerCase(), active:isActiveUser_(r, idx),
+                scope:parseScope_(cell_(r, idx, 'Scope')) };
+      out.list.push(u); out.byId[id] = u;
+    });
+  } catch (e) {}
+  var st = {}; try { st = getSettingsRaw_() || {}; } catch (e) {}
+  out.routing = (st.srRouting && typeof st.srRouting === 'object') ? st.srRouting : {};
+  out.gate = gateFromList_(String(st.releaseGatekeeperId || ''), out.list);
+  out.delegate = String(st.releaseDelegateId || '');
+  return out;
+}
+/** ผู้รับคำขอราคาของกลุ่มงานนี้ → { id, name, why } (id ว่าง = ส่งถึงทีม Sourcing) — pure (ไม่มี I/O) */
+function routeFor_(groupType, lineGroups, people) {
+  var gt = String(groupType || '').trim(), ov = String((people.routing || {})[gt] || '').trim();
+  if (ov) {
+    var o = people.byId[ov];
+    if (o && o.active && o.tier !== 'SALES') return { id:o.id, name:o.name, why:'setting' };
+  }
+  var groups = GROUP_TYPE_GROUPS[gt] || [upGroup_(gt)], primary = groups[0];
+  var lg = (lineGroups || []).map(upGroup_).filter(function (x) { return x; });
+  var best = null, bestScore = 0, tie = false;
+  people.list.forEach(function (u) {
+    if (!u.active || u.role !== 'Sourcing') return;
+    var sc = 0;
+    if (u.scope === 'all') sc = 1;
+    else {
+      if (u.scope.indexOf(primary) >= 0) sc += 10;
+      for (var i = 1; i < groups.length; i++) if (u.scope.indexOf(groups[i]) >= 0) sc += 1;
+      lg.forEach(function (g) { if (u.scope.indexOf(g) >= 0) sc += 3; });
+    }
+    if (sc > bestScore) { best = u; bestScore = sc; tie = false; }
+    else if (sc > 0 && sc === bestScore) tie = true;
+  });
+  if (best && !tie) return { id:best.id, name:best.name, why:'scope' };
+  return { id:'', name:'ทีม Sourcing', why:'pool' };
+}
+/**
+ * ใส่ผู้รับคำขอลงในเอกสาร SR (แก้ doc ตรง ๆ) — เรียกตอนบันทึก SR ทุกครั้ง
+ *  · ร่าง (Draft) = ยังไม่ส่งถึงใคร · Sales ส่งค่า routed* มาเองไม่มีผล (ปลอมผู้รับไม่ได้)
+ *  · ทีมภายใน "ส่งต่อ" ได้ด้วย doc.routedManual = true + doc.routedTo = Id ผู้รับ
+ *  · กลุ่มงานเดิม = คงผู้รับเดิม · เปลี่ยนกลุ่มงาน = คำนวณใหม่
+ * @return {{routed:boolean, forwarded:boolean}}
+ */
+var ROUTE_KEYS = ['routedTo', 'routedName', 'routedWhy', 'routedAt', 'routedBy'];
+function applyRoute_(doc, prev, sess, people) {
+  var res = { routed:false, forwarded:false }, incoming = doc.routedTo, manual = !!doc.routedManual;
+  delete doc.routedManual;
+  ROUTE_KEYS.forEach(function (k) { delete doc[k]; });
+  if (String(doc.status || 'Submitted') === 'Draft') return res;
+  var gt = String((doc.header || {}).groupType || '');
+  if (sess.caps.writeQuote && manual && incoming) {
+    var u = people.byId[String(incoming)];
+    if (u && u.active && u.tier !== 'SALES') {
+      doc.routedTo = u.id; doc.routedName = u.name; doc.routedWhy = 'manual'; doc.routedAt = nowISO_(); doc.routedBy = sess.name;
+      res.routed = true; res.forwarded = !prev || String(prev.routedTo || '') !== u.id;
+      return res;
+    }
+  }
+  if (prev && prev.routedWhy && String((prev.header || {}).groupType || '') === gt) {
+    ROUTE_KEYS.forEach(function (k) { if (prev[k] !== undefined) doc[k] = prev[k]; });
+    return res;
+  }
+  var r = routeFor_(gt, (doc.lines || []).map(function (L) { return L && L.group; }), people);
+  doc.routedTo = r.id; doc.routedName = r.name; doc.routedWhy = r.why; doc.routedAt = nowISO_(); doc.routedBy = 'auto';
+  res.routed = true;
+  return res;
+}
+
 /* ============================================================ FOLLOW-UP OWNERSHIP + SLA (v4.3)
  * ฟังก์ชันเดียวที่ตัดสินว่า "งานนี้รออยู่ที่ใคร" — ทั้งระบบทำราคาและแอป Sales ใช้ค่านี้ (row.follow) ห้ามคำนวณเองซ้ำ
  *   owner: SOURCING | MANAGEMENT | RELEASER | REPAIR | SALES | DONE
@@ -1088,7 +1247,7 @@ function projectRow_(r, idx, sess, ctx) {
  *   งานจะเป็น "งานค้างของ Sales" ได้ต่อเมื่อปล่อยราคาให้เจ้าของงานแล้ว และมีราคาฉบับ Sales จริงเท่านั้น
  * อ่านค่าจาก Detail ด้วย regex เฉพาะคีย์ระดับบน (ไม่ JSON.parse ทั้งก้อน) → เบาพอจะทำทุกแถวทุกครั้งที่โหลด */
 var FOLLOW_LABEL = {
-  SOURCING:'รอ Sourcing จัดทำราคา', MANAGEMENT:'รอผู้จัดการอนุมัติ', RELEASER:'รอปล่อยราคา',
+  SOURCING:'รอ Sourcing จัดทำราคา', MANAGEMENT:'รออนุมัติราคา (2 ระดับ)', RELEASER:'รอปล่อยราคา',
   REPAIR:'รอสร้างข้อมูลราคาสำหรับ Sales', SALES:'พร้อมเสนอลูกค้า', DONE:'ปิดงานแล้ว'
 };
 var STAGE_BUCKET = { 'Requested':'sourcing', 'In Progress':'sourcing', 'Submitted':'approval', 'Partial Approved':'approval',
@@ -1136,8 +1295,59 @@ function followInfo_(r, idx) {
     salesUpdatedAt:topStr_(det, 'salesUpdatedAt'),
     followUpDate:topStr_(det, 'followUpDate'),
     approvalRoles:topArr_(det, 'approvalRoles') || [],
-    quoteIds:topArr_(det, 'quoteIds') || []
+    quoteIds:topArr_(det, 'quoteIds') || [],
+    assignedTo:String(cell_(r, idx, 'AssignedTo') || ''),       // v5.0: ผู้ทำราคา (Sourcing ที่รับงาน)
+    routedTo:topStr_(det, 'routedTo')                           // v5.0: SR ส่งถึงใคร (routeSR)
   };
+}
+/* v5.0: ขั้นตอนของคำขอราคา (stepper ทุกหน้าจอใช้ชุดนี้)  0 ส่งคำขอ · 1 Sourcing ทำราคา · 2 Sourcing Manager
+ *       3 BD Manager · 4 ปล่อยราคา · 5 ได้ราคาแล้ว   (-1 = ยกเลิก)
+ * actor = ใครต้องทำต่อ: {kind:'user', ids} | {kind:'role', role} | {kind:'releaser'} | {kind:'pool'} (ทีม Sourcing ทุกคน) */
+var FLOW_STEPS = ['ส่งคำขอ', 'Sourcing ทำราคา', 'Sourcing Manager', 'BD Manager', 'ปล่อยราคา', 'ได้ราคาแล้ว'];
+function stepOf_(f, owner) {
+  var st = f.status;
+  if (f.docType === 'SR') {
+    if (owner === 'DONE') return ((f.quoteIds && f.quoteIds.length) || st === 'Quoted') ? { step:2, actor:null, handedOff:true } : { step:-1, actor:null };
+    if (owner === 'SALES') return { step:0, actor:{ kind:'user', ids:[f.owner] } };
+    var who = (st === 'Accepted' && f.assignedTo) ? f.assignedTo : (f.routedTo || f.assignedTo);
+    return { step:1, actor:who ? { kind:'user', ids:[who] } : { kind:'pool' } };
+  }
+  if (owner === 'SOURCING') return { step:1, actor:f.assignedTo ? { kind:'user', ids:[f.assignedTo] } : { kind:'pool' } };
+  if (owner === 'REPAIR') return { step:4, actor:f.assignedTo ? { kind:'user', ids:[f.assignedTo] } : { kind:'pool' } };
+  if (owner === 'MANAGEMENT') {
+    var a = approvalStep_(f.approvalRoles), role = a.next || REQUIRED_APPROVAL_ROLES[0];
+    return { step:1 + REQUIRED_APPROVAL_ROLES.indexOf(role) + 1, actor:{ kind:'role', role:role }, approvalLevel:REQUIRED_APPROVAL_ROLES.indexOf(role) + 1 };
+  }
+  if (owner === 'RELEASER') return { step:4, actor:{ kind:'releaser' } };
+  if (owner === 'SALES') return { step:5, actor:{ kind:'user', ids:[f.owner] } };
+  return { step:(st === 'Closed' && !(f.releasedTo && f.releasedTo.length)) ? -1 : 5, actor:null };
+}
+/** วันที่ครบกำหนด (yyyy-MM-dd ตามเวลาไทย) = วันทำการที่ n หลังวันเริ่ม — เลยวันนี้ไปแล้ว = เกินกำหนด (ตรงกับ slaBreached) */
+function addBizDays_(fromMs, n) {
+  var day = 86400000, off = 7 * 3600000, d = Math.floor((fromMs + off) / day), k = 0, guard = 0;
+  while (k < n && guard++ < 400) { d++; var wd = (d + 4) % 7; if (wd !== 0 && wd !== 6) k++; }
+  return new Date(d * day).toISOString().slice(0, 10);
+}
+/** ผู้ใช้ที่ต้องทำต่อ (สำหรับแสดงชื่อ / @mention ใน Lark) — pure */
+function actorUsers_(actor, people) {
+  if (!actor || !people) return [];
+  var list = people.list || [], byId = people.byId || {};
+  if (actor.kind === 'user') return (actor.ids || []).map(function (id) { return byId[id]; }).filter(function (u) { return !!u; });
+  if (actor.kind === 'role') return list.filter(function (u) { return u.active && u.role === actor.role; });
+  if (actor.kind === 'releaser') return [byId[people.gate], people.delegate ? byId[people.delegate] : null].filter(function (u) { return !!u; });
+  if (actor.kind === 'pool') return list.filter(function (u) { return u.active && u.role === 'Sourcing'; });
+  return [];
+}
+/** เติมชื่อผู้ดำเนินการลงใน follow (ไม่ส่งอีเมลออกไป) */
+function followActors_(out, people) {
+  var a = out && out.actor; if (!a || !people) return out;
+  var names = actorUsers_(a, people).map(function (u) { return u.name; });
+  a.names = names;
+  a.label = a.kind === 'role' ? roleLabel_(a.role) + (names.length ? ' · ' + names.join(', ') : '')
+          : a.kind === 'pool' ? 'ทีม Sourcing' + (names.length ? ' (' + names.join(', ') + ')' : '')
+          : a.kind === 'releaser' ? 'ผู้ปล่อยราคา · ' + (names.join(', ') || 'NON')
+          : (names.join(', ') || (a.ids || []).join(', ') || '—');
+  return out;
 }
 /** หัวใจของ Phase 1 — pure function (ทดสอบได้โดยไม่ต้องมีชีท) */
 function followState_(f, cfg, nowMs) {
@@ -1162,9 +1372,13 @@ function followState_(f, cfg, nowMs) {
     var end = (i + 1 < log.length) ? toMs_(log[i + 1].at) : nowMs;
     stageDays[b] += businessDays_(toMs_(log[i].at), end);
   }
+  var stp = stepOf_(f, owner);
   var out = { owner:owner, ownerLabel:FOLLOW_LABEL[owner], label:FOLLOW_LABEL[owner], actionable:false,
               waitingDays:0, slaDays:0, level:'ok', slaBreached:false, since:new Date(sinceMs).toISOString(),
-              stageDays:stageDays, estimated:!log.length };
+              stageDays:stageDays, estimated:!log.length,
+              step:stp.step, actor:stp.actor, due:'' };            // v5.0
+  if (stp.handedOff) out.handedOff = true;
+  if (stp.approvalLevel) out.approvalLevel = stp.approvalLevel;
   if (owner === 'DONE') {
     out.label = isSR ? ((f.quoteIds && f.quoteIds.length) || st === 'Quoted' ? 'จัดทำใบเสนอราคาแล้ว' : st === 'Cancelled' ? 'ยกเลิกคำขอ' : 'ปิดงานแล้ว')
                      : (st === 'Won' ? 'ปิดการขายได้' : 'ปิดงาน');
@@ -1173,9 +1387,11 @@ function followState_(f, cfg, nowMs) {
   }
   if (isSR && owner === 'SALES') { out.label = 'ร่างคำขอ — ยังไม่ได้ส่ง'; out.actionable = true; return out; }
   if (isSR && owner === 'SOURCING') out.label = (st === 'Accepted') ? 'Sourcing รับคำขอแล้ว · กำลังจัดทำราคา' : 'รอ Sourcing รับคำขอราคา';
-  if (owner === 'MANAGEMENT' && st === 'Partial Approved') {
-    var miss = REQUIRED_APPROVAL_ROLES.filter(function (r) { return (f.approvalRoles || []).indexOf(r) < 0; });
-    out.label = 'อนุมัติแล้วบางส่วน · รอ ' + miss.join(' / ');
+  if (owner === 'MANAGEMENT') {
+    // v5.0: อนุมัติเรียงลำดับ — บอกระดับที่รออยู่ (ข้อมูลเก่าที่ BD อนุมัติก่อน → ยังรอระดับ 1)
+    var lv = out.approvalLevel || 1, nx = REQUIRED_APPROVAL_ROLES[lv - 1];
+    out.label = 'รอ ' + roleLabel_(nx) + ' อนุมัติ (ระดับ ' + lv + '/' + REQUIRED_APPROVAL_ROLES.length + ')';
+    out.ownerLabel = out.label;
   }
   if (owner === 'RELEASER' && st === 'Pending') out.label = 'รอยืนยันปล่อยราคา (ข้อมูลรุ่นเก่า)';
 
@@ -1193,6 +1409,7 @@ function followState_(f, cfg, nowMs) {
   }
   out.waitingDays = businessDays_(sinceMs, nowMs);
   out.slaDays = cfg.sla[owner] || 0;
+  if (out.slaDays > 0) out.due = addBizDays_(sinceMs, out.slaDays);
   out.slaBreached = out.slaDays > 0 && out.waitingDays > out.slaDays;
   out.level = out.slaBreached ? 'over' : (out.slaDays > 0 && out.waitingDays >= out.slaDays ? 'watch' : 'ok');
   out.actionable = true;                                  // อยู่ในคิวของเจ้าของงานเสมอ
@@ -1219,7 +1436,7 @@ function salesValueTHB_(r, idx) {
 /** follow ของแถวเดียว (ใช้คืนค่าหลังบันทึก) */
 function followForRow_(sh, idx, row) {
   var r = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
-  return followState_(followInfo_(r, idx), followCfg_(), Date.now());
+  return followActors_(followState_(followInfo_(r, idx), followCfg_(), Date.now()), peopleCtx_());
 }
 
 /** defense-in-depth: ล้างคีย์ต้นทุนออกจาก SalesDetail อีกชั้นก่อนส่งออก (เผื่อแถวเก่าที่บันทึกก่อนมี stripCost_) */

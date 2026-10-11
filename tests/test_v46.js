@@ -164,7 +164,7 @@ ok('ไม่มีคำเก่า "ครบกำหนดวันนี�
 // v5.0 (ตั้งใจ): "รอผู้จัดการอนุมัติ" แยกเป็น 2 ระดับ (รอ Sourcing Manager / BD Manager อนุมัติ) ตามขั้นตอนอนุมัติเรียงลำดับ
 ok('ป้ายสถานะตรงกับ server: รอ Sourcing จัดทำราคา / รอ Sourcing Manager · BD Manager อนุมัติ (ระดับ) / รอปล่อยราคา / พร้อมเสนอลูกค้า',
   ['รอ Sourcing จัดทำราคา', 'รอปล่อยราคา', 'พร้อมเสนอลูกค้า'].every(t => fs.readFileSync(DIR + '/Code.gs', 'utf8').includes(t) && idxHtml.includes(t)) &&
-  /อนุมัติ \(ระดับ '/.test(fs.readFileSync(DIR + '/Code.gs', 'utf8')) && /อนุมัติ \(ระดับ '/.test(idxHtml) && ['Sourcing Manager', 'BD Manager'].every(t => idxHtml.includes(t) && salesHtml.includes(t)) &&
+  /' อนุมัติ \(' \+/.test(fs.readFileSync(DIR + '/Code.gs', 'utf8')) && /' อนุมัติ \('\+/.test(idxHtml) &&   /* v5.1: ป้าย "รอ X อนุมัติ (n/2)" */ ['Sourcing Manager', 'BD Manager'].every(t => idxHtml.includes(t) && salesHtml.includes(t)) &&
   !/รอผู้จัดการอนุมัติ/.test(allUi));
 ok('ระดับความเร่งด่วน 3 ระดับใช้คำเดียวกันทั้ง 2 แอป', /th:'เฝ้าระวัง'/.test(idxHtml) && /th:'เฝ้าระวัง'/.test(salesHtml) && /th:'เกินกำหนด'/.test(idxHtml) && /th:'เกินกำหนด'/.test(salesHtml));
 ok('ไม่มี toast ที่โชว์รหัส error ดิบ ๆ แบบ "ไม่สำเร็จ: "+res.error', !/ไม่สำเร็จ: '\+\((res|r|d)\.error/.test(allUi) && !/ไม่สำเร็จ: '\+\(\(d&&d\.error\)/.test(allUi));

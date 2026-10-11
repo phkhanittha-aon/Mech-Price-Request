@@ -38,7 +38,7 @@
  *   ค่าของ v4.9 (LARK_WEBHOOK_*, LARK_APP_ID, LARK_CHAT_*) ไม่ใช้แล้ว — ยกเว้น LARK_WEBHOOK_REQUESTS ใช้แทน Bot A ได้ชั่วคราว
  *************************************************************/
 
-var LARK_VERSION = '5.0';
+var LARK_VERSION = '5.1';
 
 /* ============================================================ 1) EVENT TABLE */
 /**
@@ -57,14 +57,14 @@ var LARK_EVENTS = {
                         when:'Sourcing กดรับคำขอ' },
   SR_CANCELLED:       { bot:'A', th:'ยกเลิกคำขอราคา',                    icon:'🚫', color:'grey',      mention:'pricer',    dedupMin:24 * 60,
                         when:'คำขอถูกยกเลิก' },
-  QT_SUBMITTED:       { bot:'A', th:'ทำราคาเสร็จ · รอ Sourcing Manager อนุมัติ (ระดับ 1)', icon:'📊', color:'orange', mention:'actor', dedupMin:120,
+  QT_SUBMITTED:       { bot:'A', th:'ทำราคาเสร็จ · รออนุมัติ 2 ฝ่าย', icon:'📊', color:'orange', mention:'actor', dedupMin:120,
                         when:'Sourcing กด “บันทึก & ส่งขออนุมัติ”' },
-  QT_LEVEL1_APPROVED: { bot:'A', th:'Sourcing Manager อนุมัติแล้ว · รอ BD Manager (ระดับ 2)', icon:'🏁', color:'purple', mention:'actor', dedupMin:120,
-                        when:'ระดับ 1 อนุมัติ (หรือ GM อนุมัติแทนระดับ 1)' },
-  QT_APPROVED:        { bot:'A', th:'อนุมัติครบ 2 ระดับ · รอปล่อยราคา',    icon:'✅', color:'green',     mention:'actor',     dedupMin:24 * 60,
-                        when:'ระดับ 2 อนุมัติ (หรือ GM อนุมัติแทนครบ)' },
+  QT_PARTIAL_APPROVED:{ bot:'A', th:'อนุมัติแล้ว 1 ฝ่าย · รออีกฝ่าย', icon:'🏁', color:'purple', mention:'actor', dedupMin:120,
+                        when:'Sourcing Manager หรือ BD Manager อนุมัติก่อน (ลำดับไหนก็ได้ · หรือ GM อนุมัติแทน 1 ฝ่าย)' },
+  QT_APPROVED:        { bot:'A', th:'อนุมัติครบ 2 ฝ่าย · รอปล่อยราคา',    icon:'✅', color:'green',     mention:'actor',     dedupMin:24 * 60,
+                        when:'ฝ่ายที่สองอนุมัติ (หรือ GM อนุมัติแทนครบ)' },
   QT_RETURNED:        { bot:'A', th:'ตีกลับแก้ราคา',                     icon:'↩️', color:'red',       mention:'actor',     dedupMin:120,
-                        when:'ผู้อนุมัติส่งกลับให้ Sourcing แก้ (ต้องขออนุมัติใหม่ตั้งแต่ระดับ 1)' },
+                        when:'ผู้อนุมัติส่งกลับให้ Sourcing แก้ (ต้องขออนุมัติใหม่ทั้ง 2 ฝ่าย)' },
   PRICE_RELEASED:     { bot:'A', th:'ปล่อยราคาแล้ว · Sales ดูราคาบนเว็บ',  icon:'🎉', color:'green',     mention:'requester', dedupMin:24 * 60,
                         when:'NON (ผู้ปล่อยราคา) กดปล่อยราคาให้ Sales เจ้าของงาน' },
   SLA_REMINDER:       { bot:'B', th:'งานค้างเกินกำหนด',                   icon:'⏰', color:'yellow',    mention:'actor',     dedupMin:20 * 60,
@@ -165,13 +165,12 @@ function larkLink_(appUrl, doc) {
   var sep = appUrl.indexOf('?') >= 0 ? '&' : '?';
   return doc ? appUrl + sep + 'doc=' + encodeURIComponent(doc) : appUrl;   // ไม่ระบุแอป: ระบบเลือกหน้าให้ตามอีเมลผู้กด
 }
-/** แถบขั้นตอน: ✅ ผ่านแล้ว · 🔶 อยู่ตรงนี้ · ⚪ ยังไม่ถึง */
-function larkStepper_(step) {
-  if (step == null || step < 0) return '';
-  var names = (typeof FLOW_STEPS !== 'undefined') ? FLOW_STEPS : ['ส่งคำขอ', 'Sourcing ทำราคา', 'Sourcing Manager', 'BD Manager', 'ปล่อยราคา', 'ได้ราคาแล้ว'];
-  return names.slice(0, 5).map(function (n, i) {
-    return (i < step || step >= 5 ? '✅' : i === step ? '🔶' : '⚪') + ' ' + n;
-  }).join('  ›  ');
+/** แถบขั้นตอน: ✅ ผ่านแล้ว · 🔶 อยู่ตรงนี้ · ⚪ ยังไม่ถึง — ช่วงอนุมัติ 2 ฝ่ายแสดงรายฝ่าย (คั่นด้วย + เพราะกดก่อนหลังได้) */
+function larkStepper_(step, approvedRoles) {
+  var dots = flowDots_(step, approvedRoles); if (!dots.length) return '';
+  var ic = { done:'✅', now:'🔶', todo:'⚪' };
+  var t = function (i) { return ic[dots[i]] + ' ' + FLOW_STEPS[i]; };
+  return [t(0), t(1), t(2) + ' + ' + t(3), t(4)].join('  ›  ');
 }
 function larkDateTH_(ymd) {
   var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ymd || ''));
@@ -209,7 +208,7 @@ function larkBuild_(event, info, appUrl, opt) {
                 field('ผู้ดำเนินการ', doerText)];
   if (info.due) fields.push(field('ครบกำหนด', larkDateTH_(info.due) + (info.late ? ' · ⛔ ' + larkSafe_(info.late, 60) : '')));
   var elements = [{ tag:'div', fields:fields }];
-  var stp = larkStepper_(info.step);
+  var stp = larkStepper_(info.step, info.approved);
   if (stp) elements.push({ tag:'div', text:{ tag:'lark_md', content:'**ขั้นตอน**\n' + stp } });
   var items = (info.items || []).slice(0, LARK_ITEMS_MAX).map(function (x) { return '• ' + larkSafe_(x, 140); });
   if ((info.items || []).length > LARK_ITEMS_MAX) items.push('… และอีก ' + (info.items.length - LARK_ITEMS_MAX) + ' รายการ');
@@ -259,7 +258,7 @@ function larkInfoFromRow_(r, idx, people, follow) {
     pricer:people.byId[pricerId] ? [pick(people.byId[pricerId])] : [],
     statusLabel:f.label || String(cell_(r, idx, 'Status') || ''), step:f.step, due:f.due || '',
     owner:f.owner || '', level:f.level || 'ok', waitingDays:f.waitingDays, slaDays:f.slaDays,
-    items:items, priced:docType !== 'SR' && f.step >= 2, round:num_(cell_(r, idx, 'Round'), 1)
+    items:items, priced:docType !== 'SR' && f.step >= 2, round:num_(cell_(r, idx, 'Round'), 1), approved:f.approvedRoles || []
   };
 }
 
@@ -341,7 +340,7 @@ function larkOnStatus_(sh, idx, row, prevStatus, newStatus, sess, extra) {
     info.by = sess ? sess.name : '';
     if (ev.mention === 'requester') info.actors = [info.requester];
     if (ev.mention === 'pricer') info.actors = info.pricer;
-    if (event === 'QT_RETURNED') info.note = 'ส่งกลับให้ Sourcing แก้ราคา — ต้องขออนุมัติใหม่ตั้งแต่ระดับ 1';
+    if (event === 'QT_RETURNED') info.note = 'ส่งกลับให้ Sourcing แก้ราคา — ต้องขออนุมัติใหม่ทั้ง 2 ฝ่าย';
     if (event === 'PRICE_RELEASED') info.note = 'Sales เจ้าของงานเปิดดูราคาได้แล้วบนเว็บ (ราคาไม่แสดงในกลุ่ม)';
     if (event === 'SR_FORWARDED') info.note = 'ส่งต่อให้ ' + ((info.actors[0] && info.actors[0].name) || 'ทีม Sourcing');
     return larkEnqueue_(event, info);
@@ -357,7 +356,7 @@ function larkEventFor_(docType, prev, next, forced) {
   var inApproval = function (s) { return s === 'Submitted' || s === 'Partial Approved'; };
   if (docType === 'SR') return next === 'Submitted' ? 'SR_SUBMITTED' : next === 'Accepted' ? 'SR_ACCEPTED' : next === 'Cancelled' ? 'SR_CANCELLED' : null;
   if (next === 'Submitted' && !inApproval(prev)) return 'QT_SUBMITTED';
-  if (prev === 'Submitted' && next === 'Partial Approved') return 'QT_LEVEL1_APPROVED';
+  if (prev === 'Submitted' && next === 'Partial Approved') return 'QT_PARTIAL_APPROVED';
   if (next === 'Approved') return 'QT_APPROVED';
   if (inApproval(prev) && (next === 'In Progress' || next === 'Requested')) return 'QT_RETURNED';
   return null;
@@ -499,7 +498,7 @@ function larkSlaScan_(opts) {
     var key = larkDedupKey_('SLA_REMINDER', info, day);
     if (recent[key]) continue;                                          // เตือนขั้นนี้ของงานนี้ไปแล้ววันนี้
     info.late = 'เกินกำหนด ' + (c.f.waitingDays - c.f.slaDays) + ' วันทำการ';
-    info.note = 'ค้างที่ขั้น “' + (FLOW_STEPS[c.f.step] || c.f.label) + '” มาแล้ว ' + c.f.waitingDays + ' วันทำการ (กำหนด ' + c.f.slaDays + ' วัน)';
+    info.note = 'ค้างที่ขั้น “' + (c.f.owner === 'MANAGEMENT' ? 'อนุมัติ 2 ฝ่าย' : (FLOW_STEPS[c.f.step] || c.f.label)) + '” มาแล้ว ' + c.f.waitingDays + ' วันทำการ (กำหนด ' + c.f.slaDays + ' วัน)';
     items.push({ event:'SLA_REMINDER', info:info, key:key });
   }
   var res = larkEnqueueMany_(items);
@@ -536,7 +535,7 @@ function larkSampleInfo_(me) {
           actors:[{ name:'Napasorn', email:u.email }], statusLabel:'รอ Sourcing รับคำขอราคา', step:1, due:'2026-10-14',
           items:['MOUNTING-RAIL Aluminium rail 4.2 m — 320 pcs', 'MID-CLAMP 35mm — 640 pcs'], priced:false, by:'BOSS' },
     qt: { id:'Q-DEMO', docNo:'QT-IN-2610-007', title:'Thaibev Solar Rooftop 1MW', customer:'Thai Beverage PCL', requester:{ name:'BOSS', email:u.email },
-          actors:[{ name:u.name, email:u.email }], statusLabel:'รอ Sourcing Manager อนุมัติ (ระดับ 1/2)', step:2, due:'2026-10-13',
+          actors:[{ name:u.name, email:u.email }], statusLabel:'รอ Sourcing Manager + BD Manager อนุมัติ (0/2)', step:2, approved:[], due:'2026-10-13',
           items:['SG110CX-P2 Inverter 110 kW — 9 pcs', 'Logger3000 — 1 pcs'], priced:true, round:2, by:'Chatraporn' }
   };
 }
@@ -550,11 +549,11 @@ function larkDryRunDemo() {
   var demo = [
     ['SR_SUBMITTED', s.sr], ['SR_FORWARDED', Object.assign({}, s.sr, { note:'ส่งต่อให้ Napasorn' })], ['SR_ACCEPTED', s.sr],
     ['SR_CANCELLED', Object.assign({}, s.sr, { step:-1, statusLabel:'ยกเลิกคำขอ', due:'' })],
-    ['QT_SUBMITTED', s.qt], ['QT_LEVEL1_APPROVED', Object.assign({}, s.qt, { step:3, statusLabel:'รอ BD Manager อนุมัติ (ระดับ 2/2)' })],
+    ['QT_SUBMITTED', s.qt], ['QT_PARTIAL_APPROVED', Object.assign({}, s.qt, { step:3, approved:['BD Mgr'], statusLabel:'รอ Sourcing Manager อนุมัติ (1/2)' })],
     ['QT_APPROVED', Object.assign({}, s.qt, { step:4, statusLabel:'รอปล่อยราคา' })],
-    ['QT_RETURNED', Object.assign({}, s.qt, { step:1, priced:false, statusLabel:'รอ Sourcing จัดทำราคา', note:'ส่งกลับให้ Sourcing แก้ราคา — ต้องขออนุมัติใหม่ตั้งแต่ระดับ 1' })],
+    ['QT_RETURNED', Object.assign({}, s.qt, { step:1, priced:false, statusLabel:'รอ Sourcing จัดทำราคา', note:'ส่งกลับให้ Sourcing แก้ราคา — ต้องขออนุมัติใหม่ทั้ง 2 ฝ่าย' })],
     ['PRICE_RELEASED', Object.assign({}, s.qt, { step:5, statusLabel:'พร้อมเสนอลูกค้า', due:'', note:'Sales เจ้าของงานเปิดดูราคาได้แล้วบนเว็บ (ราคาไม่แสดงในกลุ่ม)' })],
-    ['SLA_REMINDER', Object.assign({}, s.qt, { late:'เกินกำหนด 2 วันทำการ', note:'ค้างที่ขั้น “Sourcing Manager” มาแล้ว 4 วันทำการ (กำหนด 2 วัน)' })]
+    ['SLA_REMINDER', Object.assign({}, s.qt, { late:'เกินกำหนด 2 วันทำการ', note:'ค้างที่ขั้น “อนุมัติ 2 ฝ่าย” มาแล้ว 4 วันทำการ (กำหนด 2 วัน)' })]
   ];
   demo.forEach(function (d) {
     var m = larkBuild_(d[0], d[1], appUrl), ev = LARK_EVENTS[d[0]];

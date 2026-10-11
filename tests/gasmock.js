@@ -17,6 +17,7 @@ function makeRuntime(codePath) {
     };
   };
   Sheet.prototype.setFrozenRows = function () {};
+  Sheet.prototype.setName = function (n) { this.name = n; };
   Sheet.prototype.deleteRow = function (r) { this.rows.splice(r - 1, 1); };
   Sheet.prototype.deleteRows = function (r, n) { this.rows.splice(r - 1, n); };
   Sheet.prototype.appendRow = function (a) { this.rows.push(a.slice()); };
@@ -26,9 +27,19 @@ function makeRuntime(codePath) {
     return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body) }; };
   const cache = { get: k => (k in cacheStore ? cacheStore[k] : null), put: (k, v) => { cacheStore[k] = String(v); }, remove: k => { delete cacheStore[k]; },
     getAll: ks => { const o = {}; ks.forEach(k => { if (k in cacheStore) o[k] = cacheStore[k]; }); return o; } };
-  const ss = { getSheetByName: n => sheets[n] || null, insertSheet: n => (sheets[n] = new Sheet(n)), getId: () => 'x', toast() {} };
+  const ss = { getSheetByName: n => sheets[n] || null, insertSheet: n => (sheets[n] = new Sheet(n)), getId: () => 'x', getName: () => 'MGS Pricing DB', toast() {} };
+  // v5.1: ไฟล์ Google Sheet อื่น (exportPendingFile / importUploadFile) + DriveApp (สำรองไฟล์) — เก็บในหน่วยความจำ
+  const files = { x: ss }, driveLog = [];
+  const makeSS = (name) => { const id = 'F' + crypto.randomBytes(12).toString('hex'), own = {};
+    const o = { id, name, sheets: own, getId: () => id, getName: () => name, getUrl: () => 'https://docs.google.com/spreadsheets/d/' + id + '/edit',
+      getSheetByName: n => Object.values(own).find(x => x.name === n) || null,
+      insertSheet: n => { const x = new Sheet(n); own[n + '#' + Object.keys(own).length] = x; return x; },
+      getSheets: () => Object.values(own), toast() {} };
+    o.insertSheet('Sheet1'); files[id] = o; return o; };
+  const driveFile = id => ({ getName: () => (files[id] ? files[id].getName() : id), getParents: () => ({ hasNext: () => false }),
+    makeCopy: (name) => { driveLog.push({ op: 'copy', id, name }); return {}; }, moveTo: () => { driveLog.push({ op: 'move', id }); } });
   const ctx = {
-    SpreadsheetApp: { getActive: () => ss, openById: () => ss },
+    SpreadsheetApp: { getActive: () => ss, openById: id => { if (files[id]) return files[id]; throw new Error('Exception: Unexpected error while getting the method or property openById'); }, create: name => makeSS(name) },
     // ล็อกเดียวต่อ execution (เหมือน Apps Script): hasLock บอกว่าถืออยู่แล้วหรือยัง
     LockService: (() => { let held = false; const L = { waitLock() { held = true; }, tryLock() { held = true; return true; }, hasLock() { return held; }, releaseLock() { held = false; } }; return { getScriptLock: () => L }; })(),
     Utilities: { getUuid: () => crypto.randomUUID(),
@@ -56,7 +67,7 @@ function makeRuntime(codePath) {
       XFrameOptionsMode: { ALLOWALL: 'ALLOWALL' },
       createHtmlOutputFromFile: name => { const o = { file: name, setTitle() { return o; }, addMetaTag() { return o; }, setXFrameOptionsMode() { return o; }, getContent: () => '' }; return o; },
       createHtmlOutput: h => { const o = { html: h, setTitle() { return o; } }; return o; } },
-    DriveApp: {}, console, globalThis, Date, JSON, Math, Object, String, Number, Array
+    DriveApp: { getFileById: id => driveFile(id), getRootFolder: () => ({}) }, console, globalThis, Date, JSON, Math, Object, String, Number, Array
   };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(codePath, 'utf8'), ctx);
@@ -64,7 +75,7 @@ function makeRuntime(codePath) {
   const lark = require('path').join(require('path').dirname(codePath), 'Lark.gs');
   if (fs.existsSync(lark) && !globalThis.__NO_LARK) vm.runInContext(fs.readFileSync(lark, 'utf8'), ctx);
   ctx.setup();
-  return { ctx, sheets, props, fetchLog, triggers };
+  return { ctx, sheets, props, fetchLog, triggers, files, driveLog };
 }
 module.exports = { makeRuntime };
 // หมายเหตุ: ไฟล์ในโฟลเดอร์ tests/ ใช้ทดสอบบนเครื่องเท่านั้น — ห้ามคัดลอกขึ้น Apps Script

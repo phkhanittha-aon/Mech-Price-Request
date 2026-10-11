@@ -36,7 +36,7 @@ const flat = o => JSON.stringify(o).replace(/\\n/g, '\n');
 console.log('== 1) ตาราง event / การตั้งค่า ==');
 let W = world();
 const EV = W.ctx.LARK_EVENTS;
-ok('มีครบ 10 event: ทุกขั้นตอนคำขอราคา (9) + เตือนเกินกำหนด (1)', ['SR_SUBMITTED', 'SR_FORWARDED', 'SR_ACCEPTED', 'SR_CANCELLED', 'QT_SUBMITTED', 'QT_LEVEL1_APPROVED', 'QT_APPROVED', 'QT_RETURNED', 'PRICE_RELEASED', 'SLA_REMINDER'].every(k => EV[k]) && Object.keys(EV).length === 10);
+ok('มีครบ 10 event: ทุกขั้นตอนคำขอราคา (9) + เตือนเกินกำหนด (1)', ['SR_SUBMITTED', 'SR_FORWARDED', 'SR_ACCEPTED', 'SR_CANCELLED', 'QT_SUBMITTED', 'QT_PARTIAL_APPROVED', 'QT_APPROVED', 'QT_RETURNED', 'PRICE_RELEASED', 'SLA_REMINDER'].every(k => EV[k]) && Object.keys(EV).length === 10);
 ok('ทุก event ระบุ บอท / ข้อความ / เมื่อไร / ใครถูกแท็ก / กันซ้ำกี่นาที / สี', Object.values(EV).every(e => e.th && e.when && (e.bot === 'A' || e.bot === 'B') && ['actor', 'requester', 'pricer'].includes(e.mention) && e.dedupMin > 0 && e.color));
 ok('ไม่มีแจ้งเตือน follow-up ของ Sales / สรุปประจำวัน (v5.0 ตามที่ผู้ใช้กำหนด)', !EV.DAILY_DIGEST && !Object.keys(EV).some(k => /FOLLOW|DIGEST/.test(k)) && W.ctx.larkDailyDigest().disabled === true);
 ok('Bot B (เตือน) ใช้กับงานเกินกำหนดเท่านั้น', Object.entries(EV).filter(([, e]) => e.bot === 'B').map(([k]) => k).join() === 'SLA_REMINDER');
@@ -79,22 +79,23 @@ ok('Sourcing รับงาน (Chatraporn รับแทน) → SR_ACCEPTED 
 r = W.saveQT('Q1', 'In Progress'); ok('QT กำลังทำราคา → ไม่แจ้ง', r.ok && !W.Q().some(x => x.DocId === 'Q1'));
 W.saveQT('Q1', 'Submitted'); q = W.Q();
 const sub = q.find(x => x.Event === 'QT_SUBMITTED');
-ok('ส่งขออนุมัติ → QT_SUBMITTED แท็ก Sourcing Manager (ระดับ 1) เท่านั้น', sub && /<at email=pm@m\.co>/.test(sub.Payload) && !/<at email=bd@m\.co>/.test(sub.Payload) && /ระดับ 1/.test(sub.Title), sub && W.card(sub).text);
+// v5.1 (ตั้งใจ): อนุมัติก่อนหลังได้ → การ์ดรออนุมัติแท็กทั้ง 2 ฝ่ายพร้อมกัน (เดิมแท็กเฉพาะระดับ 1)
+ok('ส่งขออนุมัติ → QT_SUBMITTED แท็กทั้ง Sourcing Manager และ BD Manager', sub && /<at email=pm@m\.co>/.test(sub.Payload) && /<at email=bd@m\.co>/.test(sub.Payload) && /2 ฝ่าย/.test(sub.Title), sub && W.card(sub).text);
 ok('มีราคาแล้ว → "💰 มีราคาแล้ว — ดูราคาบนเว็บ" (ไม่มีตัวเลข)', /มีราคาแล้ว/.test(W.card(sub).text));
-r = W.post({ token: W.T.bd, action: 'approve', id: 'Q1' });
-ok('BD Manager กดก่อนระดับ 1 → ไม่ได้ (WAIT_PREVIOUS_LEVEL) และไม่มีการ์ด', !r.ok && r.error === 'WAIT_PREVIOUS_LEVEL' && !W.Q().some(x => x.Event === 'QT_LEVEL1_APPROVED'), r);
-r = W.post({ token: W.T.pm, action: 'approve', id: 'Q1' }); q = W.Q();
-const l1 = q.find(x => x.Event === 'QT_LEVEL1_APPROVED');
-ok('ระดับ 1 อนุมัติ → QT_LEVEL1_APPROVED แท็ก BD Manager', r.ok && r.status === 'Partial Approved' && l1 && /<at email=bd@m\.co>/.test(l1.Payload) && /🔶 BD Manager/.test(W.card(l1).text), l1 && W.card(l1).text);
+// v5.1 (ตั้งใจ): BD กดก่อน Sourcing Manager ได้ (เดิม v5.0 → WAIT_PREVIOUS_LEVEL)
 r = W.post({ token: W.T.bd, action: 'approve', id: 'Q1' }); q = W.Q();
+const l1 = q.find(x => x.Event === 'QT_PARTIAL_APPROVED');
+ok('BD Manager อนุมัติก่อน → QT_PARTIAL_APPROVED แท็ก Sourcing Manager (ฝ่ายที่ยังขาด) · แถบขั้นตอน ✅ BD Manager / 🔶 Sourcing Manager', r.ok && r.status === 'Partial Approved' && l1 && /<at email=pm@m\.co>/.test(l1.Payload) && !/<at email=bd@m\.co>/.test(l1.Payload) &&
+  /🔶 Sourcing Manager \+ ✅ BD Manager/.test(W.card(l1).text), l1 && W.card(l1).text);
+r = W.post({ token: W.T.pm, action: 'approve', id: 'Q1' }); q = W.Q();
 const ap = q.find(x => x.Event === 'QT_APPROVED');
-ok('ระดับ 2 อนุมัติ → QT_APPROVED แท็กผู้ปล่อยราคา (NON)', r.ok && r.status === 'Approved' && ap && /<at email=sales_non@m\.co>/.test(ap.Payload) && q.filter(x => x.Event === 'QT_APPROVED').length === 1, ap && W.card(ap).text);
+ok('ฝ่ายที่สองอนุมัติ → QT_APPROVED แท็กผู้ปล่อยราคา (NON)', r.ok && r.status === 'Approved' && ap && /<at email=sales_non@m\.co>/.test(ap.Payload) && q.filter(x => x.Event === 'QT_APPROVED').length === 1, ap && W.card(ap).text);
 r = W.post({ token: W.T.gm, action: 'release', id: 'Q1' }); q = W.Q();
 const rel = q.find(x => x.Event === 'PRICE_RELEASED');
 ok('ปล่อยราคา → PRICE_RELEASED แท็ก Sales ผู้ขอ + บอกให้ดูราคาบนเว็บ', r.ok && rel && /<at email=boss@m\.co>/.test(rel.Payload) && /ดูราคาได้แล้วบนเว็บ/.test(W.card(rel).text) && /✅ ปล่อยราคา/.test(W.card(rel).text), rel && W.card(rel).text);
 W.saveQT('Q2', 'Submitted'); W.saveQT('Q2', 'In Progress'); q = W.Q();
 const ret = q.find(x => x.Event === 'QT_RETURNED');
-ok('ส่งกลับแก้ (Submitted → In Progress) → QT_RETURNED แท็ก Sourcing ผู้ทำราคา', ret && /<at email=src@m\.co>/.test(ret.Payload) && /ตั้งแต่ระดับ 1/.test(W.card(ret).text), ret && W.card(ret).text);
+ok('ส่งกลับแก้ (Submitted → In Progress) → QT_RETURNED แท็ก Sourcing ผู้ทำราคา', ret && /<at email=src@m\.co>/.test(ret.Payload) && /ทั้ง 2 ฝ่าย/.test(W.card(ret).text), ret && W.card(ret).text);
 W.saveQT('Q2', 'Submitted');
 ok('ส่งขออนุมัติซ้ำภายใน 2 ชม. (รอบเดิม) → ไม่ส่งซ้ำ', W.Q().filter(x => x.Event === 'QT_SUBMITTED' && x.DocId === 'Q2').length === 1);
 W.saveQT('Q2', 'In Progress', { round: 2 }); W.saveQT('Q2', 'Submitted', { round: 2 });
@@ -193,7 +194,7 @@ const s1 = W.ctx.larkSlaScan({ nowMs: morning }); q = W.Q().filter(x => x.Event 
 ok('งานเกินกำหนด 2 งาน (รออนุมัติ) → การ์ดเตือนงานละ 1 ใบ เข้า Bot B', s1.reminded === 2 && q.length === 2 && q.every(x => x.Target === 'REMINDER'), [s1, q.map(x => x.Title)]);
 ok('เรียงเกินกำหนดนานสุดก่อน (S1 ก่อน S2)', q[0].DocId === 'S1' && q[1].DocId === 'S2');
 const rc = W.card(q[0]);
-ok('การ์ดเตือน: หัวเหลือง · แท็ก Sourcing Manager · บอกขั้นที่ค้าง + เกินกำหนดกี่วัน + วันครบกำหนด', rc.card.header.template === 'yellow' && /<at email=pm@m\.co>/.test(q[0].Payload) && /ค้างที่ขั้น “Sourcing Manager”/.test(rc.text) && /เกินกำหนด \d+ วันทำการ/.test(rc.text) && /ครบกำหนด \d\d\/\d\d\/\d{4}/.test(rc.text), rc.text);
+ok('การ์ดเตือน: หัวเหลือง · แท็ก Sourcing Manager · บอกขั้นที่ค้าง + เกินกำหนดกี่วัน + วันครบกำหนด', rc.card.header.template === 'yellow' && /<at email=pm@m\.co>/.test(q[0].Payload) && /ค้างที่ขั้น “อนุมัติ 2 ฝ่าย”/.test(rc.text) && /เกินกำหนด \d+ วันทำการ/.test(rc.text) && /ครบกำหนด \d\d\/\d\d\/\d{4}/.test(rc.text), rc.text);
 ok('งานที่ยังไม่เกิน (S3) และงานติดตามลูกค้าของ Sales (S4) ไม่ถูกเตือน', !q.some(x => x.DocId === 'S3' || x.DocId === 'S4'));
 W.ctx.larkSlaScan({ nowMs: morning + 3600000 });
 ok('ชั่วโมงถัดไปวันเดียวกัน → ไม่เตือนงานเดิมซ้ำ', W.Q().filter(x => x.Event === 'SLA_REMINDER').length === 2);

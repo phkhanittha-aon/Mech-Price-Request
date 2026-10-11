@@ -38,8 +38,8 @@ const appShown = p => p.evaluate(() => !document.getElementById('app').classList
   console.log('== Index: เส้นทาง Google ==');
   let p = await open(b, '/', 'bd@mglobalsourcing.net');
   ok('BD Mgr เปิดหน้า → เข้าระบบอัตโนมัติด้วยอีเมล Google (ไม่ต้องกรอก)', await appShown(p) && await p.evaluate(() => CURRENT && CURRENT.id === 'bd'));
-  // v5.0 (ตั้งใจ): อนุมัติเรียงลำดับ — ใบที่ยังรอระดับ 1 ไม่นับเป็น "รอคุณ" ของ BD แต่อยู่ในกลุ่ม "อยู่ระหว่างอนุมัติ"
-  ok('หน้าแรกของผู้อนุมัติ = รออนุมัติ (BD: ใบยังรอระดับ 1 → อยู่ระหว่างอนุมัติ)', await p.evaluate(() => route) === 'approvals' && (await p.textContent('#content')).includes('รอคุณอนุมัติ (0)') && (await p.textContent('#content')).includes('อยู่ระหว่างอนุมัติ (1)'));
+  // v5.1: อนุมัติก่อนหลังได้ → กลับเป็นค่าเดิมของ v4.x (BD เห็นใบที่รอตัวเอง 1 ใบ)
+  ok('หน้าแรกของผู้อนุมัติ = รออนุมัติ', await p.evaluate(() => route) === 'approvals' && (await p.textContent('#content')).includes('รอคุณอนุมัติ (1)'));
   await p.screenshot({ path: OUT + '/p2_approvals_home.png' });
   // role เปลี่ยนกลางทาง
   urow('bd')[col('Role')] = 'Sourcing';

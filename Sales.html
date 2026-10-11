@@ -132,6 +132,7 @@ main{max-width:1180px;margin:0 auto;padding:18px 16px 96px}
 .flow-steps li::before{content:'';position:absolute;top:12px;left:-50%;right:50%;height:2px;background:var(--line-2)}
 .flow-steps li:first-child::before{display:none}
 .flow-steps li.done::before,.flow-steps li.now::before{background:var(--green)}
+.flow-steps li.pair::before{height:0;background:none;border-top:2px dashed var(--line-2)}   /* อนุมัติ 2 ฝ่ายพร้อมกัน (ก่อนหลังได้) */
 .flow-steps .dot{position:relative;z-index:1;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;font-weight:700;background:var(--surface);border:2px solid var(--line-2);color:var(--muted)}
 .flow-steps li.done .dot{background:var(--green);border-color:var(--green);color:#fff}
 .flow-steps li.now .dot{background:var(--orange);border-color:var(--orange);color:#fff;box-shadow:0 0 0 4px var(--orange-soft)}
@@ -277,8 +278,8 @@ table.pt .r{text-align:right}
        Sourcing / Manager (GM, Admin, Procurement Mgr, BD Mgr) → เห็นทุกคน + ขอราคาแทน Sales ได้
    - แอปนี้ไม่เคยได้รับต้นทุน / %GP รายบรรทัด (server ส่งเฉพาะ SalesDetail)
    ============================================================ */
-const APP_VERSION='5.0';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Index.html
-const BUILD='2026-10-10 · Sales build 5.0 · ติดตามสถานะคำขอราคา';
+const APP_VERSION='5.1';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Index.html
+const BUILD='2026-10-11 · Sales build 5.1 · ติดตามสถานะคำขอราคา';
 const CLOUD_URL='https://script.google.com/macros/s/AKfycby6ZckOc1mv5eI8PDzcgscWCBqYyOWCgXTohIaqczJuIbKIQ597C8zQ_frMHpZhLHZV/exec';
 const HASH_SALT='mgs-internal-2025';                 // ต้องตรงกับ Index.html
 const TIMEOUT_MS=15000, POLL_MS=30000, OVERLAP_MS=90000;
@@ -292,7 +293,9 @@ const ERR_TH={ACCESS_DENIED:'บัญชีของคุณไม่มีส
   NOT_APPROVED:'ใบนี้ไม่ได้อยู่ในสถานะอนุมัติแล้ว (มีคนเปลี่ยนสถานะไปก่อน) — ดูสถานะล่าสุดบนหน้านี้',
   NO_SALES_COPY:'ใบนี้ยังไม่มีราคาฉบับ Sales — แจ้ง Sourcing ให้เปิดใบแล้วกดบันทึกอีกครั้ง',
   SR_LOCKED:'คำขอนี้ถูก Sourcing รับงานไปแล้ว แก้ไข/ลบไม่ได้ — ถ้าต้องเปลี่ยน ให้แจ้ง Sourcing',
-  BAD_VALUE:'ค่าที่พิมพ์ใช้ไม่ได้ — ตรวจตัวสะกดแล้วลองใหม่',NOT_FOUND:'ไม่พบรายการนี้แล้ว (อาจถูกลบ) — กดรีเฟรช'};
+  BAD_VALUE:'ค่าที่พิมพ์ใช้ไม่ได้ — ตรวจตัวสะกดแล้วลองใหม่',NOT_FOUND:'ไม่พบรายการนี้แล้ว (อาจถูกลบ) — กดรีเฟรช',
+  DATA_RESET:'คำขอนี้ถูกล้างออกจากระบบแล้ว (ผู้ดูแลล้างข้อมูลชุดใหม่) — กดขอราคาใหม่แทน'
+};
 function errText(res){
   const code=res&&(res.error||res.code);
   if(code&&ERR_TH[code])return ERR_TH[code];
@@ -534,7 +537,7 @@ function addRow(row){
 async function loadAll(){
   const d=await apiGet('salesview');
   if(!d||!d.ok){toast('โหลดข้อมูลไม่สำเร็จ — '+errText(d),'bad');return false}
-  S.rows={};(d.quotations||[]).forEach(addRow);S.serverTime=d.serverTime||'';setLive();
+  S.rows={};(d.quotations||[]).forEach(addRow);S.serverTime=d.serverTime||'';S.epoch=d.dataEpoch||'';setLive();
   return true;
 }
 /* Live: ดึงเฉพาะงานที่เปลี่ยนทุก 30 วินาที — เห็นสถานะใหม่ (เช่น ปล่อยราคาแล้ว) โดยไม่ต้องรีเฟรช */
@@ -546,6 +549,8 @@ async function poll(force){
     const d=since?await apiGet('salesview',since):null;
     if(!d){if(!since)await loadAll();return}
     if(!d.ok)return;
+    if((d.dataEpoch||'')!==(S.epoch||'')){            // v5.1: ผู้ดูแลล้างข้อมูลชุดใหม่ → โหลดใหม่ทั้งชุด (งานที่ถูกล้างหายจากจอ)
+      await loadAll();closeModal();toast('ผู้ดูแลระบบล้างข้อมูลชุดใหม่แล้ว — แสดงข้อมูลล่าสุด','good');render();return}
     const moved=[];let changed=0;
     (d.quotations||[]).forEach(row=>{
       const old=S.rows[row.id];
@@ -593,7 +598,7 @@ function fallbackFollow(r){
   else owner='DONE';
   const step=isSR(r)?(owner==='SALES'?0:owner==='SOURCING'?1:st==='Cancelled'?-1:2)
     :owner==='SOURCING'?1:st==='Submitted'?2:st==='Partial Approved'?3:owner==='RELEASER'?4:5;
-  return {owner,step,label:{SOURCING:'รอ Sourcing จัดทำราคา',MANAGEMENT:st==='Partial Approved'?'รอ BD Manager อนุมัติ (ระดับ 2/2)':'รอ Sourcing Manager อนุมัติ (ระดับ 1/2)',RELEASER:'รอปล่อยราคา',SALES:'พร้อมเสนอลูกค้า',DONE:'ปิดงานแล้ว'}[owner],actionable:false,waitingDays:null,level:'ok'};
+  return {owner,step,label:{SOURCING:'รอ Sourcing จัดทำราคา',MANAGEMENT:st==='Partial Approved'?'อนุมัติแล้ว 1 ฝ่าย · รออีกฝ่าย':'รอ Sourcing Manager + BD Manager อนุมัติ (0/2)',RELEASER:'รอปล่อยราคา',SALES:'พร้อมเสนอลูกค้า',DONE:'ปิดงานแล้ว'}[owner],actionable:false,waitingDays:null,level:'ok'};
 }
 const fol=r=>r.follow||fallbackFollow(r);
 const OWNER_SHORT={SOURCING:'Sourcing',MANAGEMENT:'ผู้อนุมัติ',RELEASER:'ผู้ปล่อยราคา',REPAIR:'Sourcing',SALES:'คุณ',DONE:''};
@@ -623,12 +628,24 @@ function flowSrc(r){
   }
   return r;
 }
+/* สถานะของ 5 จุด — กติกาเดียวกับ flowDots_ ใน Code.gs: ช่วงอนุมัติ 2 ฝ่ายดูรายฝ่าย (กดก่อนหลังได้) */
+const APPROVER_ROLES=['Procurement Mgr','BD Mgr'];
+function flowDots(step,approved){
+  if(step==null||step<0)return [];
+  const ap=approved||[];
+  return [0,1,2,3,4].map(i=>{
+    if(step>=5)return 'done';
+    if(i===2||i===3)return step>=4?'done':step>=2?(ap.indexOf(APPROVER_ROLES[i-2])>=0?'done':'now'):'todo';
+    return i<step?'done':i===step?'now':'todo';
+  });
+}
 function stepOf(r){const f=fol(r);return typeof f.step==='number'?f.step:fallbackFollow(r).step}
 function stepperHTML(r,compact){
   const src=flowSrc(r),f=fol(src),step=stepOf(src);
   if(step==null||step<0)return '';
-  const li=FLOW_STEPS.slice(0,5).map((n,i)=>{const st=(i<step||step>=5)?'done':i===step?'now':'todo';
-    return `<li class="${st}"><span class="dot">${st==='done'?'✓':i+1}</span><span class="nm">${esc(n)}</span></li>`}).join('');
+  const dots=flowDots(step,f.approvedRoles);
+  const li=FLOW_STEPS.slice(0,5).map((n,i)=>{const st=dots[i];
+    return `<li class="${st}${i===3?' pair':''}"><span class="dot">${st==='done'?'✓':i+1}</span><span class="nm">${esc(n)}</span></li>`}).join('');
   const head=src!==r?`<div class="hint" style="margin-bottom:6px">ทำเป็นใบเสนอราคา <b>${esc(src.docNo||'')}</b> แล้ว — ความคืบหน้าของใบนั้น</div>`:'';
   return `<div class="flow ${compact?'compact':''}">${compact?'':head}<ol class="flow-steps" aria-label="ขั้นตอนคำขอราคา">${li}</ol>${compact?'':whoLine(src)}</div>`;
 }

@@ -1,4 +1,4 @@
-// v5.0 — หน้าจอจริง: แถบขั้นตอน (มือถือ) · อนุมัติ 2 ระดับ · GM อนุมัติแทน · คำขอส่งถึง Sourcing ตามกลุ่มสินค้า
+// v5.0/5.1 — หน้าจอจริง: แถบขั้นตอน (มือถือ) · อนุมัติ 2 ฝ่าย (ก่อนหลังได้) · GM อนุมัติแทน · คำขอส่งถึง Sourcing ตามกลุ่มสินค้า
 // รัน: NODE_PATH=$(npm root -g) node tests/e2e_v50.js $PWD [out-dir]   (ทดสอบบนเครื่องเท่านั้น ห้าม deploy)
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), crypto = require('crypto');
@@ -18,7 +18,7 @@ const hd = { title: 'Factory Rooftop', customer: 'CP Group', salesUserId: 'boss'
 const qt = (id, status, roles) => post({ token: T.src, action: 'save', id, docType: 'QT', docNo: 'QT-IN-' + id, status, salesUserId: 'boss', assignedTo: 'src', title: 'Rooftop ' + id, customer: 'CP Group', total: 270000, gp: 20,
   detail: JSON.stringify({ id, _v: 2, _pm: 2, _sv: 3, docType: 'QT', docNo: 'QT-IN-' + id, status, approvalRoles: roles || [], approvals: [], releasedTo: [], header: Object.assign({}, hd, { title: 'Rooftop ' + id }), lines: [{ code: 'SG110CX', desc: 'Inverter', qty: 2, up: 3000, costCur: 'THB', opPct: 20 }], remarks: [], auditLogs: [] }),
   salesDetail: JSON.stringify({ id, status, header: hd, lines: [{ code: 'SG', desc: 'Inv', qty: 2, uom: 'pcs', unitPrice: 135000, amount: 270000 }], total: 270000 }) });
-qt('A1', 'Submitted'); qt('A2', 'Submitted'); post({ token: T.pm, action: 'approve', id: 'A2' });
+qt('A1', 'Submitted'); qt('A2', 'Submitted'); qt('A3', 'Submitted'); post({ token: T.pm, action: 'approve', id: 'A2' });
 const files = { '/': fs.readFileSync(DIR + '/Index.html', 'utf8'), '/sales': fs.readFileSync(DIR + '/Sales.html', 'utf8') };
 const srv = http.createServer((q, r) => { r.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); r.end(files[q.url.split('?')[0].split('#')[0]] || files['/']); }).listen(0);
 const BASE = 'http://localhost:' + srv.address().port;
@@ -56,26 +56,31 @@ const shot = async (p, n) => { if (OUT) await p.screenshot({ path: OUT + '/v50_'
   ok('รายละเอียดบนมือถือไม่ล้นจอ', await noHScroll(sp));
   await shot(sp, 'sales_phone_detail');
 
-  console.log('== ระบบทำราคา: อนุมัติ 2 ระดับ (มือถือ 375px) ==');
+  console.log('== ระบบทำราคา: อนุมัติ 2 ฝ่าย ก่อนหลังได้ (มือถือ 375px) ==');
+  // v5.1 (ตั้งใจ): BD กดก่อน Sourcing Manager ได้ — เดิม v5.0 ใบที่ยังรอระดับ 1 ไม่มีปุ่มให้ BD
   const bd = await loginIndex(b, 'bd', PHONE);
   let txt = await bd.textContent('#content');
-  ok('BD: หน้ารออนุมัติ — A2 (ผ่านระดับ 1 แล้ว) อยู่ใน "รอคุณ" · A1 (ยังรอระดับ 1) อยู่ใน "อยู่ระหว่างอนุมัติ" ไม่มีปุ่ม', /รอคุณอนุมัติ \(1\)/.test(txt) && /อยู่ระหว่างอนุมัติ \(1\)/.test(txt) &&
-    await bd.locator('.acard', { hasText: 'QT-IN-A1' }).locator('button').count() === 0, txt.slice(0, 300));
+  ok('BD: ทุกใบที่ BD ยังไม่อนุมัติอยู่ใน "รอคุณ" (3) — รวมใบที่ Sourcing Manager ยังไม่กด', /รอคุณอนุมัติ \(3\)/.test(txt) &&
+    await bd.locator('.acard', { hasText: 'QT-IN-A1' }).locator('button:has-text("อนุมัติ (BD Manager)")').count() === 1, txt.slice(0, 300));
   ok('มือถือ: การ์ดอนุมัติไม่ล้นจอ · ปุ่มเต็มความกว้าง', await noHScroll(bd) && await bd.locator('.acard', { hasText: 'QT-IN-A2' }).locator('.ac-acts .btn').evaluate(e => e.getBoundingClientRect().width > 200));
   await shot(bd, 'index_phone_approvals');
-  await bd.locator('.acard', { hasText: 'QT-IN-A2' }).locator('button:has-text("อนุมัติ ระดับ 2")').click(); await bd.waitForTimeout(900);
-  ok('BD กดอนุมัติระดับ 2 → Approved (server)', String(sheets['Quotations'].rows.find(r => r[0] === 'A2')[uh.length ? sheets['Quotations'].rows[0].indexOf('Status') : 0]) === 'Approved');
+  await bd.locator('.acard', { hasText: 'QT-IN-A2' }).locator('button:has-text("อนุมัติ (BD Manager)")').click(); await bd.waitForTimeout(900);
+  const stOf = id => String(sheets['Quotations'].rows.find(r => r[0] === id)[sheets['Quotations'].rows[0].indexOf('Status')]);
+  ok('A2 (Sourcing Manager อนุมัติแล้ว) → BD กด → Approved (server)', stOf('A2') === 'Approved');
   await bd.evaluate(() => openQuote('A1')); await bd.waitForTimeout(600);
+  await bd.locator('button:has-text("อนุมัติ (BD Manager)")').first().click(); await bd.waitForTimeout(900);
   txt = await bd.textContent('#content');
-  ok('BD เปิด A1: ไม่มีปุ่มอนุมัติ · บอกว่ารอ Sourcing Manager (ระดับ 1) ก่อน · มีแถบขั้นตอน', !(await bd.locator('button:has-text("อนุมัติ ระดับ")').count()) && /รอ Sourcing Manager \(ระดับ 1\) ก่อน/.test(txt) && await bd.locator('.flow-steps li.now').count() === 1, txt.slice(0, 300));
+  ok('A1: BD กดก่อน Sourcing Manager → Partial Approved · ป้าย "✓ BD Manager อนุมัติแล้ว" + "⏳ รอ Sourcing Manager"', stOf('A1') === 'Partial Approved' && /✓ BD Manager อนุมัติแล้ว/.test(txt) && /⏳ รอ Sourcing Manager/.test(txt), txt.slice(0, 400));
+  ok('แถบขั้นตอน: จุด BD Manager เขียว · จุด Sourcing Manager กำลังรอ', await bd.evaluate(() => { const li = document.querySelectorAll('.flow-steps li'); return li[3].classList.contains('done') && li[2].classList.contains('now'); }));
+  ok('BD ไม่มีปุ่มอนุมัติซ้ำ', !(await bd.locator('button:has-text("อนุมัติ (BD Manager)")').count()));
 
   console.log('== GM อนุมัติแทน ==');
   const gm = await loginIndex(b, 'gm');
-  await gm.evaluate(() => openQuote('A1')); await gm.waitForTimeout(600);
-  ok('GM เห็นปุ่ม "อนุมัติแทน ระดับ 1" และ "แทนทั้ง 2 ระดับ"', await gm.locator('button:has-text("อนุมัติแทน ระดับ 1")').count() === 1 && await gm.locator('button:has-text("แทนทั้ง 2 ระดับ")').count() === 1);
-  await gm.locator('button:has-text("แทนทั้ง 2 ระดับ")').click(); await gm.waitForTimeout(900);
-  const dA1 = JSON.parse(sheets['Quotations'].rows.find(r => r[0] === 'A1')[sheets['Quotations'].rows[0].indexOf('Detail')]);
-  ok('GM แทนทั้ง 2 ระดับ → Approved · ประวัติ 2 บรรทัด "อนุมัติแทน"', dA1.status === 'Approved' && dA1.approvals.length === 2 && dA1.approvals.every(a => a.onBehalfOf), dA1.approvals);
+  await gm.evaluate(() => openQuote('A3')); await gm.waitForTimeout(600);
+  ok('GM เห็นปุ่ม "อนุมัติแทน Sourcing Manager" และ "แทนทั้ง 2 ฝ่าย"', await gm.locator('button:has-text("อนุมัติแทน Sourcing Manager")').count() === 1 && await gm.locator('button:has-text("แทนทั้ง 2 ฝ่าย")').count() === 1);
+  await gm.locator('button:has-text("แทนทั้ง 2 ฝ่าย")').click(); await gm.waitForTimeout(900);
+  const dA3 = JSON.parse(sheets['Quotations'].rows.find(r => r[0] === 'A3')[sheets['Quotations'].rows[0].indexOf('Detail')]);
+  ok('GM แทนทั้ง 2 ฝ่าย → Approved · ประวัติ 2 บรรทัด "อนุมัติแทน"', dA3.status === 'Approved' && dA3.approvals.length === 2 && dA3.approvals.every(a => a.onBehalfOf), dA3.approvals);
 
   console.log('== คิวคำขอราคาของ Sourcing ==');
   const s2 = await loginIndex(b, 'src2');
@@ -98,6 +103,20 @@ const shot = async (p, n) => { if (OUT) await p.screenshot({ path: OUT + '/v50_'
   ok('หน้า ⚙️ ตั้งค่า: ตาราง "คำขอราคาส่งถึงใคร" · Mounting → Napasorn · Inverter → Chatraporn', /คำขอราคาส่งถึงใคร/.test(txt) &&
     await pm.evaluate(() => autoRouteOf('Mounting').name === 'Napasorn' && autoRouteOf('Inverter').name === 'Chatraporn'), txt.slice(0, 200));
   ok('ชื่อที่แสดง: Sourcing Manager (role Procurement Mgr)', await pm.evaluate(() => roleTH(CURRENT.role) === 'Sourcing Manager'));
+  console.log('== v5.1 ล้างข้อมูลเหลือ Pending: เครื่องที่เปิดค้างอยู่ ==');
+  post({ token: tok('gm'), action: 'release', id: 'A2' });                       // A2 → Pending (ใบเดียวที่จะเหลือ)
+  await bd.evaluate(() => { pollChanges(true); }); await bd.waitForTimeout(800);
+  await bd.evaluate(() => setQueue([{ payload: { action: 'save', id: 'A1', docType: 'QT', status: 'Approved', baseUpdatedAt: '2026-01-01T00:00:00.000Z', detail: JSON.stringify({ id: 'A1', docType: 'QT', status: 'Approved', header: {}, lines: [] }) }, at: Date.now(), tries: 0 }]));
+  const nBefore = await bd.evaluate(() => QUOTES.length);
+  const ex = ctx.exportPendingFile(), im = ctx.importUploadFile(ex.url, 'CLEAR_AND_IMPORT');
+  ok('ผู้ดูแลล้างข้อมูล (เหลือ A2 Pending ใบเดียว)', im.done && im.qt === 1 && sheets['Quotations'].rows.length === 2, im);
+  await bd.evaluate(() => { _lastPollAt = 0; return pollChanges(true); }); await bd.waitForTimeout(1500);
+  const after = await bd.evaluate(() => ({ ids: QUOTES.map(q => q.id), q: getQueue().length, ep: LS.get('dataEpoch', ''), bk: JSON.parse(localStorage.getItem('mgs_quotes_backup') || 'null') }));
+  ok('ระบบทำราคา: เครื่องที่เปิดค้าง → ล้างสำเนาในเครื่อง เหลือ A2 · คิวค้างถูกล้าง · จำ epoch ใหม่', after.ids.join() === 'A2' && after.q === 0 && after.ep === im.dataEpoch, after.ids);
+  ok('…สำรองสำเนาเดิมไว้ที่ mgs_quotes_backup (ใบเดิม ' + nBefore + ' ใบ + คิวที่ยังไม่ส่ง)', after.bk && after.bk.quotes.length === nBefore && after.bk.syncQueue.length === 1 && after.bk.toEpoch === im.dataEpoch);
+  ok('…ใบที่ถูกล้างไม่ถูกส่งกลับขึ้นชีท', !sheets['Quotations'].rows.some(r => r[0] === 'A1'));
+  await sp.evaluate(() => poll(true)); await sp.waitForTimeout(1200);
+  ok('แอป Sales: โหลดใหม่ทั้งชุด — คำขอ/ใบที่ถูกล้างหายจากจอ เหลือ A2', await sp.evaluate(() => Object.keys(S.rows).join()) === 'A2' && /QT-IN-A2/.test(await sp.textContent('body')) && !/Carport โรงงาน/.test(await sp.textContent('body')));
   await b.close(); srv.close();
   console.log(fails ? '\n' + fails + ' FAILED' : '\nALL v5.0 E2E PASSED'); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

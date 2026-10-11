@@ -278,11 +278,11 @@ table.pt .r{text-align:right}
        Sourcing / Manager (GM, Admin, Procurement Mgr, BD Mgr) → เห็นทุกคน + ขอราคาแทน Sales ได้
    - แอปนี้ไม่เคยได้รับต้นทุน / %GP รายบรรทัด (server ส่งเฉพาะ SalesDetail)
    ============================================================ */
-const APP_VERSION='5.4';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Index.html
-const BUILD='2026-10-11 · Sales build 5.4 · ติดตามสถานะคำขอราคา';
+const APP_VERSION='5.5';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Index.html
+const BUILD='2026-10-11 · Sales build 5.5 · ติดตามสถานะคำขอราคา';
 const CLOUD_URL='https://script.google.com/macros/s/AKfycby6ZckOc1mv5eI8PDzcgscWCBqYyOWCgXTohIaqczJuIbKIQ597C8zQ_frMHpZhLHZV/exec';
 const HASH_SALT='mgs-internal-2025';                 // ต้องตรงกับ Index.html
-const TIMEOUT_MS=15000, POLL_MS=30000, OVERLAP_MS=90000;
+const TIMEOUT_MS=15000, POLL_MS=30000, OVERLAP_MS=90000, FULL_TIMEOUT_MS=60000;   // v5.5: โหลดทั้งชุดรอได้นานขึ้น (เดิม 15 วิ หมดเวลาแล้วจอว่าง)
 /* v4.6: เกณฑ์ทั้งหมดของแอปนี้อยู่ที่นี่ — วัน SLA / ระดับเร่งด่วนคำนวณที่ server (FOLLOW_CFG ใน Code.gs) */
 const LEVEL={over:{th:'เกินกำหนด',icon:'⛔'},watch:{th:'เฝ้าระวัง',icon:'⚠'}};
 const GP_TH={good:20,warn:12};                       // สีป้าย %GP ที่ผู้จัดการเห็นในแอปนี้ (ตารางคอมมิชชั่นไม่ถูกส่งมาแอปนี้)
@@ -392,7 +392,7 @@ const canRequestForOthers=()=>!!caps().writeQuote;     // ขอราคาแ�
 
 /* ============================================================ API (google.script.run เมื่อเปิดผ่าน /exec · fetch เมื่อโฮสต์ที่อื่น) */
 function gsRun(){return !!(window.google&&google.script&&google.script.run)}
-function withTimeout(p){return new Promise(res=>{let done=false;const t=setTimeout(()=>{if(!done){done=true;res({ok:false,error:'timeout'})}},TIMEOUT_MS);
+function withTimeout(p,ms){return new Promise(res=>{let done=false;const t=setTimeout(()=>{if(!done){done=true;res({ok:false,error:'timeout'})}},ms||TIMEOUT_MS);
   p.then(r=>{if(!done){done=true;clearTimeout(t);res(r)}},e=>{if(!done){done=true;clearTimeout(t);res({ok:false,error:String(e&&e.message||e)})}})})}
 function parse(r){try{return (typeof r==='string')?JSON.parse(r):(r||{ok:false,error:'empty'})}catch(e){return {ok:false,error:'bad response'}}}
 async function api(payload){
@@ -405,12 +405,12 @@ async function api(payload){
   if(r&&r.error==='AUTH_REQUIRED'&&payload.action!=='login'&&payload.action!=='ssoLogin')sessionExpired(r.reason);
   return r;
 }
-async function apiGet(type,arg){
+async function apiGet(type,arg,ms){
   const r=await withTimeout(new Promise(async res=>{
     if(gsRun()){google.script.run.withSuccessHandler(x=>res(parse(x))).withFailureHandler(e=>res({ok:false,error:String(e&&e.message||e)})).apiGet(type,S.token,arg==null?'':String(arg));return}
     const q='?type='+encodeURIComponent(type)+'&token='+encodeURIComponent(S.token)+(arg?((type==='quote'?'&id=':'&since=')+encodeURIComponent(arg)):'');
     try{const x=await fetch(CLOUD_URL+q,{redirect:'follow'});res(parse(await x.text()))}catch(e){res({ok:false,error:'network'})}
-  }));
+  }),ms);
   if(r&&r.error==='AUTH_REQUIRED')sessionExpired(r.reason);
   if(r&&r.me)applyMe(r.me);
   return r;
@@ -513,10 +513,10 @@ async function boot(){
   const u=S.user;
   $('#meAv').textContent=(u.name||'?')[0].toUpperCase();$('#meName').textContent=u.name;$('#meRole').textContent=ROLE_TH[u.role]||u.role;
   $('#main').innerHTML='<div class="empty"><div class="spin"></div><div style="margin-top:10px">กำลังโหลดงาน…</div></div>';
-  const [us,st,pr]=await Promise.all([apiGet('users'),apiGet('settings'),apiGet('products')]);
+  // v5.5: โหลดงานพร้อมกับผู้ใช้/ตั้งค่า/สินค้า (เดิมรอ 3 อย่างแรกเสร็จก่อนแล้วค่อยโหลดงาน)
+  const [us,st,pr]=await Promise.all([apiGet('users'),apiGet('settings'),apiGet('products'),loadAll()]);
   S.users=(us&&us.users)||[];S.settings=(st&&st.ok)?st:{};
   S.products=buildProducts((pr&&pr.products)||[]);
-  await loadAll();
   readRoute(()=>{render();startPoll();openPendingDoc()});
 }
 /* v4.7: เปิดเอกสารจากปุ่มในการ์ด Lark — เปิดได้เฉพาะงานที่ server ส่งมาให้ผู้ใช้คนนี้เห็นอยู่แล้ว */
@@ -535,7 +535,7 @@ function addRow(row){
   row.d=d;S.rows[row.id]=row;
 }
 async function loadAll(){
-  const d=await apiGet('salesview');
+  const d=await apiGet('salesview',undefined,FULL_TIMEOUT_MS);
   if(!d||!d.ok){toast('โหลดข้อมูลไม่สำเร็จ — '+errText(d),'bad');return false}
   S.rows={};(d.quotations||[]).forEach(addRow);S.serverTime=d.serverTime||'';S.epoch=d.dataEpoch||'';setLive();
   return true;

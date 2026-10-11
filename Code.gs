@@ -42,6 +42,12 @@
  *     · ทั้ง SR และ QT วิ่งถึงผู้ดูแลหมวดของรายการส่วนใหญ่ในใบ (routeFor_) · QT ที่มีผู้รับงานแล้ว (AssignedTo) ใช้คนนั้น
  *     · row.follow.resp = ผู้รับผิดชอบเอกสาร (ทุกขั้น) · follow.actor.uids = Id ของคนที่ต้องทำต่อ → หน้าติดตามงานกรอง "งานของฉัน" ได้ตรง
  *     · ไม่มีคอลัมน์ใหม่ · ใบเก่าที่ไม่มี routedSig ยังใช้ผู้รับเดิมตราบที่กลุ่มงานไม่เปลี่ยน (ไม่ย้ายงานที่ส่งไปแล้ว)
+ *  M) v5.5: หมวด Floating อยู่กลุ่มสินค้า Mounting (กติกากลุ่มค่าคอมฝั่ง HTML) · server ไม่เปลี่ยน (GROUP_TYPE_GROUPS มี FLOATING ใต้ Mounting อยู่แล้ว)
+ *     PERF/บั๊กหน้ารีเฟรชเอง:
+ *     · saveSettings_ ไม่ให้ client เขียนทับ dataEpoch / dataEpochAt (เดิมเครื่องที่ถือค่าเก่ากดบันทึกตั้งค่า → ทุกเครื่องเห็นว่า "ล้างข้อมูลชุดใหม่"
+ *       แล้วล้างสำเนา + โหลดใหม่ทั้งชุด = หน้ารีเฟรชเองและค้างนาน) · SettingsRev เพิ่มขึ้นเสมอ (ไม่ถอยหลัง)
+ *     · แคชการอ่านชีทภายใน request เดียว (memoRun_): header / Users / Settings อ่านครั้งเดียวต่อ request (เดิม 11–17 ครั้ง)
+ *     · type=changes / salesview แบบ since: อ่านคอลัมน์ UpdatedAt ก่อน — ไม่มีอะไรเปลี่ยน = ไม่อ่าน Detail ทั้งชีท
  *  * v4.2: รัน setup() หนึ่งครั้ง เพื่อเพิ่มคอลัมน์ Email / Active ในแท็บ Users แล้ว Deploy → New version
  *
  * สิ่งที่เปลี่ยนจาก v2.1 (สำคัญ — ต้องอัปเดต HTML ทั้ง 2 ไฟล์พร้อมกัน)
@@ -60,7 +66,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '5.4';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '5.5';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -241,25 +247,25 @@ function doGet(e) {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, viewport-fit=cover')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
-  return json_(apiGetObj_(type, prm.token || '', prm.id || prm.since || ''));
+  return json_(memoRun_(function () { return apiGetObj_(type, prm.token || '', prm.id || prm.since || ''); }));
 }
 
 function doPost(e) {
   var payload;
   try { payload = JSON.parse((e && e.postData && e.postData.contents) || '{}'); }
   catch (err) { return json_({ ok:false, error:'bad JSON: ' + err }); }
-  return json_(handle_(payload));
+  return json_(memoRun_(function () { return handle_(payload); }));
 }
 
 function apiPost(jsonStr) {
   var payload;
   try { payload = JSON.parse(jsonStr || '{}'); }
   catch (err) { return JSON.stringify({ ok:false, error:'bad JSON: ' + err }); }
-  return JSON.stringify(handle_(payload));
+  return JSON.stringify(memoRun_(function () { return handle_(payload); }));
 }
 
 /** google.script.run.apiGet(type, token, arg) — arg = id (type 'quote') หรือ since (type 'changes') */
-function apiGet(type, token, arg) { return JSON.stringify(apiGetObj_(type, token, arg)); }
+function apiGet(type, token, arg) { return JSON.stringify(memoRun_(function () { return apiGetObj_(type, token, arg); })); }
 
 /** หน้าตรวจระบบ ( …/exec?diag=1 ) — ไม่ต้องล็อกอิน · ไม่แสดงข้อมูลผู้ใช้หรือราคา
  *  ใช้ตรวจอาการ "หน้าว่าง": ไฟล์ HTML มีครบไหม · ถูกวางไม่ครบ (ไม่มี </html> ท้ายไฟล์) ไหม · Deploy เวอร์ชันใหม่แล้วหรือยัง */
@@ -368,7 +374,7 @@ function migratePasswordHashes() {
     var v = String(vals[i][0] || '');
     if (/^[0-9a-f]{64}$/.test(v)) { vals[i][0] = pwWrap_(v); n++; }
   }
-  if (n) rng.setValues(vals);
+  if (n) { rng.setValues(vals); memoDrop_(SH.USERS); }
   logRow_('migratePasswordHashes', '', '', '-', n + ' users');
   return n;
 }
@@ -411,7 +417,7 @@ function login_(p) {
   loginClear_(lockKey);
   if (v.upgrade) {   // แปลง hash เดิมเป็น v2 ทันที
     var ush = sheet_(SH.USERS), uidx = headerIndex_(ush), urow = findRow_(ush, uidx, 'Id', String(cell_(f.r, f.idx, 'Id')));
-    if (urow && uidx.PassHash) ush.getRange(urow, uidx.PassHash).setValue(pwWrap_(hash));
+    if (urow && uidx.PassHash) { ush.getRange(urow, uidx.PassHash).setValue(pwWrap_(hash)); memoDrop_(SH.USERS); }
   }
   return issueSession_(f.r, f.idx, p.agent, 'password');
 }
@@ -494,9 +500,9 @@ function auth_(token) {
   if (expMs && expMs < Date.now()) { ss.deleteRow(row); AUTH_FAIL_ = 'SESSION_EXPIRED'; return null; }
   // v4.4: role / สถานะ Active มาจากแท็บ Users "ทุก request" — Admin เปลี่ยนสิทธิ์หรือปิดบัญชีแล้วมีผลทันที
   var uid = String(cell_(r, idx, 'UserId'));
-  var ush = sheet_(SH.USERS), uidx = headerIndex_(ush), urow = findRow_(ush, uidx, 'Id', uid);
-  if (!urow) { ss.deleteRow(row); AUTH_FAIL_ = 'ACCOUNT_REMOVED'; return null; }
-  var u = ush.getRange(urow, 1, 1, ush.getLastColumn()).getValues()[0];
+  var ut = usersTable_(), uidx = ut.idx, u = null;           // PERF v5.5: ตาราง Users ชุดเดียวกับ peopleCtx_ (อ่านครั้งเดียวต่อ request)
+  for (var ui = 0; ui < ut.data.length; ui++) if (String(cell_(ut.data[ui], uidx, 'Id')) === uid) { u = ut.data[ui]; break; }
+  if (!u) { ss.deleteRow(row); AUTH_FAIL_ = 'ACCOUNT_REMOVED'; return null; }
   if (!isActiveUser_(u, uidx)) { ss.deleteRow(row); AUTH_FAIL_ = 'ACCOUNT_DISABLED'; logRow_('session-revoked', '', uid, '', 'inactive'); return null; }
   var role = normRole_(cell_(u, uidx, 'Role'));
   return { token:token, userId:uid, name:String(cell_(u, uidx, 'Name') || cell_(r, idx, 'Name')),
@@ -1040,6 +1046,12 @@ function getQuotations_(sess, opts) {
     var row = findRow_(sh, idx, 'Id', opts.id);
     if (!row) return [];
     data = [sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0]];
+  } else if (opts.sinceMs && idx.UpdatedAt) {
+    // PERF v5.5: polling ทุก 30 วิ — อ่านคอลัมน์ UpdatedAt ก่อน แล้วอ่านเฉพาะช่วงแถวที่เปลี่ยน (เดิมอ่าน Detail ทั้งชีททุกรอบ)
+    var upd = sh.getRange(2, idx.UpdatedAt, last - 1, 1).getValues(), lo = -1, hi = -1;
+    for (var u = 0; u < upd.length; u++) if (toMs_(upd[u][0]) > opts.sinceMs) { if (lo < 0) lo = u; hi = u; }
+    if (lo < 0) return [];
+    data = sh.getRange(2 + lo, 1, hi - lo + 1, sh.getLastColumn()).getValues();
   } else {
     data = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
   }
@@ -1190,8 +1202,8 @@ function gateFromList_(set, users) {
 function peopleCtx_() {
   var out = { list:[], byId:{}, routing:{}, gate:'', delegate:'' };
   try {
-    var sh = sheet_(SH.USERS), idx = headerIndex_(sh), last = sh.getLastRow();
-    if (last >= 2) sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues().forEach(function (r) {
+    var ut = usersTable_(), idx = ut.idx;
+    ut.data.forEach(function (r) {
       var id = String(cell_(r, idx, 'Id') || '').trim(); if (!id) return;
       var role = normRole_(cell_(r, idx, 'Role'));
       var u = { id:id, name:String(cell_(r, idx, 'Name') || id), role:role, tier:capsOf_(role).tier,
@@ -1575,22 +1587,37 @@ function getProducts_(sess) {
 
 /* ============================================================ SETTINGS */
 
+/** คีย์ที่ server เป็นเจ้าของ — client ส่งมาเท่าไรก็ไม่ใช้ (ใช้ค่าบนชีทเสมอ) */
+var SETTINGS_SERVER_KEYS = ['dataEpoch', 'dataEpochAt'];
 function saveSettings_(p, sess) {
   var sh = sheet_(SH.SETTINGS), idx = headerIndex_(sh);
-  var d = safeDetail_(p.detail);
   var row = (sh.getLastRow() >= 2) ? 2 : null;
-  writeRow_(sh, idx, row, { SettingsRev:num_(p.settingsRev,1),
+  var cur = getSettingsRaw_() || {}, storedRev = row ? num_(sh.getRange(2, idx.SettingsRev).getValue(), 0) : 0;
+  // v5.5 บั๊กหน้ารีเฟรชเอง: เดิมเขียนทั้งก้อนตามที่ client ส่งมา → เครื่องที่ถือ dataEpoch เก่า (หรือไม่มี) บันทึกตั้งค่าเมื่อไร
+  //   ทุกเครื่องจะเห็นว่า "ผู้ดูแลล้างข้อมูลชุดใหม่" แล้วล้างสำเนา + โหลดใหม่ทั้งชุด — ตอนนี้คงค่าบนชีทไว้เสมอ
+  var detail = p.detail;
+  try {
+    var obj = JSON.parse(String(p.detail || '{}'));
+    SETTINGS_SERVER_KEYS.forEach(function (k) { if (cur[k] !== undefined) obj[k] = cur[k]; else delete obj[k]; });
+    detail = JSON.stringify(obj);
+  } catch (e) { return { ok:false, error:'BAD_VALUE' }; }
+  var d = safeDetail_(detail);
+  var rev = Math.max(num_(p.settingsRev, 1), storedRev + 1);   // ไม่ถอยหลัง — เครื่องอื่นเห็นว่ามีของใหม่เสมอ
+  writeRow_(sh, idx, row, { SettingsRev:rev,
     SettingsUpdatedAt:p.settingsUpdatedAt||nowISO_(), By:sess.name, Detail:d.text });
-  logRow_('saveSettings', '', '', sess.name, 'rev ' + p.settingsRev);
-  return { ok:true, settingsRev:num_(p.settingsRev,1) };
+  logRow_('saveSettings', '', '', sess.name, 'rev ' + rev);
+  return { ok:true, settingsRev:rev };
 }
 
 function getSettingsRaw_() {
-  var sh = sheet_(SH.SETTINGS);
-  if (sh.getLastRow() < 2) return {};
-  var idx = headerIndex_(sh);
-  var r = sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0];
-  try { return JSON.parse(String(cell_(r, idx, 'Detail') || '{}')); } catch (e) { return {}; }
+  var text = MEMO_ ? MEMO_.settingsText : null;          // PERF v5.5: อ่านครั้งเดียวต่อ request (คืนสำเนาใหม่ทุกครั้ง แก้ได้ไม่กระทบแคช)
+  if (text === null) {
+    var sh = sheet_(SH.SETTINGS);
+    if (sh.getLastRow() < 2) text = '{}';
+    else { var idx = headerIndex_(sh); text = String(cell_(sh.getRange(2, 1, 1, sh.getLastColumn()).getValues()[0], idx, 'Detail') || '{}'); }
+    if (MEMO_) MEMO_.settingsText = text;
+  }
+  try { return JSON.parse(text); } catch (e) { return {}; }
 }
 
 /** ตารางคอมมิชชั่น / group defaults = โครงสร้างราคาภายใน → ห้ามส่งให้ role ที่ไม่มี viewCost */
@@ -1696,19 +1723,47 @@ function getUsers_(sess) {
 
 function ss_() { return SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActive(); }
 
+/* PERF v5.5: แคชการอ่านชีท "ภายใน request เดียว"
+ *  Apps Script เริ่ม execution ใหม่ทุกคำขอ → แคชไม่ค้างข้ามคน/ข้ามเวลา · เปิดเฉพาะระหว่าง apiGet / apiPost / doGet / doPost (memoRun_)
+ *  ฟังก์ชันที่รันจาก trigger หรือ editor (Lark, exportPendingFile …) ทำงานแบบเดิม = อ่านสดทุกครั้ง
+ *  แคช: ชีท + header ที่ตรวจแล้ว · ข้อความ Settings · ตาราง Users — เขียนชีทไหน (writeRow_ / memoDrop_) ล้างแคชของชีทนั้นทันที */
+var MEMO_ = null;
+function memoRun_(fn) {
+  var prev = MEMO_; MEMO_ = { sheets:{}, settingsText:null, users:null };
+  try { return fn(); } finally { MEMO_ = prev; }
+}
+function memoNameOf_(sh) {
+  if (!MEMO_) return '';
+  for (var n in MEMO_.sheets) if (MEMO_.sheets[n].sh === sh) return n;
+  return '';
+}
+function memoDrop_(shOrName) {
+  if (!MEMO_) return;
+  var n = typeof shOrName === 'string' ? shOrName : memoNameOf_(shOrName);
+  if (n === SH.SETTINGS) MEMO_.settingsText = null;
+  if (n === SH.USERS) MEMO_.users = null;
+}
+function idxOf_(head) {
+  var idx = {};
+  for (var i = 0; i < head.length; i++) { var h = String(head[i]).trim(); if (h) idx[h] = i + 1; }
+  return idx;
+}
+
 function sheet_(name) {
+  if (MEMO_ && MEMO_.sheets[name]) return MEMO_.sheets[name].sh;
   var ss = ss_(), sh = ss.getSheetByName(name), want = HEADERS[name] || [];
+  var remember = function (head) { if (MEMO_) MEMO_.sheets[name] = { sh:sh, idx:idxOf_(head) }; return sh; };
   if (!sh) {
     sh = ss.insertSheet(name);
     sh.getRange(1, 1, 1, want.length).setValues([want]);
     sh.setFrozenRows(1);
     sh.getRange(1, 1, 1, want.length).setFontWeight('bold').setBackground('#f5efe5');
-    return sh;
+    return remember(want);
   }
   if (sh.getLastRow() === 0) {
     sh.getRange(1, 1, 1, want.length).setValues([want]);
     sh.setFrozenRows(1);
-    return sh;
+    return remember(want);
   }
   var have = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0]
                .map(function (h) { return String(h).trim(); });
@@ -1717,13 +1772,21 @@ function sheet_(name) {
     sh.getRange(1, have.length + 1, 1, missing.length).setValues([missing]);
     sh.getRange(1, 1, 1, have.length + missing.length).setFontWeight('bold');
   }
-  return sh;
+  return remember(have.concat(missing));
 }
 
 function headerIndex_(sh) {
-  var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0], idx = {};
-  for (var i = 0; i < head.length; i++) { var h = String(head[i]).trim(); if (h) idx[h] = i + 1; }
-  return idx;
+  var n = memoNameOf_(sh);
+  if (n) { var c = MEMO_.sheets[n].idx, o = {}; for (var k in c) o[k] = c[k]; return o; }   // สำเนา (ผู้เรียกแก้ได้ไม่กระทบแคช)
+  return idxOf_(sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0]);
+}
+/** ตาราง Users ทั้งแผ่น (อ่านครั้งเดียวต่อ request) — ใช้ใน auth_ / peopleCtx_ */
+function usersTable_() {
+  if (MEMO_ && MEMO_.users) return MEMO_.users;
+  var sh = sheet_(SH.USERS), idx = headerIndex_(sh), last = sh.getLastRow();
+  var t = { sh:sh, idx:idx, data:last >= 2 ? sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues() : [] };
+  if (MEMO_) MEMO_.users = t;
+  return t;
 }
 function cell_(rowArr, idx, header) {
   var c = idx[header]; if (!c) return '';
@@ -1743,6 +1806,7 @@ function writeRow_(sh, idx, row, obj) {
   var current = isNew ? new Array(width).fill('') : sh.getRange(row, 1, 1, width).getValues()[0];
   for (var k in obj) { var c = idx[k]; if (c) current[c - 1] = obj[k]; }
   sh.getRange(row, 1, 1, width).setValues([current]);
+  memoDrop_(sh);                                          // PERF v5.5: ชีทนี้เปลี่ยนแล้ว → อ่านใหม่ครั้งถัดไป
   return row;
 }
 function safeDetail_(text) {

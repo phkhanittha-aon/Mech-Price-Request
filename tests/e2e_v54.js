@@ -24,8 +24,9 @@ qt('QM', 'MNT', 'In Progress', [line('MOUNTING', 'Mounting')]);           // →
 qt('QA', 'APR', 'Submitted', [line('INVERTER', 'Inverter')]);             // → Chatraporn · รอ Sourcing Manager + BD อนุมัติ
 qt('QX', 'OWN', 'In Progress', [line('MOUNTING', 'Mounting')], { assignedTo: 'src' });   // Chatraporn รับงานเองแล้ว (หมวด MOUNTING)
 
-const files = { '/': fs.readFileSync(DIR + '/Index.html', 'utf8') };
-const srv = http.createServer((q, r) => { r.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); r.end(files['/']); }).listen(0);
+let BEFORE = ''; try { BEFORE = require('child_process').execSync('git show dcda638:Index.html', { cwd: DIR, maxBuffer: 64 << 20 }).toString(); } catch (e) { }   // v5.4 ก่อนย้าย Floating
+const files = { '/': fs.readFileSync(DIR + '/Index.html', 'utf8'), '/before': BEFORE };
+const srv = http.createServer((q, r) => { r.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); r.end(files[q.url.split('?')[0]] || files['/']); }).listen(0);
 const BASE = 'http://localhost:' + srv.address().port;
 let fails = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (!c && x !== undefined ? '  -> ' + JSON.stringify(x).slice(0, 400) : '')); if (!c) fails++; };
 
@@ -73,8 +74,21 @@ let fails = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n
   ok('มีการ์ด "หมวดสินค้า · กลุ่มสินค้า · ผู้รับผิดชอบ" + โครงสร้างกลุ่ม (INVERTER · Chatraporn อยู่ใต้ Inverter)', /หมวดสินค้า · กลุ่มสินค้า · ผู้รับผิดชอบ/.test(st) &&
     await m.evaluate(() => [...document.querySelectorAll('.cat-tree-g')].some(g => /^Inverter/.test(g.textContent.trim()) && /INVERTER · Chatraporn/.test(g.textContent))));
   ok('ไม่แสดงแถวหัวตาราง Excel "Sub Group" เป็นหมวด', !/Sub Group/.test(st));
-  ok('ค่าเริ่มต้นกลุ่มค่าคอม = กติกาเดิม (ค่าคอมใบเดิมไม่เปลี่ยน) · Floating มีคำแนะนำ → Mounting', await m.evaluate(() =>
-    catList().every(c => comCategory(c) === comCategoryLegacy(c)) && catSuggest('Floating') === 'Mounting') && /ใช้กลุ่มที่แนะนำ \(1\)/.test(st));
+  // v5.5 (ตั้งใจเปลี่ยน): Floating ย้ายเข้ากลุ่ม Mounting เป็นค่าตั้งต้น — เดิม v5.4 ตรวจว่ายังอยู่กติกาเดิม + มีปุ่มแนะนำ (1)
+  const SNAP = '(() => { const q = _stQuote(); q.lines = [_stLine({ group: "Floating", comGroup: "", up: 1000, qty: 1, opPct: 30 })]; const t = computeQuote(q);' +
+    ' return { map: Object.fromEntries(catList().map(c => [c, comCategory(c)])), grade: Object.entries(t.com).map(([k, v]) => k + ":" + v.grade + "/" + v.rate + "%").join() }; })()';
+  const after = await m.evaluate(SNAP);
+  if (BEFORE) {
+    const bp = await b.newPage(); await bp.goto(BASE + '/before'); await bp.waitForTimeout(400);
+    const before = await bp.evaluate(SNAP);
+    const diff = Object.keys(after.map).filter(c => after.map[c] !== before.map[c]);
+    console.log('หมวด'.padEnd(20), '| กลุ่มค่าคอม v5.4 → v5.5'); diff.forEach(c => console.log(c.padEnd(20), '|', before.map[c], '→', after.map[c]));
+    console.log('รายการ Floating ที่ยังไม่บันทึกกลุ่ม (%GP 30):', before.grade, '→', after.grade);
+    ok('เทียบ v5.4: เปลี่ยนเฉพาะ Floating (Inverter → Mounting) หมวดอื่นเหมือนเดิมทั้งหมด', diff.join() === 'Floating' && before.map.Floating === 'Inverter' && after.map.Floating === 'Mounting', diff);
+  }
+  ok('Floating อยู่ใต้กลุ่ม Mounting ในโครงสร้าง · ไม่มีปุ่ม "ใช้กลุ่มที่แนะนำ" แล้ว', after.map.Floating === 'Mounting' &&
+    await m.evaluate(() => [...document.querySelectorAll('.cat-tree-g')].some(g => /^Mounting/.test(g.textContent.trim()) && /Floating/.test(g.textContent))) && !/ใช้กลุ่มที่แนะนำ/.test(st));
+  ok('รายการที่บันทึกกลุ่มค่าคอมไว้แล้ว (Floating + Inverter) ไม่เปลี่ยน', await m.evaluate(() => { const q = _stQuote(); q.lines = [_stLine({ group: 'Floating', comGroup: 'Inverter' })]; return !!computeQuote(q).com.Inverter; }));
   await m.evaluate(() => catOwnersFromScope()); await m.waitForTimeout(300);
   const own = await m.evaluate(() => ({ dl: catOwnerId('DATA LOGGER'), pv: catOwnerId('PV MODULE'), cp: catOwnerId('Carport'), inv: catOwnerId('INVERTER') }));
   ok('"ตั้งจากสิทธิ์กลุ่มเดิม" → DATA LOGGER/PV MODULE = Chatraporn · Carport = Napasorn · หมวดที่ตั้งไว้แล้วไม่ถูกทับ', own.dl === 'src' && own.pv === 'src' && own.cp === 'src2' && own.inv === 'src', own);

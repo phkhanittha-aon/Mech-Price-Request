@@ -634,8 +634,8 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='5.4';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
-const BUILD='2026-10-11 · build 5.4 · งานวิ่งตามหมวดสินค้า · ติดตามงานเฉพาะของฉัน';
+const APP_VERSION='5.5';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const BUILD='2026-10-11 · build 5.5 · โหลดเร็วขึ้น · ไม่รีเฟรชเอง · Floating อยู่กลุ่ม Mounting';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
@@ -838,10 +838,11 @@ function comCategory(group){
   try{if(m&&SETTINGS.commission&&SETTINGS.commission[m])return m}catch(e){}
   return comCategoryLegacy(group);
 }
-// product group -> commission category (กติกาเดิม — ค่าตั้งต้นของ SETTINGS.catGroup)
+// product group -> commission category (กติกาตั้งต้นของ SETTINGS.catGroup)
+// v5.5: FLOATING (ทุ่นลอยน้ำ = ระบบยึดแผง) → Mounting ตามที่ Aon ยืนยัน 2026-10-11 (เดิมตกไป Inverter)
 function comCategoryLegacy(group){
   const g=(group||'').toUpperCase();
-  if(g.includes('MOUNT')||g==='CONNECTOR'||g==='CARPORT'||g==='WALKWAY'||g==='ACCESSORIES') return 'Mounting';
+  if(g.includes('MOUNT')||g==='CONNECTOR'||g==='CARPORT'||g==='WALKWAY'||g==='ACCESSORIES'||g==='FLOATING') return 'Mounting';
   if(g.includes('DC CABLE')) return 'DC Cable';
   if(g.includes('EV')) return 'EV Charger';
   if(g.includes('STORAGE')||g==='BATTERY') return 'ESS';
@@ -1537,7 +1538,7 @@ function setSrRoute(gt,id){
 }
 /* ============================================================ v5.4 หมวดสินค้า → กลุ่มสินค้า → ผู้รับผิดชอบ (หน้า ⚙️ ตั้งค่า)
    ที่เดียวที่ตั้ง "ใครดูแลหมวดไหน" + "หมวดนี้คิดค่าคอมกลุ่มไหน" + ค่าเริ่มต้น Duty/Clr/%GP ของหมวด          */
-const CAT_GROUP_SUGGEST={'FLOATING':'Mounting'};   // ข้อแนะนำ (ไม่ตั้งให้เอง): ทุ่นลอยน้ำ = ระบบยึดแผง → กลุ่ม Mounting
+const CAT_GROUP_SUGGEST={};   // ข้อแนะนำ (ไม่ตั้งให้เอง) — v5.5: Floating → Mounting ย้ายเป็นค่าตั้งต้นแล้ว
 function catList(){return Object.keys(SETTINGS.groups||{}).filter(k=>catKey(k)!=='SUB GROUP').sort((a,b)=>a.localeCompare(b))}
 function catSuggest(cat){return CAT_GROUP_SUGGEST[catKey(cat)]||comCategoryLegacy(cat)}
 // ผู้ใช้จริงจากแท็บ Users (เมื่อซิงค์แล้ว) — ไม่นับบัญชีตัวอย่างในเครื่อง (sourcing1/sourcing2 …) กติกาเดียวกับ autoRouteOf
@@ -4728,7 +4729,9 @@ function saveSettings(){
   SETTINGS.settingsUpdatedAt=new Date().toISOString();
   LS.set('settings',SETTINGS);
   // push to sheet so other devices pick up commission/defaults changes
-  if(cloudReady())postCloud({action:'saveSettings',settingsRev:SETTINGS.settingsRev,settingsUpdatedAt:SETTINGS.settingsUpdatedAt,detail:JSON.stringify(SETTINGS)}).catch(()=>{});
+  // v5.5: server คง dataEpoch ของตัวเองไว้ และคืนเลข rev ที่ใช้จริง (ไม่ถอยหลัง) → จำไว้ ไม่ให้เครื่องนี้ดึงตั้งค่าของตัวเองกลับมาซ้ำ
+  if(cloudReady())postCloud({action:'saveSettings',settingsRev:SETTINGS.settingsRev,settingsUpdatedAt:SETTINGS.settingsUpdatedAt,detail:JSON.stringify(SETTINGS)})
+    .then(r=>{const v=r&&r.ok&&r.data&&+r.data.settingsRev;if(v&&v>(SETTINGS.settingsRev||0)){SETTINGS.settingsRev=v;LS.set('settings',SETTINGS);}}).catch(()=>{});
 }
 
 /* ============================================================ USERS */
@@ -4921,7 +4924,7 @@ function applyDataEpoch(ep){
   const mine=LS.get('dataEpoch','');
   if(mine===ep)return false;
   try{localStorage.setItem('mgs_quotes_backup',JSON.stringify({at:new Date().toISOString(),fromEpoch:mine||'',toEpoch:ep,quotes:QUOTES,syncQueue:getQueue()}))}catch(e){/* เต็ม = ข้าม (ชีทมีไฟล์สำรองแล้ว) */}
-  QUOTES=[];LS.set('quotes',QUOTES);setQueue([]);clearDraft();
+  QUOTES=[];LS.set('quotes',QUOTES);setQueue([]);clearDraft();LS.set('syncMark',null);
   editing=null;dirty=false;_lastServerTime='';
   LS.set('dataEpoch',ep);
   if(route==='new'||route==='preview')route=CURRENT?homeRoute(CURRENT):'dashboard';
@@ -4951,8 +4954,8 @@ async function postCloud(payload){
   if(r&&!r.ok&&r.error==='AUTH_REQUIRED'&&payload.action!=='login'&&payload.action!=='ssoLogin')onAuthExpired(r.data&&r.data.reason);
   return r;
 }
-async function cloudGet(type,arg){
-  const r=await withTimeout(_cloudGet(type,arg),CLOUD_TIMEOUT_MS);
+async function cloudGet(type,arg,timeoutMs){
+  const r=await withTimeout(_cloudGet(type,arg,timeoutMs),timeoutMs||CLOUD_TIMEOUT_MS);
   if(r&&r.ok===false&&r.error==='AUTH_REQUIRED')onAuthExpired(r.reason);
   if(r&&r.me)applyMe(r.me);
   return r;
@@ -5049,7 +5052,7 @@ async function _postCloud(payload){
 }
 /* ---- unified GET ---- */
 // arg = id (type 'quote') หรือ since (type 'changes') — ต้องใช้ Code.gs v4.1 ขึ้นไป
-async function _cloudGet(type,arg){
+async function _cloudGet(type,arg,timeoutMs){
   if(gsRun()){
     return new Promise(resolve=>{
       try{ google.script.run
@@ -5061,7 +5064,7 @@ async function _cloudGet(type,arg){
   }
   if(!SETTINGS.cloudUrl||!SETTINGS.cloudUrl.startsWith('http'))return null;
   const ac=(typeof AbortController!=='undefined')?new AbortController():null;
-  const killer=ac?setTimeout(()=>ac.abort(),CLOUD_TIMEOUT_MS):null;
+  const killer=ac?setTimeout(()=>ac.abort(),timeoutMs||CLOUD_TIMEOUT_MS):null;
   const argQ=arg==null||arg===''?'':((type==='quote'?'&id=':'&since=')+encodeURIComponent(arg));
   try{const res=await fetch(SETTINGS.cloudUrl+'?type='+(type||'quotations')+(SESSION_TOKEN?('&token='+encodeURIComponent(SESSION_TOKEN)):'')+argQ,{redirect:'follow',signal:ac?ac.signal:undefined});
     if(killer)clearTimeout(killer);return await res.json();}catch(e){if(killer)clearTimeout(killer);return null}
@@ -5195,7 +5198,7 @@ async function _syncCloud(q,opts){
     conflictModal(q.id,res.data||{});
   }
   else if(res.error==='DATA_RESET'){                                      // v5.1: ใบนี้ถูกล้างไปแล้ว → ไม่เข้าคิว ไม่สร้างกลับ
-    toast(ERR_TH.DATA_RESET,'bad');initializeData().then(()=>{renderNav();render()});
+    toast(ERR_TH.DATA_RESET,'bad');initializeData({full:true}).then(()=>{renderNav();render()});
   }
   else{ q.isSynced=false; persistQuote(q); enqueueSync(payload);
     if(!res.offline)toast('ยังบันทึกขึ้น Google Sheet ไม่ได้ — '+errText(res)+' · งานเก็บไว้ในเครื่องแล้ว กด 🔄 ซิงค์ เพื่อส่งอีกครั้ง','bad');
@@ -5304,28 +5307,59 @@ function mergeRemoteRow(row,opts){
   return 'same';
 }
 
-/* ---- startup / manual: ดึงทั้งชุด ---- */
-async function initializeData(){
+/* ---- startup / manual: ดึงข้อมูล ----
+   PERF v5.5:
+   · ผู้ใช้ / ตั้งค่า / ใบเสนอราคา ขอพร้อมกัน (เดิมทีละคำขอ) แล้วค่อยนำมาใช้ตามลำดับเดิม (ตั้งค่าก่อน ใบทีหลัง)
+   · เปิดหน้าใหม่บนเครื่องที่มีข้อมูลอยู่แล้ว (ผู้ใช้คนเดิม · ชุดข้อมูลเดิม · ดึงทั้งชุดไม่เกิน 6 ชม.) → ขอเฉพาะใบที่เปลี่ยน
+     (เดิมดึงทั้งชีททุกครั้งที่เปิดหน้า = ช้าที่สุดของระบบ) · ปุ่ม 🔄 ซิงค์ ยังดึงทั้งชุดเหมือนเดิม
+   · ดึงทั้งชุดรอได้นานขึ้น (60 วิ) — เดิม 15 วิ ชีทใหญ่หมดเวลาก่อนแล้วไม่ได้ข้อมูลเลย */
+const FULL_PULL_EVERY_MS=6*3600000, FULL_PULL_TIMEOUT_MS=60000;
+let _initInFlight=false;
+function syncMark(){const m=LS.get('syncMark',null);return (m&&typeof m==='object')?m:null}
+function saveSyncMark(serverTime,full){
+  if(!CURRENT||!serverTime)return;
+  const m=syncMark()||{};
+  LS.set('syncMark',{uid:CURRENT.id,epoch:LS.get('dataEpoch',''),serverTime,fullAt:full?Date.now():(m.uid===CURRENT.id?m.fullAt||0:0)});
+}
+function canDeltaBoot(){
+  const m=syncMark();
+  return !!(m&&CURRENT&&m.uid===CURRENT.id&&m.serverTime&&m.epoch===LS.get('dataEpoch','')&&
+    Date.now()-(m.fullAt||0)<FULL_PULL_EVERY_MS&&QUOTES.some(q=>q.isSynced!==false&&q._cloudAt));
+}
+async function initializeData(opts){
   if(!cloudReady()){setCloudDot('');return {ok:false,offline:true}}
-  // pull settings first so newer commission/defaults from another device take effect before quotes render
-  try{await pullUsers();}catch(e){/* non-fatal */}
-  try{const sd=await cloudGet('settings');
+  if(_initInFlight)return {ok:false,busy:true};
+  _initInFlight=true;
+  try{return await _initializeData(opts||{})}finally{_initInFlight=false}
+}
+async function _initializeData(opts){
+  setCloudDot('sync');
+  const delta=!opts.full&&canDeltaBoot(),mark=syncMark();
+  const quotesReq=delta
+    ?cloudGet('changes',new Date((Date.parse(mark.serverTime)||Date.now())-LIVE_OVERLAP_MS).toISOString())
+    :cloudGet('quotations',undefined,FULL_PULL_TIMEOUT_MS);
+  const [,sd,data0]=await Promise.all([pullUsers().catch(()=>0),cloudGet('settings').catch(()=>null),quotesReq]);
+  // ตั้งค่าก่อน แล้วค่อยใบเสนอราคา (ลำดับเดิม) — ตั้งค่าใหม่จากเครื่องอื่นมีผลก่อนวาดใบ
+  try{
     if(sd&&sd.master){MASTER=sd.master;migrateLocalLists();}   // v4.6: ตัวเลือก dropdown จากแท็บ MasterData (+ v4.8 ค่าที่เคยเพิ่มเองในเครื่อง)
     if(sd&&sd.settingsRev&&+sd.settingsRev>(SETTINGS.settingsRev||0)){
       const merged=Object.assign({},SETTINGS,sd,{cloudUrl:SETTINGS.cloudUrl});
       SETTINGS=merged;LS.set('settings',SETTINGS);}}catch(e){/* non-fatal */}
-  setCloudDot('sync');
   let result={ok:false,added:0,merged:0};
   try{
-    const data=await cloudGet('quotations');
+    let data=data0,full=!delta;
+    // ขอเฉพาะที่เปลี่ยนไม่สำเร็จ / มีการล้างข้อมูลชุดใหม่ → กลับไปดึงทั้งชุด
+    if(delta&&(!data||data.ok===false||(data.dataEpoch&&data.dataEpoch!==LS.get('dataEpoch','')))){
+      data=await cloudGet('quotations',undefined,FULL_PULL_TIMEOUT_MS);full=true;}
     if(data&&data.ok!==false)applyDataEpoch(data.dataEpoch);          // v5.1: ล้างข้อมูลชุดใหม่ → เริ่มจากว่างแล้วรับของ server ทั้งชุด
     const rows=(data&&(data.quotations||data.rows))||[];
     let added=0,merged=0;
     rows.forEach(row=>{const r=mergeRemoteRow(row);if(r==='added')added++;else if(r==='merged')merged++;});
     QUOTES.forEach(q=>{if(q.isSynced==null)q.isSynced=true});
-    LS.set('quotes',QUOTES);
-    _lastFullPull=Date.now();
+    if(full||added+merged>0)LS.set('quotes',QUOTES);       // ไม่มีอะไรเปลี่ยน = ไม่ต้องเขียน localStorage ก้อนใหญ่ซ้ำ
+    if(full)_lastFullPull=Date.now();
     _lastServerTime=(data&&data.serverTime)||'';          // ว่าง = Code.gs รุ่นเก่า → polling แบบดึงทั้งชุด
+    if(data&&data.ok!==false)saveSyncMark(_lastServerTime,full);
     if(added+merged>0){renderNav();liveRender();toast('ดึงจาก Google Sheet: ใหม่ '+added+' · อัปเดต '+merged,'good');}
     setCloudDot(data&&data.ok!==false?'on':'err');setLiveStamp();
     result={ok:!!data&&data.ok!==false,added,merged};
@@ -5339,10 +5373,11 @@ let _syncing=false;
 async function manualSync(){
   if(_syncing)return;
   if(!cloudReady()){toast('ยังไม่ได้เชื่อมต่อ Google Sheet','bad');return}
+  if(_initInFlight){toast('กำลังโหลดข้อมูลอยู่ — รอสักครู่','good');return}
   _syncing=true;const b=$('#syncBtn');if(b){b.disabled=true;b.textContent='⏳ ซิงค์...';}
   setCloudDot('sync');
   await flushQueue();                 // push my pending saves first
-  const r=await initializeData();     // then pull everyone's latest
+  const r=await initializeData({full:true});     // then pull everyone's latest (ทั้งชุด)
   if(b){b.disabled=false;b.textContent='🔄 ซิงค์';}
   updateQueueBadge();
   _syncing=false;
@@ -5382,7 +5417,7 @@ async function refreshPreview(id){
 
 /* ---- Dashboard polling: ดึงเฉพาะที่เปลี่ยน ---- */
 async function pollChanges(force){
-  if(_polling||!CURRENT||_authWarned||!cloudReady())return;
+  if(_polling||_initInFlight||!CURRENT||_authWarned||!cloudReady())return;   // v5.5: กำลังโหลดตอนเปิดหน้าอยู่ = ไม่ดึงซ้อน (เดิมดึงทั้งชีท 2 รอบติดกัน)
   if(document.hidden&&!force)return;                       // แท็บไม่ได้เปิดอยู่ = ไม่เปลือง quota
   if(!force&&Date.now()-_lastPollAt<8000)return;
   _polling=true;_lastPollAt=Date.now();
@@ -5397,8 +5432,8 @@ async function pollChanges(force){
       data=await cloudGet('quotations');_lastFullPull=Date.now();
     }
     if(!data||data.ok===false){setCloudDot('err');return}
-    if(applyDataEpoch(data.dataEpoch)){_polling=false;await initializeData();renderNav();render();return}   // v5.1
-    if(data.serverTime)_lastServerTime=data.serverTime;
+    if(applyDataEpoch(data.dataEpoch)){_polling=false;await initializeData({full:true});renderNav();render();return}   // v5.1
+    if(data.serverTime){_lastServerTime=data.serverTime;saveSyncMark(_lastServerTime,false);}
     const changes=[];
     (data.quotations||data.rows||[]).forEach(row=>{
       const prev=QUOTES.find(x=>x.id===row.id),prevSt=prev?statusOf(prev):null;

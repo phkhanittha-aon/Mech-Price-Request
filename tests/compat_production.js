@@ -126,7 +126,9 @@ async function route(p, rt, state) {
   ok('[ใหม่] ไม่มี key ของ production หายจาก localStorage', lost.length === 0, lost);
   const added = Object.keys(after).filter(k => !(k in prodLS));
   console.log('   key ที่เวอร์ชันใหม่เพิ่ม: ' + (added.join(', ') || '(ไม่มี)'));
-  ok('[ใหม่] key ที่เพิ่มเป็นของที่ production ก็ใช้อยู่แล้ว (ไม่มี key ใหม่)', added.every(k => /^mgs_(token|caps|session|lastUser|syncQueue|summaryView|draft)$/.test(k)), added);
+  // v5.5 (ตั้งใจเพิ่ม 1 คีย์): mgs_syncMark = จุดซิงค์ล่าสุด {uid, epoch, serverTime, fullAt} — เปิดหน้าใหม่ขอเฉพาะใบที่เปลี่ยน (ไม่ดึงทั้งชีท)
+  //   เป็นคีย์ใหม่ล้วน ไม่แตะคีย์/โครงสร้างเดิม · ลบทิ้งได้ (ไม่มี = ดึงทั้งชุดครั้งถัดไปเหมือนเดิม)
+  ok('[ใหม่] key ที่เพิ่มเป็นของที่ production ก็ใช้อยู่แล้ว (+ mgs_syncMark ของ v5.5)', added.every(k => /^mgs_(token|caps|session|lastUser|syncQueue|summaryView|draft|syncMark)$/.test(k)), added);
   ok('[ใหม่] ไม่มี JavaScript error ตลอดการทดสอบ', errs.length === 0, errs);
   await nc.close();
 

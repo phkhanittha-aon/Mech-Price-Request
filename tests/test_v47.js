@@ -146,7 +146,8 @@ ok('dryrun ซ้ำ → ไม่มีอะไรค้าง', W.ctx.larkFlu
 
 /* ------------------------------------------------------------------ 5) live: webhook การ์ด + ลายเซ็น */
 W = world();
-Object.assign(W.props, { LARK_MODE: 'live', LARK_BOT_URL: HK('botA-1234'), LARK_BOT_SECRET: 'whsecA', LARK_REMINDER_URL: HK('botB-1234'), LARK_REMINDER_SECRET: 'whsecB' });
+// v5.7 (ตั้งใจเปลี่ยน): ค่าเริ่มต้นส่งทันทีตอนบันทึก — ส่วนนี้ทดสอบกลไกคิว + trigger จึงปิดด้วย LARK_SEND_NOW=off (ส่งทันทีทดสอบใน test_v57)
+Object.assign(W.props, { LARK_MODE: 'live', LARK_SEND_NOW: 'off', LARK_BOT_URL: HK('botA-1234'), LARK_BOT_SECRET: 'whsecA', LARK_REMINDER_URL: HK('botB-1234'), LARK_REMINDER_SECRET: 'whsecB' });
 W.saveQT('L1', 'Submitted'); W.saveSR('SRL', 'Submitted', { groupType: 'Inverter' });
 ok('live: ธุรกรรมหลักยังไม่ยิง HTTP', W.fetchLog.length === 0);
 f = W.ctx.larkFlush();

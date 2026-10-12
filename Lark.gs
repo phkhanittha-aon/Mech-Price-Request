@@ -34,11 +34,12 @@
  *   LARK_REMINDER_URL        (ทางเลือก) Bot B — ไม่ตั้ง = ใช้ Bot A
  *   LARK_REMINDER_SECRET
  *   LARK_MENTION_REQUESTER   on (ค่าเริ่มต้น) | off — แท็ก Sales ผู้ขอในช่อง "ผู้ขอ" ทุกการ์ด
+ *   LARK_SEND_NOW            on (ค่าเริ่มต้น · v5.7) = ส่งทันทีตอนบันทึก | off = เข้าคิวรอ trigger ทุก 5 นาที
  *   APP_URL                  URL /exec ของ Web App (ไม่ตั้ง = ใช้ ScriptApp.getService().getUrl())
  *   ค่าของ v4.9 (LARK_WEBHOOK_*, LARK_APP_ID, LARK_CHAT_*) ไม่ใช้แล้ว — ยกเว้น LARK_WEBHOOK_REQUESTS ใช้แทน Bot A ได้ชั่วคราว
  *************************************************************/
 
-var LARK_VERSION = '5.6';
+var LARK_VERSION = '5.7';
 
 /* ============================================================ 1) EVENT TABLE */
 /**
@@ -111,6 +112,8 @@ function larkBotDest_(bot, props) {
   if (!url && b.fallback) { var f = larkBotDest_(b.fallback, props); if (f) { f.via = bot + '→' + f.via; return f; } }
   return url ? { url:url, secret:secret, via:via } : null;
 }
+/** v5.7: ส่งทันทีตอนบันทึก (ค่าเริ่มต้น on) · off = เข้าคิวรอ trigger ทุก 5 นาทีเหมือนเดิม */
+function larkSendNow_(props) { return String((props || larkProps_()).LARK_SEND_NOW || 'on').toLowerCase().trim() !== 'off'; }
 function larkMentionRequester_(props) { return String((props || {}).LARK_MENTION_REQUESTER || 'on').toLowerCase().trim() !== 'off'; }
 /**
  * ตรวจการตั้งค่า (setup / ?diag=1 / ก่อนส่งทุกรอบ) — ไม่คืนค่า secret / URL เต็ม
@@ -343,7 +346,11 @@ function larkOnStatus_(sh, idx, row, prevStatus, newStatus, sess, extra) {
     if (event === 'QT_RETURNED') info.note = 'ส่งกลับให้ Sourcing แก้ราคา — ต้องขออนุมัติใหม่ทั้ง 2 ฝ่าย';
     if (event === 'PRICE_RELEASED') info.note = 'Sales เจ้าของงานเปิดดูราคาได้แล้วบนเว็บ (ราคาไม่แสดงในกลุ่ม)';
     if (event === 'SR_FORWARDED') info.note = 'ส่งต่อให้ ' + ((info.actors[0] && info.actors[0].name) || 'ทีม Sourcing');
-    return larkEnqueue_(event, info);
+    var q = larkEnqueue_(event, info);
+    // v5.7: โหมดส่งจริง = ส่งทันทีในคำขอเดียวกับการบันทึก (เดิมรอ trigger ทุก 5 นาที + Google หน่วงอีก = การ์ดมาช้ามาก)
+    //       ไม่สำเร็จ = ค้างในคิวเป็น RETRY ให้ trigger ลองใหม่ตามเดิม · ห้ามทำให้การบันทึกใบล้ม
+    if (q && q.queued && q.mode === 'live' && larkSendNow_()) { try { q.flush = larkFlush(); } catch (e) { try { logRow_('lark-send-now-error', '', '', '-', String(e).slice(0, 300)); } catch (e2) {} } }
+    return q;
   } catch (e) {
     try { logRow_('lark-hook-error', '', '', '-', String(e).slice(0, 300)); } catch (e2) {}
     return null;
@@ -378,9 +385,34 @@ function larkRequestFor_(item, props) {
   var dest = larkBotDest_(item.target === 'REMINDER' ? 'B' : 'A', props);
   return dest && p.card ? larkHookRequest_(dest, p.card) : null;
 }
+/* v5.7: Lark ปฏิเสธการ์ด "ทั้งใบ" ถ้ามี @อีเมลที่ไม่ใช่บัญชีในองค์กร Lark
+ *   code 11246 · ErrCode 100290 · "There is an invalid user resource(at/person) in your card"
+ *   → ส่งซ้ำทันทีแบบไม่แท็ก (แสดงชื่อแทน) ให้การ์ดถึงกลุ่มเสมอ แล้วบันทึกอีเมลที่อยู่ในการ์ดไว้ใน LastError (ในชีท ไม่ออกกลุ่ม) */
+function larkBadMention_(j) {
+  var m = String((j && (j.msg || j.StatusMessage)) || '');
+  return /100290|invalid user resource/i.test(m);
+}
+function larkMentionEmails_(card) {
+  var out = [], seen = {}, re = /<at email=([^>]*)><\/at>/g, s = JSON.stringify(card || {}), m;
+  while ((m = re.exec(s))) { var e = String(m[1]).toLowerCase(); if (!seen[e]) { seen[e] = 1; out.push(e); } }
+  return out;
+}
+/** การ์ดเดิมแต่เปลี่ยน <at email=…></at> เป็นชื่อธรรมดา (ชื่อจากแท็บ Users · ไม่มี = ส่วนหน้าของอีเมล) */
+function larkStripMentions_(card, nameByEmail) {
+  var s = JSON.stringify(card || {}).replace(/<at email=([^>]*)><\/at>/g, function (_, em) {
+    var e = String(em).toLowerCase(); return larkSafe_((nameByEmail || {})[e] || e.split('@')[0], 60);
+  });
+  return JSON.parse(s);
+}
+function larkNameByEmail_() {
+  var map = {};
+  try { peopleCtx_().list.forEach(function (u) { if (u.email) map[String(u.email).toLowerCase()] = u.name; }); } catch (e) {}
+  return map;
+}
 /** คำแนะนำจากข้อความ error ของ Lark (แบบเดียวกับระบบ Food) */
 function larkHint_(j) {
   var m = String((j && (j.msg || j.StatusMessage)) || '');
+  if (larkBadMention_(j)) return ' → มีอีเมลใน @แท็กที่ไม่ใช่บัญชี Lark ในองค์กร — ตรวจคอลัมน์ Email ในแท็บ Users (หน้าตั้งค่า Lark Bot → ตรวจอีเมลทีละคน)';
   if (/sign/i.test(m)) return ' → Secret ไม่ตรงกับบอท (หรือเวลาเครื่องคลาดเคลื่อน) — คัดลอก Secret ใหม่จาก Security settings';
   if (/keyword/i.test(m)) return ' → บอทตั้ง Custom keywords ไว้ — ปิด keywords ใช้ Signature verification อย่างเดียว';
   if (/\bip\b/i.test(m)) return ' → บอทจำกัด IP — ปิด IP whitelist';
@@ -427,13 +459,35 @@ function larkFlush() {
       var resps = [];
       try { resps = reqs.length ? UrlFetchApp.fetchAll(reqs) : []; }                // HTTP ครั้งเดียวทั้งชุด
       catch (e) { resps = []; map.forEach(function (k) { outcome[k] = { status:'RETRY', err:String(e).slice(0, 200) }; }); }
+      var again = [];                                                              // v5.7: ถูกปฏิเสธเพราะ @แท็ก → ส่งซ้ำแบบไม่แท็ก
       resps.forEach(function (res, n) {
         var k = map[n], code = res.getResponseCode(), j = {};
         try { j = JSON.parse(res.getContentText()); } catch (e) {}
         var okLark = code === 200 && (j.code === 0 || j.StatusCode === 0);
+        if (!okLark && larkBadMention_(j)) { again.push(k); return; }
         outcome[k] = okLark ? { status:'SENT', err:'' }
           : { status:'RETRY', err:('HTTP ' + code + ' code ' + (j.code != null ? j.code : j.StatusCode) + ' ' + (j.msg || j.StatusMessage || '') + larkHint_(j)).slice(0, 240) };
       });
+      if (again.length) {
+        var names = larkNameByEmail_(), reqs2 = [], map2 = [];
+        again.forEach(function (k) {
+          try {
+            var p = JSON.parse(picked[k].payload || '{}'), dest = larkBotDest_(picked[k].target === 'REMINDER' ? 'B' : 'A', props);
+            reqs2.push(larkHookRequest_(dest, larkStripMentions_(p.card, names)));
+            map2.push({ k:k, emails:larkMentionEmails_(p.card) });
+          } catch (e) { outcome[k] = { status:'RETRY', err:'ส่งแบบไม่แท็กไม่ได้: ' + String(e).slice(0, 150) }; }
+        });
+        var resps2 = [];
+        try { resps2 = reqs2.length ? UrlFetchApp.fetchAll(reqs2) : []; }
+        catch (e) { map2.forEach(function (x) { outcome[x.k] = { status:'RETRY', err:String(e).slice(0, 200) }; }); }
+        resps2.forEach(function (res, n) {
+          var x = map2[n], code = res.getResponseCode(), j = {};
+          try { j = JSON.parse(res.getContentText()); } catch (e) {}
+          var ok2 = code === 200 && (j.code === 0 || j.StatusCode === 0);
+          outcome[x.k] = ok2 ? { status:'SENT', err:('ส่งแล้วแบบไม่แท็ก — มีอีเมลที่ไม่ใช่บัญชี Lark อยู่ในนี้: ' + x.emails.join(', ')).slice(0, 240) }
+            : { status:'RETRY', err:('HTTP ' + code + ' code ' + (j.code != null ? j.code : j.StatusCode) + ' ' + (j.msg || j.StatusMessage || '') + larkHint_(j)).slice(0, 240) };
+        });
+      }
     }
   }
   // ---- เขียนผล (ใต้ล็อก ครั้งเดียว) ----
@@ -504,6 +558,7 @@ function larkSlaScan_(opts) {
   }
   var res = larkEnqueueMany_(items);
   res.overdue = cand.length; res.reminded = items.length;
+  if (res.queued && res.mode === 'live' && larkSendNow_()) { try { res.flush = larkFlush(); } catch (e) {} }   // v5.7: ส่งการ์ดเตือนทันที ไม่รอรอบ 5 นาที
   return res;
 }
 /** v4.9 เคยมีสรุปประจำวัน — v5.0 ยกเลิก (ไม่มีแจ้งเตือน follow-up) · คงชื่อไว้ให้ trigger เก่าไม่ error จนกว่าจะรัน larkInstallTriggers() ใหม่ */
@@ -608,7 +663,7 @@ function larkQueueReport(n) {
  *   · ไม่ส่ง Secret กลับไปที่หน้าเว็บเลย · URL แสดงแบบปิดบัง (…/hook/••••xxxx)
  *   · เว้นว่าง = ไม่เปลี่ยนค่าเดิม · "ลบค่า" = ลบออกจาก Script Properties
  *   · ส่งการ์ดทดสอบ = ยิงจริงทันที (ไม่สนโหมด) ไปที่บอทตัวนั้นตัวเดียว แท็กอีเมลของคนที่กด */
-var LARK_ADMIN_ACTIONS = ['larkStatus', 'larkSave', 'larkClear', 'larkTest', 'larkMode', 'larkTriggers'];
+var LARK_ADMIN_ACTIONS = ['larkStatus', 'larkSave', 'larkClear', 'larkTest', 'larkMode', 'larkTriggers', 'larkCheckEmails'];
 function larkMaskUrl_(u) {
   u = String(u || ''); if (!u) return '';
   var m = /^(https:\/\/[^\/]+)\/.*\/hook\/(.*)$/.exec(u);
@@ -658,6 +713,7 @@ function larkStatus_() {
 function larkAdmin_(action, p, sess) {
   var P = PropertiesService.getScriptProperties(), bot = String(p.bot || ''), def = LARK_BOTS[bot];
   if (action === 'larkStatus') return larkStatus_();
+  if (action === 'larkCheckEmails') return larkCheckEmails_(sess);
   if (action === 'larkMode') {
     var m = String(p.mode || '').toLowerCase();
     if (['off', 'dryrun', 'live'].indexOf(m) < 0) return { ok:false, error:'BAD_VALUE' };
@@ -703,13 +759,50 @@ function larkAdmin_(action, p, sess) {
     // fetchAll เท่านั้น (กติกาของไฟล์นี้)
     try { res = UrlFetchApp.fetchAll([larkHookRequest_(dest, card)])[0]; code = res.getResponseCode(); try { j = JSON.parse(res.getContentText()); } catch (e) {} }
     catch (e) { err = String(e).slice(0, 200); }
-    var okLark = !err && code === 200 && (j.code === 0 || j.StatusCode === 0);
+    var okLark = !err && code === 200 && (j.code === 0 || j.StatusCode === 0), noTag = false;
+    if (!okLark && !err && larkBadMention_(j)) {                                  // v5.7: อีเมลของคนที่กดไม่ใช่บัญชี Lark → ส่งซ้ำแบบไม่แท็ก (ตรวจ webhook ได้)
+      try { var r2 = UrlFetchApp.fetchAll([larkHookRequest_(dest, larkStripMentions_(card, larkNameByEmail_()))])[0], j2 = {};
+            try { j2 = JSON.parse(r2.getContentText()); } catch (e) {}
+            okLark = r2.getResponseCode() === 200 && (j2.code === 0 || j2.StatusCode === 0); noTag = okLark; if (!okLark) j = j2; }
+      catch (e) { err = String(e).slice(0, 200); }
+    }
     if (!okLark && !err) err = ('HTTP ' + code + ' ' + (j.msg || j.StatusMessage || '') + larkHint_(j)).slice(0, 240);
+    if (noTag) err = 'ส่งแล้วแบบไม่แท็ก — อีเมล ' + String(sess.email || '') + ' ไม่ใช่บัญชี Lark ในองค์กร';
     var rec = { at:nowISO_(), what:'test', status:okLark ? 'SENT' : 'FAILED', err:err };
     P.setProperty('LARK_LAST_TEST_' + bot, JSON.stringify(rec));
     logRow_('lark-test', 'bot ' + bot, '', sess.name, okLark ? 'ส่งสำเร็จ' : err);
-    var st = larkStatus_(); st.test = { bot:bot, ok:okLark, err:err, mentioned:!!LARK_EMAIL_RE.test(String(sess.email || '')) };
+    var st = larkStatus_(); st.test = { bot:bot, ok:okLark, err:err, noTag:noTag, mentioned:!noTag && !!LARK_EMAIL_RE.test(String(sess.email || '')) };
     return st;
   }
   return { ok:false, error:'unknown action: ' + action };
+}
+
+/** v5.7: ตรวจว่าอีเมลของผู้ใช้แต่ละคน @แท็กใน Lark ได้ไหม — ส่งการ์ดเล็ก 1 ใบต่อคน (fetchAll ครั้งเดียว) ผ่านบอทตัวแรก
+ *  อีเมลที่ไม่ใช่บัญชี Lark → Lark ปฏิเสธ (ไม่มีอะไรขึ้นกลุ่ม) · ที่ถูกต้อง → การ์ด "[ตรวจอีเมล]" ขึ้นกลุ่มพร้อมแท็กคนนั้น
+ *  Custom Bot ค้นหาผู้ใช้จากอีเมลไม่ได้ จึงต้องตรวจด้วยการส่งจริง */
+function larkCheckEmails_(sess) {
+  var props = larkProps_(), u = String(props[LARK_BOTS.A.url] || '').trim();
+  if (!u) return { ok:false, error:'LARK_NOT_SET' };
+  var dest = { url:u, secret:String(props[LARK_BOTS.A.secret] || '').trim() }, list = [], reqs = [];
+  peopleCtx_().list.forEach(function (x) {
+    if (!x.active) return;
+    var e = String(x.email || '').trim().toLowerCase();
+    if (!LARK_EMAIL_RE.test(e)) { list.push({ name:x.name, email:e, result:'NO_EMAIL' }); return; }
+    if (reqs.length >= 40) { list.push({ name:x.name, email:e, result:'SKIPPED' }); return; }
+    var card = { config:{ wide_screen_mode:true }, header:{ template:'grey', title:{ tag:'plain_text', content:'[ตรวจอีเมล @แท็ก] ไม่ต้องตอบกลับ' } },
+                 elements:[{ tag:'div', text:{ tag:'lark_md', content:'<at email=' + e + '></at> — ระบบทำราคาทดสอบการแท็กชื่อคุณ' } },
+                           { tag:'note', elements:[{ tag:'plain_text', content:'สั่งตรวจโดย ' + larkSafe_(sess.name, 60) }] }] };
+    reqs.push(larkHookRequest_(dest, card)); list.push({ name:x.name, email:e, result:'PENDING' });
+  });
+  var resps = [];
+  try { resps = reqs.length ? UrlFetchApp.fetchAll(reqs) : []; } catch (e) { return { ok:false, error:'SEND_FAILED', detail:String(e).slice(0, 200) }; }
+  var k = 0;
+  list.forEach(function (x) {
+    if (x.result !== 'PENDING') return;
+    var res = resps[k++], j = {}; try { j = JSON.parse(res.getContentText()); } catch (e) {}
+    x.result = res.getResponseCode() === 200 && (j.code === 0 || j.StatusCode === 0) ? 'OK' : larkBadMention_(j) ? 'NOT_LARK' : 'ERROR';
+    if (x.result === 'ERROR') x.err = (String(j.msg || j.StatusMessage || '') + larkHint_(j)).slice(0, 200);
+  });
+  logRow_('lark-check-emails', '', '', sess.name, list.filter(function (x) { return x.result !== 'OK'; }).length + ' ไม่ผ่าน / ' + list.length);
+  return { ok:true, emails:list };
 }

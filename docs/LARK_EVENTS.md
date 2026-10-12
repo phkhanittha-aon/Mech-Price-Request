@@ -18,7 +18,10 @@
    - Security settings → เปิด **Signature verification** แล้วคัดลอก **Secret**
    - **ห้ามเปิด** Custom keywords และ IP whitelist
 3. เพิ่ม Bot B ด้วยวิธีเดียวกัน ตั้งชื่อ `MGS Reminder` (ไม่บังคับ ถ้าไม่ตั้ง การ์ดเตือนจะส่งผ่าน Bot A)
-4. Apps Script → ⚙️ Project Settings → **Script properties** → เพิ่มค่าต่อไปนี้ (ห้ามใส่ในโค้ดหรือในชีท)
+4. **ใส่ค่าในระบบ (v5.6 · แนะนำ):** เข้าระบบทำราคาด้วยบัญชี Admin / GM → เมนู **🔔 ตั้งค่า Lark Bot** → วาง Webhook URL + Secret → บันทึก → ส่งการ์ดทดสอบ
+   - หน้านี้เปลี่ยนโหมด (ทดสอบ / ส่งจริง / ปิด) และติดตั้งตัวส่งอัตโนมัติได้ด้วย ไม่ต้องเปิด Apps Script Editor
+   - ค่าที่บันทึกเก็บใน Script Properties ตัวเดียวกับตารางด้านล่าง ไม่ลงชีท ไม่ลง Log · หน้าเว็บไม่เคยได้รับ Secret กลับมา
+   - **หรือ**ใส่เองที่ Apps Script → ⚙️ Project Settings → **Script properties** (ห้ามใส่ในโค้ดหรือในชีท)
 
 | Property | ค่า |
 |---|---|

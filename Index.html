@@ -462,6 +462,16 @@ tr.det-row td{background:var(--surface-2);padding:12px 14px}
 .route-tag{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:2px 8px;border-radius:20px;background:var(--blue-soft);color:var(--blue);font-weight:600;white-space:nowrap}
 .route-tag.me{background:var(--orange);color:#fff}
 .route-tag.pool{background:var(--surface-2);color:var(--ink-2)}
+/* v5.6 ตั้งค่า Lark Bot */
+.lark-page{display:flex;flex-direction:column;gap:14px;max-width:1100px}
+.lark-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:15px}
+.lark-kv{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px 14px;font-size:13px;align-items:baseline}
+.lark-kv>span{min-width:0;overflow-wrap:anywhere}
+.lark-in{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-top:14px}
+.lark-in .f{min-width:0}
+.lark-msg{margin-top:10px;padding:8px 12px;border-radius:9px;font-size:13px}
+.lark-msg.ok{background:var(--green-soft);color:var(--green)}.lark-msg.bad{background:var(--red-soft);color:var(--red)}
+@media(max-width:720px){.lark-in{grid-template-columns:1fr}.lark-kv{grid-template-columns:90px minmax(0,1fr)}}
 /* v5.4 หมวดสินค้า → กลุ่มสินค้า → ผู้รับผิดชอบ */
 .cat-tree{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:10px}
 .cat-tree-g{border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:0}
@@ -634,8 +644,8 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='5.5';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
-const BUILD='2026-10-11 · build 5.5 · โหลดเร็วขึ้น · ไม่รีเฟรชเอง · Floating อยู่กลุ่ม Mounting';
+const APP_VERSION='5.6';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const BUILD='2026-10-12 · build 5.6 · หน้าตั้งค่า Lark Bot';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
@@ -2137,8 +2147,10 @@ const NAV=[
   {group:'ระบบ',perm:'settings'},
   {id:'settings',label:'ตั้งค่า Default',icon:'sliders',perm:'settings'},
   {id:'users',label:'จัดการผู้ใช้',icon:'users',perm:'users'},
+  {id:'larkbot',label:'ตั้งค่า Lark Bot',icon:'bell',perm:'users'},
 ];
 const ICONS={
+  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
   check:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   chart:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/>',
@@ -2175,7 +2187,7 @@ function renderNav(){
    ตรวจสิทธิ์ "ทุกครั้งที่ route ถูกเปิด" ไม่ว่ามาจากเมนู, Back/Forward,
    Refresh หรือพิมพ์ URL ตรง ๆ — ไม่ได้พึ่ง Browser Back เป็นตัวคุมสิทธิ์
    ============================================================ */
-var ROUTE_CAPS={settings:'manageSetting',users:'manageUsers',summary:'viewCost',
+var ROUTE_CAPS={settings:'manageSetting',users:'manageUsers',larkbot:'manageUsers',summary:'viewCost',
   master:'viewCost',new:'writeQuote',preview:'viewCost',quotes:'viewCost',
   followup:'viewCost',salesupdate:'viewCost',srqueue:'viewCost',salessummary:'viewCost',
   dashboard:null,denied:null,approvals:'approve'};
@@ -2215,6 +2227,7 @@ function go(r,force){
   }
   if(!routeAllowed(r)){route='denied';renderNav();render();toast('ไม่มีสิทธิ์เข้าหน้านี้','bad');return}
   route=r;if(r!=='new'){editing=null;dirty=false;}
+  if(r==='larkbot'){_lark.loaded=false;_lark.msg={};}          // v5.6: เข้าหน้าตั้งค่า Lark = อ่านสถานะล่าสุดจาก server ทุกครั้ง
   if(r!=='salesrequest'&&!_srEditPending)srEditId=null;      // ออกจากฟอร์ม = เลิกโหมดแก้ไข
   if(r!=='new')_editConflict=null;
   syncHash();renderNav();render();setLiveStamp();
@@ -2243,7 +2256,7 @@ function openPendingDoc(){
   PENDING_DOC='';
   if(routeAllowed('preview'))openQuote(id);else toast('บัญชีของคุณเปิดเอกสารนี้ไม่ได้','bad');
 }
-const TITLES={approvals:'รออนุมัติราคา',dashboard:'ภาพรวม',salessummary:'สรุปทีมขาย — สำหรับอัปเดตผู้บริหาร',summary:'สรุปยอดขาย & GP',srqueue:'คำขอราคา (SR)',new:'ทำราคาใหม่',quotes:'ใบเสนอราคา (QT)',followup:'ติดตามงาน',salesupdate:'อัพเดตโครงการ (Sales)',master:'ข้อมูลสินค้า & ราคา Default',settings:'ตั้งค่า Default',users:'จัดการผู้ใช้',preview:'ดูใบเสนอราคา',salesdash:'My Projects',salesrequest:'ขอราคาใหม่'};
+const TITLES={larkbot:'ตั้งค่า Lark Bot',approvals:'รออนุมัติราคา',dashboard:'ภาพรวม',salessummary:'สรุปทีมขาย — สำหรับอัปเดตผู้บริหาร',summary:'สรุปยอดขาย & GP',srqueue:'คำขอราคา (SR)',new:'ทำราคาใหม่',quotes:'ใบเสนอราคา (QT)',followup:'ติดตามงาน',salesupdate:'อัพเดตโครงการ (Sales)',master:'ข้อมูลสินค้า & ราคา Default',settings:'ตั้งค่า Default',users:'จัดการผู้ใช้',preview:'ดูใบเสนอราคา',salesdash:'My Projects',salesrequest:'ขอราคาใหม่'};
 const SALES_ONLY_ROUTES=['salesdash','salesrequest','preview'];
 function render(){
   // ด่านสุดท้าย: ไม่ว่าจะมาถึงหน้านี้ด้วยวิธีใด (เมนู / Back / Forward / Refresh / URL ตรง)
@@ -2268,6 +2281,7 @@ function render(){
   else if(route==='master')c.innerHTML=viewMaster();
   else if(route==='settings')c.innerHTML=viewSettings();
   else if(route==='users')c.innerHTML=viewUsers();
+  else if(route==='larkbot'){c.innerHTML=viewLarkBot();if(!_lark.loaded&&!_lark.busy)larkLoad();}
   else if(route==='preview')c.innerHTML=viewPreview();
 }
 
@@ -4732,6 +4746,126 @@ function saveSettings(){
   // v5.5: server คง dataEpoch ของตัวเองไว้ และคืนเลข rev ที่ใช้จริง (ไม่ถอยหลัง) → จำไว้ ไม่ให้เครื่องนี้ดึงตั้งค่าของตัวเองกลับมาซ้ำ
   if(cloudReady())postCloud({action:'saveSettings',settingsRev:SETTINGS.settingsRev,settingsUpdatedAt:SETTINGS.settingsUpdatedAt,detail:JSON.stringify(SETTINGS)})
     .then(r=>{const v=r&&r.ok&&r.data&&+r.data.settingsRev;if(v&&v>(SETTINGS.settingsRev||0)){SETTINGS.settingsRev=v;LS.set('settings',SETTINGS);}}).catch(()=>{});
+}
+
+/* ============================================================ v5.6 ตั้งค่า Lark Bot (Admin / GM)
+   Webhook + Secret เก็บใน Script Properties ที่ server (larkAdmin_ ใน Lark.gs) — หน้านี้ไม่เคยได้รับ Secret กลับมา
+   ไม่เก็บค่าที่พิมพ์ไว้ใน localStorage / ตัวแปร: ส่งแล้วล้างช่องทันที · สิทธิ์ตรวจที่ server ทุกคำขอ           */
+const LARK_HOOK_RE=/^https:\/\/open\.(larksuite\.com|feishu\.cn)\/open-apis\/bot\/v2\/hook\/[A-Za-z0-9_-]{8,}$/;
+const LARK_BOT_UI={A:{icon:'🤖',name:'MGS Price Request',sub:'แจ้งทุกขั้นตอนของคำขอราคา · ใบเสนอราคา'},
+                   B:{icon:'⏰',name:'MGS Reminder',sub:'แจ้งเฉพาะงานที่เกินกำหนด (ตรวจทุกชั่วโมงในเวลาทำงาน)'}};
+const LARK_MODE_TH={dryrun:'ทดสอบ — สร้างการ์ดเก็บไว้ในแท็บ NotifyQueue ยังไม่ส่งเข้ากลุ่ม',live:'ส่งจริงเข้ากลุ่ม Lark',off:'ปิดการแจ้งเตือน'};
+const LARK_ERR_TH={BAD_WEBHOOK:'Webhook URL ไม่ถูกรูปแบบ — ต้องขึ้นต้นด้วย https://open.larksuite.com/open-apis/bot/v2/hook/',
+  BAD_SECRET:'Secret ไม่ถูกต้อง (มีช่องว่าง หรือยาวเกิน) — คัดลอกใหม่จาก Security settings',NOTHING_TO_SAVE:'ยังไม่ได้กรอก Webhook URL หรือ Secret ใหม่',
+  LARK_NOT_SET:'ยังไม่ได้ตั้ง Webhook URL ของบอทตัวนี้',LARK_NOT_READY:'ยังเปิดส่งจริงไม่ได้ — ตั้ง Webhook ของบอทตัวแรกให้ถูกต้องก่อน',
+  LARK_FILE_MISSING:'ไม่พบไฟล์ Lark.gs ในโปรเจกต์ Apps Script — วางไฟล์ Lark.gs แล้ว Deploy ใหม่',
+  TRIGGER_FAILED:'ติดตั้งจากหน้าเว็บไม่ได้ (สิทธิ์ของ Deploy) — เปิด Apps Script Editor แล้วรัน larkInstallTriggers() 1 ครั้ง',
+  ACCESS_DENIED:'เฉพาะ Admin / GM เท่านั้น'};
+let _lark={loaded:false,busy:false,st:null,err:'',msg:{}};
+function larkErrTh(r){const d=(r&&r.data)||{};return LARK_ERR_TH[d.error]||LARK_ERR_TH[r&&r.error]||((d.error||r&&r.error||'ติดต่อ server ไม่ได้')+'')}
+async function larkCall(payload){
+  if(!cloudReady())return {ok:false,error:'ยังไม่ได้เชื่อมต่อ Google Sheet'};
+  _lark.busy=true;const r=await postCloud(payload);_lark.busy=false;
+  if(r&&r.ok&&r.data&&r.data.ok!==false&&r.data.bots){_lark.st=r.data;_lark.loaded=true;_lark.err='';}
+  return r;
+}
+async function larkLoad(){
+  const r=await larkCall({action:'larkStatus'});
+  if(!(r&&r.ok&&r.data&&r.data.ok!==false)){_lark.err=larkErrTh(r);_lark.loaded=true;}
+  if(route==='larkbot')render();
+}
+function larkStamp(l){
+  if(!l||!l.at)return '<span class="hint">ยังไม่เคยส่ง</span>';
+  const okc=l.status==='SENT'?'<b style="color:var(--green)">ส่งสำเร็จ</b>':l.status==='DRYRUN'?'<span class="tag grey" style="font-size:10.5px">โหมดทดสอบ (ไม่ได้ส่งจริง)</span>'
+    :l.status==='RETRY'?'<b style="color:var(--amber)">กำลังลองใหม่</b>':'<b style="color:var(--red)">ไม่สำเร็จ</b>';
+  return `${esc(fmtTime(l.at))} · ${esc(l.whatTh||l.what||'')} · ${okc}${l.err&&l.status!=='SENT'?`<div class="hint" style="color:var(--red)">${esc(l.err)}</div>`:''}`;
+}
+function larkBotCard(b){
+  const s=(_lark.st&&_lark.st.bots&&_lark.st.bots[b])||{},ui=LARK_BOT_UI[b],m=_lark.msg[b];
+  return `<div class="card lark-card" id="larkBot${b}"><div class="card-b">
+    <div class="lark-h"><span style="font-size:18px">${ui.icon}</span><b>${esc(ui.name)}</b><span class="hint">${esc(ui.sub)}</span></div>
+    <div class="lark-kv">
+      <span class="hint">Webhook URL</span><span>${s.urlSet?`<b style="color:var(--green)">✓ ตั้งแล้ว</b> <span class="mono" style="font-size:12px">${esc(s.url)}</span>`
+        :`<b style="color:var(--amber)">ยังไม่ได้ตั้ง</b>${b==='B'?' <span class="hint">— การ์ดเตือนจะส่งผ่าน '+esc(LARK_BOT_UI.A.name)+' แทน</span>':''}`}</span>
+      <span class="hint">Secret</span><span>${s.secretSet?'<b style="color:var(--green)">✓ ตั้งแล้ว</b> <span class="hint">(ซ่อนไว้)</span>'
+        :(s.urlSet?'<b style="color:var(--amber)">ยังไม่ได้ตั้ง</b> <span class="hint">— แนะนำให้เปิด Signature verification</span>':'<span class="hint">—</span>')}</span>
+      <span class="hint">ส่งล่าสุด</span><span>${larkStamp(s.last)}</span></div>
+    <div class="lark-in">
+      <div class="f"><label class="lbl">Webhook URL ใหม่</label><input class="inp mono" id="lkUrl${b}" autocomplete="off" spellcheck="false" placeholder="https://open.larksuite.com/open-apis/bot/v2/hook/…" oninput="larkCheckUrl('${b}')"></div>
+      <div class="f"><label class="lbl">Secret ใหม่</label><input class="inp mono" id="lkSec${b}" type="password" autocomplete="new-password" spellcheck="false" placeholder="จาก Security settings → Signature verification"></div></div>
+    <div class="hint" id="lkHint${b}" style="margin-top:6px">เว้นว่างช่องที่ไม่ต้องการเปลี่ยน · ค่าที่บันทึกเก็บใน Script Properties (<span class="mono">${esc(s.urlKey||'')}</span>, <span class="mono">${esc(s.secretKey||'')}</span>) ไม่อยู่ใน Sheet</div>
+    ${m?`<div class="lark-msg ${m.ok?'ok':'bad'}">${m.html}</div>`:''}
+    <div class="row-flex" style="gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn" onclick="larkSave('${b}')" ${_lark.busy?'disabled':''}>💾 บันทึก</button>
+      <button class="btn ghost" onclick="larkTest('${b}')" ${(!s.urlSet||_lark.busy)?'disabled':''} title="${s.urlSet?'ส่งการ์ดทดสอบเข้ากลุ่มทันที (ไม่สนโหมด) แท็กอีเมลของคุณ':'ตั้ง Webhook URL ก่อน'}">📨 ส่งการ์ดทดสอบ</button>
+      <button class="btn ghost" style="color:var(--red);border-color:var(--red)" onclick="larkClear('${b}')" ${(!s.urlSet&&!s.secretSet)||_lark.busy?'disabled':''}>ลบค่า</button></div>
+  </div></div>`;
+}
+function viewLarkBot(){
+  const st=_lark.st;
+  const how=`<div class="card"><div class="card-b" style="font-size:13px;line-height:1.75">
+    <b>วิธีสร้างบอท (ทำ 2 ตัวในกลุ่มเดียวกัน):</b> กลุ่ม Lark → ⚙️ Settings → <b>Bots</b> → <b>Add Bot</b> → <b>Custom Bot</b> →
+    ตั้งชื่อ “${esc(LARK_BOT_UI.A.name)}” / “${esc(LARK_BOT_UI.B.name)}” → <b>Security settings:</b> ✅ <b>Set signature verification</b>
+    (ไม่ต้องตั้ง keywords / IP) → คัดลอก Webhook URL และ Secret มาวางด้านล่าง → บันทึก → กด “ส่งการ์ดทดสอบ”</div></div>`;
+  if(!st)return `${how}<div class="card" style="margin-top:14px"><div class="card-b">${_lark.err?`<div class="lark-msg bad">${esc(_lark.err)}</div><button class="btn sm" style="margin-top:10px" onclick="_lark.loaded=false;larkLoad()">ลองใหม่</button>`
+    :'<div class="hint"><span class="live-spin"></span> กำลังอ่านการตั้งค่าจาก server…</div>'}</div></div>`;
+  const mode=st.mode||'dryrun',tg=st.triggers||{};
+  const modeBtn=(m,label)=>`<button class="${mode===m?'on':''}" onclick="larkSetMode('${m}')" ${_lark.busy?'disabled':''}>${label}</button>`;
+  return `<div class="lark-page">${how}
+  <div class="card"><div class="card-b">
+    <div class="lark-h"><span style="font-size:18px">⚙️</span><b>โหมดการแจ้งเตือน</b></div>
+    <div class="row-flex" style="gap:10px;flex-wrap:wrap;align-items:center">
+      <div class="seg">${modeBtn('dryrun','🧪 ทดสอบ')}${modeBtn('live','🟢 ส่งจริง')}${modeBtn('off','⏸ ปิด')}</div>
+      <span class="hint">${esc(LARK_MODE_TH[mode]||mode)}</span></div>
+    <div class="lark-kv" style="margin-top:12px">
+      <span class="hint">ตัวส่งอัตโนมัติ</span><span>${tg.known===false?'<span class="hint">ตรวจไม่ได้</span>':(tg.flush&&tg.sla?'<b style="color:var(--green)">✓ ติดตั้งแล้ว</b> <span class="hint">(ส่งคิวทุก 5 นาที · ตรวจงานเกินกำหนดทุกชั่วโมง)</span>'
+        :'<b style="color:var(--red)">ยังไม่ได้ติดตั้ง</b> <span class="hint">— การ์ดจะค้างในคิว ไม่ถูกส่ง</span>')}
+        <button class="btn tiny ghost" style="margin-left:6px" onclick="larkTriggers()" ${_lark.busy?'disabled':''}>${tg.flush&&tg.sla?'ติดตั้งใหม่':'ติดตั้งตอนนี้'}</button></span>
+      ${(st.noEmail||[]).length?`<span class="hint">ยังไม่มีอีเมล</span><span><span style="color:var(--amber)">@แท็กไม่ได้ (แสดงเป็นชื่อธรรมดา):</span> ${esc(st.noEmail.join(', '))} <span class="hint">— เติมอีเมลบัญชี Lark ในหน้าจัดการผู้ใช้</span></span>`:''}
+    </div>
+    ${(st.problems||[]).length?`<div class="lark-msg bad">${st.problems.map(esc).join('<br>')}</div>`:''}
+    ${_lark.msg.mode?`<div class="lark-msg ${_lark.msg.mode.ok?'ok':'bad'}">${_lark.msg.mode.html}</div>`:''}
+  </div></div>
+  ${larkBotCard('A')}${larkBotCard('B')}</div>`;
+}
+function larkCheckUrl(b){
+  const el=document.getElementById('lkUrl'+b),h=document.getElementById('lkHint'+b);if(!el)return;
+  const v=el.value.trim(),bad=v&&!LARK_HOOK_RE.test(v);
+  el.style.borderColor=bad?'var(--red)':'';
+  if(h&&bad)h.innerHTML='<span style="color:var(--red)">'+esc(LARK_ERR_TH.BAD_WEBHOOK)+'</span>';
+}
+async function larkSave(b){
+  const u=document.getElementById('lkUrl'+b),s=document.getElementById('lkSec'+b);
+  const url=((u&&u.value)||'').trim(),secret=((s&&s.value)||'').trim();
+  if(!url&&!secret){_lark.msg[b]={ok:false,html:esc(LARK_ERR_TH.NOTHING_TO_SAVE)};render();return}
+  if(url&&!LARK_HOOK_RE.test(url)){_lark.msg[b]={ok:false,html:esc(LARK_ERR_TH.BAD_WEBHOOK)};render();return}
+  if(u)u.value='';if(s)s.value='';                            // ไม่ค้างค่าลับไว้ในหน้า
+  const r=await larkCall({action:'larkSave',bot:b,url,secret});
+  _lark.msg[b]=(r&&r.ok&&r.data&&r.data.ok!==false)?{ok:true,html:'✓ บันทึกแล้ว ('+[url?'Webhook':'',secret?'Secret':''].filter(Boolean).join(' + ')+') — กด “ส่งการ์ดทดสอบ” เพื่อตรวจ'}:{ok:false,html:esc(larkErrTh(r))};
+  render();
+}
+async function larkTest(b){
+  _lark.msg[b]={ok:true,html:'<span class="live-spin"></span> กำลังส่งการ์ดทดสอบ…'};render();
+  const r=await larkCall({action:'larkTest',bot:b}),t=r&&r.data&&r.data.test;
+  _lark.msg[b]=t?(t.ok?{ok:true,html:'✓ ส่งการ์ดทดสอบเข้ากลุ่มแล้ว'+(t.mentioned?' — ถ้าชื่อคุณในการ์ดเป็นสีฟ้า แปลว่า @แท็กได้':' — บัญชีคุณยังไม่มีอีเมลในแท็บ Users จึงไม่ได้ถูกแท็ก')}
+      :{ok:false,html:'ส่งไม่สำเร็จ: '+esc(t.err||'')}):{ok:false,html:esc(larkErrTh(r))};
+  render();
+}
+function larkClear(b){
+  confirmModal('ลบค่าของ '+esc(LARK_BOT_UI[b].name)+'?','ลบ Webhook URL และ Secret ของบอทนี้ออกจาก Script Properties'+(b==='A'?'<br><b style="color:var(--red)">การแจ้งเตือนทุกขั้นตอนจะหยุดส่ง</b>':'<br>การ์ดเตือนจะส่งผ่าน '+esc(LARK_BOT_UI.A.name)+' แทน'),
+    async()=>{closeModal();const r=await larkCall({action:'larkClear',bot:b});_lark.msg[b]=(r&&r.ok&&r.data&&r.data.ok!==false)?{ok:true,html:'ลบค่าแล้ว'}:{ok:false,html:esc(larkErrTh(r))};render();},'ยืนยันลบค่า');
+}
+function larkSetMode(m){
+  const cur=_lark.st&&_lark.st.mode;if(m===cur)return;
+  const go2=async()=>{closeModal();const r=await larkCall({action:'larkMode',mode:m});
+    const d=r&&r.data;_lark.msg.mode=(r&&r.ok&&d&&d.ok!==false)?{ok:true,html:'✓ เปลี่ยนเป็น '+esc(LARK_MODE_TH[m])}
+      :{ok:false,html:esc(larkErrTh(r))+((d&&d.problems)?'<br>'+d.problems.map(esc).join('<br>'):'')};render();};
+  if(m==='live')confirmModal('เปิดส่งจริง?','การ์ดทุกขั้นตอนจะถูกส่งเข้ากลุ่ม Lark ตั้งแต่รอบถัดไป (ภายใน 5 นาที)<br><span class="hint">การ์ดที่สร้างไว้ในโหมดทดสอบจะไม่ถูกส่งย้อนหลัง</span>',go2,'เปิดส่งจริง');
+  else go2();
+}
+async function larkTriggers(){
+  const r=await larkCall({action:'larkTriggers'});
+  _lark.msg.mode=(r&&r.ok&&r.data&&r.data.ok!==false)?{ok:true,html:'✓ ติดตั้งตัวส่งอัตโนมัติแล้ว'}:{ok:false,html:esc(larkErrTh(r))};render();
 }
 
 /* ============================================================ USERS */

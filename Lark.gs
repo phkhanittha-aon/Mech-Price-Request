@@ -38,7 +38,7 @@
  *   ค่าของ v4.9 (LARK_WEBHOOK_*, LARK_APP_ID, LARK_CHAT_*) ไม่ใช้แล้ว — ยกเว้น LARK_WEBHOOK_REQUESTS ใช้แทน Bot A ได้ชั่วคราว
  *************************************************************/
 
-var LARK_VERSION = '5.2';
+var LARK_VERSION = '5.6';
 
 /* ============================================================ 1) EVENT TABLE */
 /**
@@ -600,4 +600,116 @@ function larkQueueReport(n) {
   });
   Logger.log(rows.join('\n'));
   return rows;
+}
+
+/* ============================================================ 6) หน้าตั้งค่า Lark Bot ในเว็บ (v5.6)
+ * ให้ Admin / GM ใส่ Webhook + Secret จากหน้าเว็บได้ — ค่าเก็บใน Script Properties ที่เดิม (ไม่ลงชีท ไม่ลง Log)
+ *   · สิทธิ์ตัดสินที่ server (need_ 'manageUsers' ใน handle_) — client ซ่อนเมนูอย่างเดียวไม่พอ
+ *   · ไม่ส่ง Secret กลับไปที่หน้าเว็บเลย · URL แสดงแบบปิดบัง (…/hook/••••xxxx)
+ *   · เว้นว่าง = ไม่เปลี่ยนค่าเดิม · "ลบค่า" = ลบออกจาก Script Properties
+ *   · ส่งการ์ดทดสอบ = ยิงจริงทันที (ไม่สนโหมด) ไปที่บอทตัวนั้นตัวเดียว แท็กอีเมลของคนที่กด */
+var LARK_ADMIN_ACTIONS = ['larkStatus', 'larkSave', 'larkClear', 'larkTest', 'larkMode', 'larkTriggers'];
+function larkMaskUrl_(u) {
+  u = String(u || ''); if (!u) return '';
+  var m = /^(https:\/\/[^\/]+)\/.*\/hook\/(.*)$/.exec(u);
+  return m ? m[1] + '/…/hook/••••' + m[2].slice(-4) : '••••' + u.slice(-4);
+}
+/** การส่งล่าสุดของบอทจากแท็บ NotifyQueue (อ่านครั้งเดียว ย้อนหลังไม่เกิน LARK_DEDUP_SCAN แถว) */
+function larkLastFromQueue_() {
+  var out = { A:null, B:null };
+  try {
+    var sh = sheet_(SH.NOTIFY), last = sh.getLastRow(); if (last < 2) return out;
+    var idx = headerIndex_(sh), from = Math.max(2, last - LARK_DEDUP_SCAN + 1);
+    var data = sh.getRange(from, 1, last - from + 1, sh.getLastColumn()).getValues();
+    for (var i = data.length - 1; i >= 0 && (!out.A || !out.B); i--) {
+      var st = String(cell_(data[i], idx, 'Status'));
+      if (['SENT', 'FAILED', 'RETRY', 'DRYRUN', 'SKIPPED'].indexOf(st) < 0) continue;
+      var b = String(cell_(data[i], idx, 'Target')) === 'REMINDER' ? 'B' : 'A';
+      if (out[b]) continue;
+      out[b] = { at:toIso_(cell_(data[i], idx, 'SentAt') || cell_(data[i], idx, 'NextAt') || cell_(data[i], idx, 'CreatedAt')),
+                 what:String(cell_(data[i], idx, 'Event')), status:st, err:String(cell_(data[i], idx, 'LastError') || '').slice(0, 200) };
+    }
+  } catch (e) {}
+  return out;
+}
+function larkTriggerState_() {
+  var s = { flush:false, sla:false, known:true };
+  try { ScriptApp.getProjectTriggers().forEach(function (t) { var f = t.getHandlerFunction(); if (f === 'larkFlush') s.flush = true; if (f === 'larkSlaScan') s.sla = true; }); }
+  catch (e) { s.known = false; }
+  return s;
+}
+function larkStatus_() {
+  var props = larkProps_(), check = larkValidateConfig_(props), q = larkLastFromQueue_(), bots = {};
+  for (var b in LARK_BOTS) {
+    var def = LARK_BOTS[b], url = String(props[def.url] || '').trim(), test = null;
+    try { test = props['LARK_LAST_TEST_' + b] ? JSON.parse(props['LARK_LAST_TEST_' + b]) : null; } catch (e) { test = null; }
+    var last = q[b];
+    if (test && (!last || String(test.at) > String(last.at))) last = test;
+    if (last) last.whatTh = last.what === 'test' ? 'ส่งการ์ดทดสอบ' : ((LARK_EVENTS[last.what] || {}).th || last.what);
+    var dest = larkBotDest_(b, props);
+    bots[b] = { name:def.th, urlKey:def.url, secretKey:def.secret, urlSet:!!url, url:larkMaskUrl_(url), secretSet:!!String(props[def.secret] || '').trim(),
+                via:dest && dest.via !== b ? dest.via : '', last:last };
+  }
+  var noEmail = [];
+  try { noEmail = peopleCtx_().list.filter(function (u) { return u.active && !LARK_EMAIL_RE.test(u.email || ''); }).map(function (u) { return u.name; }); } catch (e) {}
+  return { ok:true, mode:larkMode_(props), problems:check.problems, warnings:check.warnings, bots:bots,
+           triggers:larkTriggerState_(), noEmail:noEmail, appUrl:!!larkAppUrl_(props) };
+}
+function larkAdmin_(action, p, sess) {
+  var P = PropertiesService.getScriptProperties(), bot = String(p.bot || ''), def = LARK_BOTS[bot];
+  if (action === 'larkStatus') return larkStatus_();
+  if (action === 'larkMode') {
+    var m = String(p.mode || '').toLowerCase();
+    if (['off', 'dryrun', 'live'].indexOf(m) < 0) return { ok:false, error:'BAD_VALUE' };
+    if (m === 'live') {
+      var c = larkValidateConfig_(Object.assign(larkProps_(), { LARK_MODE:'live' }));
+      if (c.problems.length) return { ok:false, error:'LARK_NOT_READY', problems:c.problems };
+    }
+    P.setProperty('LARK_MODE', m);
+    logRow_('lark-config', 'mode', m, sess.name, '');
+    return larkStatus_();
+  }
+  if (action === 'larkTriggers') {
+    try { larkInstallTriggers(); } catch (e) { return { ok:false, error:'TRIGGER_FAILED', detail:String(e).slice(0, 200) }; }
+    logRow_('lark-config', 'triggers', '', sess.name, 'installed');
+    return larkStatus_();
+  }
+  if (!def) return { ok:false, error:'BAD_VALUE' };
+  if (action === 'larkSave') {
+    var url = String(p.url || '').trim(), secret = String(p.secret || '').trim(), changed = [];
+    if (!url && !secret) return { ok:false, error:'NOTHING_TO_SAVE' };
+    if (url && !LARK_HOOK_RE.test(url)) return { ok:false, error:'BAD_WEBHOOK' };
+    if (secret && (/\s/.test(secret) || secret.length > 200)) return { ok:false, error:'BAD_SECRET' };
+    if (url) { P.setProperty(def.url, url); changed.push('webhook'); }
+    if (secret) { P.setProperty(def.secret, secret); changed.push('secret'); }
+    logRow_('lark-config', 'bot ' + bot, '', sess.name, 'ตั้ง ' + changed.join(' + '));   // ห้ามบันทึกค่าจริง
+    return larkStatus_();
+  }
+  if (action === 'larkClear') {
+    P.deleteProperty(def.url); P.deleteProperty(def.secret); P.deleteProperty('LARK_LAST_TEST_' + bot);
+    logRow_('lark-config', 'bot ' + bot, '', sess.name, 'ลบค่า');
+    return larkStatus_();
+  }
+  if (action === 'larkTest') {
+    var props = larkProps_(), u = String(props[def.url] || '').trim();
+    if (!u) return { ok:false, error:'LARK_NOT_SET' };
+    var dest = { url:u, secret:String(props[def.secret] || '').trim() };
+    var s = larkSampleInfo_({ name:sess.name, email:String(sess.email || '').toLowerCase() });
+    var ev = bot === 'B' ? 'SLA_REMINDER' : 'QT_SUBMITTED';
+    var info = Object.assign({}, s.qt, { docNo:'TEST-' + s.qt.docNo }, bot === 'B' ? { late:'เกินกำหนด 1 วันทำการ' } : {});
+    var card = larkBuild_(ev, info, larkAppUrl_(props)).card;
+    card.header.title.content = '[ทดสอบจากหน้าตั้งค่า] ' + card.header.title.content;
+    var res, code = 0, j = {}, err = '';
+    // fetchAll เท่านั้น (กติกาของไฟล์นี้)
+    try { res = UrlFetchApp.fetchAll([larkHookRequest_(dest, card)])[0]; code = res.getResponseCode(); try { j = JSON.parse(res.getContentText()); } catch (e) {} }
+    catch (e) { err = String(e).slice(0, 200); }
+    var okLark = !err && code === 200 && (j.code === 0 || j.StatusCode === 0);
+    if (!okLark && !err) err = ('HTTP ' + code + ' ' + (j.msg || j.StatusMessage || '') + larkHint_(j)).slice(0, 240);
+    var rec = { at:nowISO_(), what:'test', status:okLark ? 'SENT' : 'FAILED', err:err };
+    P.setProperty('LARK_LAST_TEST_' + bot, JSON.stringify(rec));
+    logRow_('lark-test', 'bot ' + bot, '', sess.name, okLark ? 'ส่งสำเร็จ' : err);
+    var st = larkStatus_(); st.test = { bot:bot, ok:okLark, err:err, mentioned:!!LARK_EMAIL_RE.test(String(sess.email || '')) };
+    return st;
+  }
+  return { ok:false, error:'unknown action: ' + action };
 }

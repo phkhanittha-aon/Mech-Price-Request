@@ -644,8 +644,8 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='5.7';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
-const BUILD='2026-10-12 · build 5.7 · การ์ด Lark ส่งถึงกลุ่มเสมอ · ตรวจอีเมล @แท็ก';
+const APP_VERSION='5.8';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const BUILD='2026-10-12 · build 5.8 · Reminder วันละครั้ง';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
    ห้ามพึ่งค่าตรงนี้เป็นด่านความปลอดภัย เพราะแก้ได้จาก devtools
@@ -4753,7 +4753,7 @@ function saveSettings(){
    ไม่เก็บค่าที่พิมพ์ไว้ใน localStorage / ตัวแปร: ส่งแล้วล้างช่องทันที · สิทธิ์ตรวจที่ server ทุกคำขอ           */
 const LARK_HOOK_RE=/^https:\/\/open\.(larksuite\.com|feishu\.cn)\/open-apis\/bot\/v2\/hook\/[A-Za-z0-9_-]{8,}$/;
 const LARK_BOT_UI={A:{icon:'🤖',name:'MGS Price Request',sub:'แจ้งทุกขั้นตอนของคำขอราคา · ใบเสนอราคา'},
-                   B:{icon:'⏰',name:'MGS Reminder',sub:'แจ้งเฉพาะงานที่เกินกำหนด (ตรวจทุกชั่วโมงในเวลาทำงาน)'}};
+                   B:{icon:'⏰',name:'MGS Reminder',sub:'แจ้งเฉพาะงานที่เกินกำหนด · วันละครั้ง จ.–ศ.'}};
 const LARK_MODE_TH={dryrun:'ทดสอบ — สร้างการ์ดเก็บไว้ในแท็บ NotifyQueue ยังไม่ส่งเข้ากลุ่ม',live:'ส่งจริงเข้ากลุ่ม Lark',off:'ปิดการแจ้งเตือน'};
 const LARK_ERR_TH={BAD_WEBHOOK:'Webhook URL ไม่ถูกรูปแบบ — ต้องขึ้นต้นด้วย https://open.larksuite.com/open-apis/bot/v2/hook/',
   BAD_SECRET:'Secret ไม่ถูกต้อง (มีช่องว่าง หรือยาวเกิน) — คัดลอกใหม่จาก Security settings',NOTHING_TO_SAVE:'ยังไม่ได้กรอก Webhook URL หรือ Secret ใหม่',
@@ -4818,11 +4818,15 @@ function viewLarkBot(){
       <div class="seg">${modeBtn('dryrun','🧪 ทดสอบ')}${modeBtn('live','🟢 ส่งจริง')}${modeBtn('off','⏸ ปิด')}</div>
       <span class="hint">${esc(LARK_MODE_TH[mode]||mode)}</span></div>
     <div class="lark-kv" style="margin-top:12px">
-      <span class="hint">ตัวส่งอัตโนมัติ</span><span>${tg.known===false?'<span class="hint">ตรวจไม่ได้</span>':(tg.flush&&tg.sla?'<b style="color:var(--green)">✓ ติดตั้งแล้ว</b> <span class="hint">(โหมดส่งจริงส่งทันทีตอนบันทึก · ตัวนี้ลองส่งรายการที่ค้างทุก 5 นาที + ตรวจงานเกินกำหนดทุกชั่วโมง)</span>'
+      <span class="hint">ตัวส่งอัตโนมัติ</span><span>${tg.known===false?'<span class="hint">ตรวจไม่ได้</span>':(tg.flush&&tg.sla?'<b style="color:var(--green)">✓ ติดตั้งแล้ว</b> <span class="hint">(โหมดส่งจริงส่งทันทีตอนบันทึก · ตัวนี้ลองส่งรายการที่ค้างทุก 5 นาที + เตือนงานเกินกำหนดวันละครั้ง)</span>'
         :'<b style="color:var(--red)">ยังไม่ได้ติดตั้ง</b> <span class="hint">— การ์ดจะค้างในคิว ไม่ถูกส่ง</span>')}
         <button class="btn tiny ghost" style="margin-left:6px" onclick="larkTriggers()" ${_lark.busy?'disabled':''}>${tg.flush&&tg.sla?'ติดตั้งใหม่':'ติดตั้งตอนนี้'}</button></span>
       ${(st.noEmail||[]).length?`<span class="hint">ยังไม่มีอีเมล</span><span><span style="color:var(--amber)">@แท็กไม่ได้ (แสดงเป็นชื่อธรรมดา):</span> ${esc(st.noEmail.join(', '))} <span class="hint">— เติมอีเมลบัญชี Lark ในหน้าจัดการผู้ใช้</span></span>`:''}
     </div>
+    <div class="lark-kv" style="margin-top:8px"><span class="hint">เตือนเกินกำหนด</span><span>วันละครั้ง จ.–ศ. เวลา
+      <select class="inp" id="lkHour" style="width:auto;display:inline-block;padding:4px 26px 4px 9px;height:auto" onchange="larkSetHour(this.value)" ${_lark.busy?'disabled':''}>
+        ${[8,9,10,11,12,13,14,15,16].map(h=>`<option value="${h}" ${(+st.remindHour||9)===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}</select>
+      <span class="hint">· งานที่เพิ่งเกินกำหนดระหว่างวันจะเตือนรอบถัดไป${st.remindDay?' · รอบล่าสุด '+esc(st.remindDay):''}</span></span></div>
     <div class="lark-kv" style="margin-top:8px"><span class="hint">อีเมล @แท็ก</span><span>
       <button class="btn tiny ghost" onclick="larkCheckEmails()" ${(_lark.busy||!(st.bots&&st.bots.A&&st.bots.A.urlSet))?'disabled':''}>🔎 ตรวจอีเมลทีละคน</button>
       <span class="hint">อีเมลในแท็บ Users ต้องเป็นอีเมลบัญชี Lark ในองค์กร — ถ้าไม่ใช่ Lark ไม่รับการ์ดที่แท็กคนนั้น (ระบบส่งซ้ำแบบไม่แท็กให้อัตโนมัติ)</span></span></div>
@@ -4884,6 +4888,10 @@ function larkCheckEmails(){
       const r=await larkCall({action:'larkCheckEmails'}),d=r&&r.data;
       if(r&&r.ok&&d&&d.ok!==false&&d.emails){_lark.emails=d.emails;_lark.msg.mode=null;}else _lark.msg.mode={ok:false,html:esc(larkErrTh(r))};
       render();},'ส่งการ์ดตรวจ');
+}
+async function larkSetHour(h){
+  const r=await larkCall({action:'larkRemindHour',hour:+h});
+  _lark.msg.mode=(r&&r.ok&&r.data&&r.data.ok!==false)?{ok:true,html:'✓ เตือนงานเกินกำหนดวันละครั้ง เวลา '+String(h).padStart(2,'0')+':00 น. (จ.–ศ.)'}:{ok:false,html:esc(larkErrTh(r))};render();
 }
 async function larkTriggers(){
   const r=await larkCall({action:'larkTriggers'});

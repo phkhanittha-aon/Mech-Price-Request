@@ -191,6 +191,7 @@ ok('นอกเวลาทำงาน (20:00) → ไม่เตือน', 
 ok('วันเสาร์ → ไม่เตือน', W.ctx.larkSlaScan({ nowMs: at(sat, 10, 0) }).skipped === 'outside-working-hours');
 ok('trigger ส่ง event object มา (ไม่มี nowMs) → ใช้เวลาจริง ไม่พัง', (() => { const x = W.ctx.larkSlaScan({ authMode: 'FULL', triggerUid: '1' }); return !!x && !x.error; })());
 W.sheets['NotifyQueue'].rows.splice(1);
+delete W.props.LARK_REMIND_DAY;   // v5.8: เตือนวันละรอบ — การเรียกด้วยเวลาจริงด้านบนอาจจดรอบของวันนี้ไว้แล้ว (ล้างเหมือนล้างคิว)
 const s1 = W.ctx.larkSlaScan({ nowMs: morning }); q = W.Q().filter(x => x.Event === 'SLA_REMINDER');
 ok('งานเกินกำหนด 2 งาน (รออนุมัติ) → การ์ดเตือนงานละ 1 ใบ เข้า Bot B', s1.reminded === 2 && q.length === 2 && q.every(x => x.Target === 'REMINDER'), [s1, q.map(x => x.Title)]);
 ok('เรียงเกินกำหนดนานสุดก่อน (S1 ก่อน S2)', q[0].DocId === 'S1' && q[1].DocId === 'S2');

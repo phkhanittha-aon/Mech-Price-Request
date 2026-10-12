@@ -11,7 +11,7 @@
  *
  * บอท 2 ตัว (Custom Bot ในกลุ่ม — ส่งการ์ด interactive + ปุ่มลิงก์ได้)
  *   Bot A  "MGS Price Request"  ทุกขั้นตอนของคำขอราคา              LARK_BOT_URL      + LARK_BOT_SECRET
- *   Bot B  "MGS Reminder"       เฉพาะงานที่เกินกำหนด (ตรวจทุกชั่วโมง)  LARK_REMINDER_URL + LARK_REMINDER_SECRET
+ *   Bot B  "MGS Reminder"       เฉพาะงานที่เกินกำหนด (วันละรอบ · v5.8)   LARK_REMINDER_URL + LARK_REMINDER_SECRET
  *          ไม่ตั้ง Bot B = ใช้ Bot A ส่งการ์ดเตือนแทน · Custom Bot รับการกดปุ่มกลับไม่ได้ → อนุมัติ/ปล่อยราคาบนเว็บเท่านั้น
  *
  * โครงสร้าง (สร้างข้อความ ↔ ส่ง แยกกัน)
@@ -35,11 +35,13 @@
  *   LARK_REMINDER_SECRET
  *   LARK_MENTION_REQUESTER   on (ค่าเริ่มต้น) | off — แท็ก Sales ผู้ขอในช่อง "ผู้ขอ" ทุกการ์ด
  *   LARK_SEND_NOW            on (ค่าเริ่มต้น · v5.7) = ส่งทันทีตอนบันทึก | off = เข้าคิวรอ trigger ทุก 5 นาที
+ *   LARK_REMIND_HOUR         8–16 (ค่าเริ่มต้น 9 · v5.8) — เวลารอบเตือนงานเกินกำหนด วันละครั้ง จ.–ศ.
+ *   LARK_REMIND_DAY          (ระบบเขียนเอง) วันที่ของรอบเตือนล่าสุด yyyy-MM-dd — กันเตือนซ้ำในวันเดียวกัน
  *   APP_URL                  URL /exec ของ Web App (ไม่ตั้ง = ใช้ ScriptApp.getService().getUrl())
  *   ค่าของ v4.9 (LARK_WEBHOOK_*, LARK_APP_ID, LARK_CHAT_*) ไม่ใช้แล้ว — ยกเว้น LARK_WEBHOOK_REQUESTS ใช้แทน Bot A ได้ชั่วคราว
  *************************************************************/
 
-var LARK_VERSION = '5.7';
+var LARK_VERSION = '5.8';
 
 /* ============================================================ 1) EVENT TABLE */
 /**
@@ -69,7 +71,7 @@ var LARK_EVENTS = {
   PRICE_RELEASED:     { bot:'A', th:'ปล่อยราคาแล้ว · Sales ดูราคาบนเว็บ',  icon:'🎉', color:'green',     mention:'requester', dedupMin:24 * 60,
                         when:'NON (ผู้ปล่อยราคา) กดปล่อยราคาให้ Sales เจ้าของงาน' },
   SLA_REMINDER:       { bot:'B', th:'งานค้างเกินกำหนด',                   icon:'⏰', color:'yellow',    mention:'actor',     dedupMin:20 * 60,
-                        when:'ตรวจทุกชั่วโมงในเวลาทำงาน: งานที่เกินกำหนด (ไม่รวมงานติดตามลูกค้าของ Sales) — วันละครั้งต่องานต่อขั้นตอน' }
+                        when:'วันละครั้ง (จ.–ศ. ค่าเริ่มต้น 09:00 · ตั้งได้ที่หน้าตั้งค่า Lark Bot): งานที่เกินกำหนด (ไม่รวมงานติดตามลูกค้าของ Sales) — วันละครั้งต่องานต่อขั้นตอน' }
 };
 var LARK_BOTS = {
   A: { th:'MGS Price Request', url:'LARK_BOT_URL',      secret:'LARK_BOT_SECRET' },
@@ -83,7 +85,8 @@ var LARK_RETRY_MIN = [1, 5, 15, 60, 180];        // ระยะรอก่อ�
 var LARK_FLUSH_MAX = 30;                          // ส่งได้สูงสุดต่อรอบ (กัน quota / timeout)
 var LARK_QUEUE_KEEP = 3000;                       // เก็บประวัติในแท็บ NotifyQueue ล่าสุดกี่แถว
 var LARK_DEDUP_SCAN = 1500;                       // ตรวจซ้ำย้อนหลังกี่แถว
-var LARK_REMIND_MAX = 15;                         // การ์ดเตือนสูงสุดต่อชั่วโมง (เกินกำหนดนานสุดก่อน)
+var LARK_REMIND_MAX = 30;                         // การ์ดเตือนสูงสุดต่อรอบ (วันละรอบ · เกินกำหนดนานสุดก่อน)
+var LARK_REMIND_HOUR_DEFAULT = 9;                 // v5.8: รอบเตือนงานเกินกำหนด วันละครั้ง (ชั่วโมง เวลาไทย)
 var LARK_WORK = { start:8 * 60 + 30, end:17 * 60 + 30 };   // เวลาทำงาน (นาทีของวัน เวลาไทย) — เตือนเฉพาะช่วงนี้ จ.–ศ.
 var LARK_ITEMS_MAX = 8;                           // รายการสินค้าในการ์ดสูงสุด
 
@@ -529,12 +532,26 @@ function larkWithLock_(fn) {
 /** งานที่ Bot B เตือน: เกินกำหนดและไม่ใช่งานติดตามลูกค้าของ Sales (SALES) / งานปิดแล้ว (DONE)
  *  v5.2: ไม่เตือนงานซ่อมข้อมูลรุ่นเก่า (REPAIR) ในกลุ่ม — แก้ได้ทีเดียวด้วยปุ่มในระบบ ไม่ใช่งานของคนในกลุ่ม */
 var LARK_REMIND_OWNERS = ['SOURCING', 'MANAGEMENT', 'RELEASER'];
-/** รายชั่วโมง (ชื่อเดิม larkSlaScan — trigger เดิมใช้ต่อได้) · opts.nowMs / opts.force ใช้ในเทสต์ (trigger ส่ง event object มา = ใช้เวลาจริง) */
+/** v5.8: เวลารอบเตือน (8–16 · ค่าเริ่มต้น 9) */
+function larkRemindHour_(props) {
+  var h = parseInt(String((props || larkProps_()).LARK_REMIND_HOUR || ''), 10);
+  return (h >= 8 && h <= 16) ? h : LARK_REMIND_HOUR_DEFAULT;
+}
+/** v5.8 วันละรอบ: trigger ยังเรียกทุกชั่วโมง (trigger เดิมใช้ต่อได้ ไม่ต้องติดตั้งใหม่) แต่ทำงานจริงแค่รอบแรกตั้งแต่เวลาที่ตั้งไว้ของวันทำการ
+ *  แล้วจดวันไว้ใน LARK_REMIND_DAY — ชั่วโมงอื่น ๆ ของวันนั้นออกทันทีโดยไม่อ่านชีท · งานที่เพิ่งเกินกำหนดระหว่างวัน = เตือนรอบเช้าวันทำการถัดไป
+ *  opts.nowMs / opts.force ใช้ในเทสต์และปุ่มทดสอบ (force = ไม่ดูเวลา/วัน) · trigger ส่ง event object มา = ใช้เวลาจริง */
 function larkSlaScan(opts) { return larkWithLock_(function () { return larkSlaScan_(opts); }); }
 function larkSlaScan_(opts) {
   var props = larkProps_(); if (larkMode_(props) === 'off') return { mode:'off' };
-  var now = (opts && typeof opts.nowMs === 'number') ? opts.nowMs : Date.now();
-  if (!(opts && opts.force === true) && !larkWorkingTime_(now)) return { skipped:'outside-working-hours' };
+  var now = (opts && typeof opts.nowMs === 'number') ? opts.nowMs : Date.now(), force = !!(opts && opts.force === true);
+  if (!force && !larkWorkingTime_(now)) return { skipped:'outside-working-hours' };
+  var today = Utilities.formatDate(new Date(now), TZ, 'yyyy-MM-dd');
+  if (!force) {
+    var hourTH = new Date(now + 7 * 3600000).getUTCHours();
+    if (hourTH < larkRemindHour_(props)) return { skipped:'before-remind-hour', hour:larkRemindHour_(props) };
+    if (String(props.LARK_REMIND_DAY || '') === today) return { skipped:'already-today' };
+  }
+  try { PropertiesService.getScriptProperties().setProperty('LARK_REMIND_DAY', today); } catch (e) {}   // จดก่อนส่ง: ล้มกลางทางก็ไม่ส่งซ้ำทั้งวัน
   var sh = sheet_(SH.QUOTES), last = sh.getLastRow(); if (last < 2) return { reminded:0, overdue:0 };
   var idx = headerIndex_(sh), data = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
   var cfg = followCfg_(), people = peopleCtx_(), cand = [];
@@ -566,12 +583,12 @@ function larkDailyDigest() { return { disabled:true, reason:'v5.0 ไม่ม�
 
 /* ============================================================ ADMIN TOOLS (รันจาก Editor) */
 /** ติดตั้ง trigger: ส่งคิวทุก 5 นาที · เตือนเกินกำหนดทุกชั่วโมง (รันซ้ำได้ ไม่ซ้อน · ลบ trigger สรุปประจำวันของ v4.9) */
-function larkInstallTriggers() {
+function larkInstallTriggers() {   // v5.8: larkSlaScan ยังรันทุกชั่วโมง แต่เตือนจริงวันละรอบ (larkSlaScan_ ตัดสินเอง)
   var names = ['larkFlush', 'larkSlaScan', 'larkDailyDigest'];
   ScriptApp.getProjectTriggers().forEach(function (t) { if (names.indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('larkFlush').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('larkSlaScan').timeBased().everyHours(1).create();
-  Logger.log('ติดตั้ง trigger แล้ว (larkFlush ทุก 5 นาที · larkSlaScan ทุกชั่วโมง) · โหมดตอนนี้ = %s (dryrun = ไม่ส่งจริง)', larkMode_());
+  Logger.log('ติดตั้ง trigger แล้ว (larkFlush ทุก 5 นาที · เตือนงานเกินกำหนดวันละครั้ง %s:00 น.) · โหมดตอนนี้ = %s (dryrun = ไม่ส่งจริง)', larkRemindHour_(), larkMode_());
 }
 /** ตรวจการตั้งค่า Lark (ไม่แสดง secret) + ผู้ใช้ที่ยังไม่มีอีเมล (แท็กไม่ได้) */
 function larkCheckConfig() {
@@ -663,7 +680,7 @@ function larkQueueReport(n) {
  *   · ไม่ส่ง Secret กลับไปที่หน้าเว็บเลย · URL แสดงแบบปิดบัง (…/hook/••••xxxx)
  *   · เว้นว่าง = ไม่เปลี่ยนค่าเดิม · "ลบค่า" = ลบออกจาก Script Properties
  *   · ส่งการ์ดทดสอบ = ยิงจริงทันที (ไม่สนโหมด) ไปที่บอทตัวนั้นตัวเดียว แท็กอีเมลของคนที่กด */
-var LARK_ADMIN_ACTIONS = ['larkStatus', 'larkSave', 'larkClear', 'larkTest', 'larkMode', 'larkTriggers', 'larkCheckEmails'];
+var LARK_ADMIN_ACTIONS = ['larkStatus', 'larkSave', 'larkClear', 'larkTest', 'larkMode', 'larkTriggers', 'larkCheckEmails', 'larkRemindHour'];
 function larkMaskUrl_(u) {
   u = String(u || ''); if (!u) return '';
   var m = /^(https:\/\/[^\/]+)\/.*\/hook\/(.*)$/.exec(u);
@@ -707,13 +724,21 @@ function larkStatus_() {
   }
   var noEmail = [];
   try { noEmail = peopleCtx_().list.filter(function (u) { return u.active && !LARK_EMAIL_RE.test(u.email || ''); }).map(function (u) { return u.name; }); } catch (e) {}
-  return { ok:true, mode:larkMode_(props), problems:check.problems, warnings:check.warnings, bots:bots,
+  return { ok:true, mode:larkMode_(props), remindHour:larkRemindHour_(props), remindDay:String(props.LARK_REMIND_DAY || ''),
+           problems:check.problems, warnings:check.warnings, bots:bots,
            triggers:larkTriggerState_(), noEmail:noEmail, appUrl:!!larkAppUrl_(props) };
 }
 function larkAdmin_(action, p, sess) {
   var P = PropertiesService.getScriptProperties(), bot = String(p.bot || ''), def = LARK_BOTS[bot];
   if (action === 'larkStatus') return larkStatus_();
   if (action === 'larkCheckEmails') return larkCheckEmails_(sess);
+  if (action === 'larkRemindHour') {                                       // v5.8: เวลารอบเตือนวันละครั้ง
+    var h = parseInt(String(p.hour), 10);
+    if (!(h >= 8 && h <= 16)) return { ok:false, error:'BAD_VALUE' };
+    P.setProperty('LARK_REMIND_HOUR', String(h));
+    logRow_('lark-config', 'remind-hour', String(h), sess.name, '');
+    return larkStatus_();
+  }
   if (action === 'larkMode') {
     var m = String(p.mode || '').toLowerCase();
     if (['off', 'dryrun', 'live'].indexOf(m) < 0) return { ok:false, error:'BAD_VALUE' };

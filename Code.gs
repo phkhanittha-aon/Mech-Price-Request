@@ -42,6 +42,7 @@
  *     · ทั้ง SR และ QT วิ่งถึงผู้ดูแลหมวดของรายการส่วนใหญ่ในใบ (routeFor_) · QT ที่มีผู้รับงานแล้ว (AssignedTo) ใช้คนนั้น
  *     · row.follow.resp = ผู้รับผิดชอบเอกสาร (ทุกขั้น) · follow.actor.uids = Id ของคนที่ต้องทำต่อ → หน้าติดตามงานกรอง "งานของฉัน" ได้ตรง
  *     · ไม่มีคอลัมน์ใหม่ · ใบเก่าที่ไม่มี routedSig ยังใช้ผู้รับเดิมตราบที่กลุ่มงานไม่เปลี่ยน (ไม่ย้ายงานที่ส่งไปแล้ว)
+ *  P) v5.8: การ์ดเตือนงานเกินกำหนด (Reminder) วันละรอบเดียว จ.–ศ. (ค่าเริ่มต้น 09:00 · ตั้งได้ในหน้าตั้งค่า Lark Bot · LARK_REMIND_HOUR)
  *  O) v5.7: การ์ด Lark ถูกปฏิเสธทั้งใบเมื่อมี @อีเมลที่ไม่ใช่บัญชี Lark (code 11246 · ErrCode 100290) → ส่งซ้ำแบบไม่แท็กอัตโนมัติ
  *     + ปุ่ม "ตรวจอีเมลทีละคน" ในหน้าตั้งค่า Lark Bot (larkCheckEmails_) บอกว่าอีเมลของใครแท็กไม่ได้
  *  N) v5.6: หน้า "ตั้งค่า Lark Bot" ในเว็บ (Admin / GM) — ใส่ Webhook + Secret ของบอททั้ง 2 ตัว · ส่งการ์ดทดสอบ · เปลี่ยนโหมด · ติดตั้ง trigger
@@ -70,7 +71,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '5.7';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '5.8';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -582,7 +583,7 @@ function handle_(p) {
       case 'addMaster':    return addMaster_(p, sess);
       case 'saveMaster':   return need_(sess,'manageSetting') || saveMaster_(p, sess);
       // v5.6: หน้าตั้งค่า Lark Bot — Admin / GM เท่านั้น (ค่าลับเก็บใน Script Properties · ไม่ส่ง Secret กลับไปหน้าเว็บ)
-      case 'larkStatus': case 'larkSave': case 'larkClear': case 'larkTest': case 'larkMode': case 'larkTriggers': case 'larkCheckEmails':
+      case 'larkStatus': case 'larkSave': case 'larkClear': case 'larkTest': case 'larkMode': case 'larkTriggers': case 'larkCheckEmails': case 'larkRemindHour':
         if (typeof larkAdmin_ !== 'function') return { ok:false, error:'LARK_FILE_MISSING' };
         return need_(sess,'manageUsers') || larkAdmin_(action, p, sess);
       default:             return { ok:false, error:'unknown action: ' + action };

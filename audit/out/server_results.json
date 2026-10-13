@@ -1,0 +1,618 @@
+{
+ "matrix": {
+  "GET quotations (ทั้งชุด)": {
+   "boss": "R",
+   "sales_non": "R",
+   "smgr": "R",
+   "src": "R+cost",
+   "pm": "R+cost",
+   "bd": "R+cost",
+   "gm": "R+cost",
+   "adm": "R+cost"
+  },
+  "GET salesview": {
+   "boss": "R",
+   "sales_non": "R",
+   "smgr": "R",
+   "src": "R",
+   "pm": "R",
+   "bd": "R",
+   "gm": "R",
+   "adm": "R"
+  },
+  "GET users": {
+   "boss": "R",
+   "sales_non": "R+email",
+   "smgr": "R+email",
+   "src": "R+email",
+   "pm": "R+email",
+   "bd": "R+email",
+   "gm": "R+email",
+   "adm": "R+email"
+  },
+  "GET settings": {
+   "boss": "R",
+   "sales_non": "R",
+   "smgr": "R",
+   "src": "R",
+   "pm": "R",
+   "bd": "R",
+   "gm": "R",
+   "adm": "R"
+  },
+  "GET products": {
+   "boss": "R",
+   "sales_non": "R",
+   "smgr": "R",
+   "src": "R",
+   "pm": "R",
+   "bd": "R",
+   "gm": "R",
+   "adm": "R"
+  },
+  "POST saveSR (ของตัวเอง)": {
+   "boss": "ALLOW",
+   "sales_non": "ALLOW",
+   "smgr": "ALLOW",
+   "src": "ALLOW",
+   "pm": "ALLOW",
+   "bd": "ALLOW",
+   "gm": "ALLOW",
+   "adm": "ALLOW"
+  },
+  "POST save QT": {
+   "boss": "DENY",
+   "sales_non": "DENY",
+   "smgr": "DENY",
+   "src": "ALLOW",
+   "pm": "ALLOW",
+   "bd": "ALLOW",
+   "gm": "ALLOW",
+   "adm": "ALLOW"
+  },
+  "POST approve": {
+   "boss": "DENY",
+   "sales_non": "DENY",
+   "smgr": "DENY",
+   "src": "DENY",
+   "pm": "ALLOW",
+   "bd": "ALLOW",
+   "gm": "ERR:NOT_IN_APPROVAL",
+   "adm": "DENY"
+  },
+  "POST release": {
+   "boss": "DENY",
+   "sales_non": "ALLOW",
+   "smgr": "DENY",
+   "src": "DENY",
+   "pm": "ERR:NOT_APPROVED",
+   "bd": "ERR:NOT_APPROVED",
+   "gm": "ERR:NOT_APPROVED",
+   "adm": "ERR:NOT_APPROVED"
+  },
+  "POST delete QT": {
+   "boss": "ALLOW",
+   "sales_non": "ALLOW",
+   "smgr": "ALLOW",
+   "src": "ALLOW",
+   "pm": "ALLOW",
+   "bd": "ALLOW",
+   "gm": "ALLOW",
+   "adm": "ALLOW"
+  },
+  "POST salesPatch (ของ boss)": {
+   "boss": "ALLOW",
+   "sales_non": "DENY",
+   "smgr": "ALLOW",
+   "src": "ALLOW",
+   "pm": "ALLOW",
+   "bd": "ALLOW",
+   "gm": "ALLOW",
+   "adm": "ALLOW"
+  },
+  "POST saveSettings": {
+   "boss": "DENY",
+   "sales_non": "DENY",
+   "smgr": "DENY",
+   "src": "DENY",
+   "pm": "ALLOW",
+   "bd": "ALLOW",
+   "gm": "ALLOW",
+   "adm": "ALLOW"
+  },
+  "POST saveUsers": {
+   "boss": "DENY",
+   "sales_non": "DENY",
+   "smgr": "DENY",
+   "src": "DENY",
+   "pm": "DENY",
+   "bd": "DENY",
+   "gm": "ERR:empty user list",
+   "adm": "ERR:empty user list"
+  },
+  "POST saveProduct": {
+   "boss": "DENY",
+   "sales_non": "DENY",
+   "smgr": "DENY",
+   "src": "ALLOW",
+   "pm": "ALLOW",
+   "bd": "ALLOW",
+   "gm": "ALLOW",
+   "adm": "ALLOW"
+  },
+  "POST addMaster (uom)": {
+   "boss": "ALLOW",
+   "sales_non": "ALLOW",
+   "smgr": "ALLOW",
+   "src": "ALLOW",
+   "pm": "ALLOW",
+   "bd": "ALLOW",
+   "gm": "ALLOW",
+   "adm": "ALLOW"
+  },
+  "POST saveMaster": {
+   "boss": "DENY",
+   "sales_non": "DENY",
+   "smgr": "DENY",
+   "src": "DENY",
+   "pm": "ALLOW",
+   "bd": "ALLOW",
+   "gm": "ALLOW",
+   "adm": "ALLOW"
+  },
+  "POST larkStatus": {
+   "boss": "DENY",
+   "sales_non": "DENY",
+   "smgr": "DENY",
+   "src": "DENY",
+   "pm": "DENY",
+   "bd": "DENY",
+   "gm": "ALLOW",
+   "adm": "ALLOW"
+  },
+  "POST unlockUser": {
+   "boss": "DENY",
+   "sales_non": "DENY",
+   "smgr": "DENY",
+   "src": "DENY",
+   "pm": "DENY",
+   "bd": "DENY",
+   "gm": "ALLOW",
+   "adm": "ALLOW"
+  }
+ },
+ "leaks": [],
+ "loop": [
+  {
+   "label": "Sales ส่ง SR → ได้เลขที่",
+   "docNo": "SR-2610-001",
+   "ok": true
+  },
+  {
+   "label": "SR ส่งแล้ว (Submitted)",
+   "id": "SR1",
+   "status": "Submitted",
+   "owner": "SOURCING",
+   "actor": "pool",
+   "actorIds": [
+    "src",
+    "src2"
+   ],
+   "resp": ""
+  },
+  {
+   "label": "SR รับงานแล้ว (Accepted)",
+   "id": "SR1",
+   "status": "Accepted",
+   "owner": "SOURCING",
+   "actor": "user",
+   "actorIds": [
+    "src"
+   ],
+   "resp": "src"
+  },
+  {
+   "label": "QT กำลังทำราคา",
+   "id": "QT1",
+   "status": "In Progress",
+   "owner": "SOURCING",
+   "actor": "user",
+   "actorIds": [
+    "src"
+   ],
+   "resp": "src"
+  },
+  {
+   "label": "SR หลังผูก QT",
+   "id": "SR1",
+   "status": "Quoted",
+   "owner": "DONE",
+   "actor": null,
+   "actorIds": [],
+   "resp": "src"
+  },
+  {
+   "label": "QT ส่งขออนุมัติ",
+   "id": "QT1",
+   "status": "Submitted",
+   "owner": "MANAGEMENT",
+   "actor": "roles",
+   "actorIds": [
+    "pm",
+    "bd"
+   ],
+   "resp": "src"
+  },
+  {
+   "label": "BD อนุมัติก่อน",
+   "id": "QT1",
+   "status": "Partial Approved",
+   "owner": "MANAGEMENT",
+   "actor": "roles",
+   "actorIds": [
+    "pm"
+   ],
+   "resp": "src"
+  },
+  {
+   "label": "Sourcing Mgr อนุมัติครบ",
+   "id": "QT1",
+   "status": "Approved",
+   "owner": "RELEASER",
+   "actor": "releaser",
+   "actorIds": [
+    "sales_non"
+   ],
+   "resp": "src"
+  },
+  {
+   "label": "NON ปล่อยราคา",
+   "id": "QT1",
+   "status": "Pending",
+   "owner": "SALES",
+   "actor": "user",
+   "actorIds": [
+    "boss"
+   ],
+   "resp": "src"
+  },
+  {
+   "label": "Sales เห็นราคา",
+   "ok": true
+  },
+  {
+   "label": "Sales กด Won เอง",
+   "status": "Pending",
+   "note": "salesPatch รับเฉพาะ salesNote/followUpDate/salesUpdate"
+  },
+  {
+   "label": "Sourcing เปลี่ยนเป็น Won",
+   "id": "QT1",
+   "status": "Won",
+   "owner": "DONE",
+   "actor": null,
+   "actorIds": [],
+   "resp": "src"
+  },
+  {
+   "label": "statusLog QT",
+   "entries": []
+  }
+ ],
+ "bypass": [
+  {
+   "name": "Sourcing บันทึกใบใหม่เป็น \"Approved\" ตรง ๆ (ไม่ผ่านอนุมัติ 2 ฝ่าย)",
+   "vulnerable": true,
+   "ev": {
+    "ok": true,
+    "status": "Approved",
+    "approvals": []
+   }
+  },
+  {
+   "name": "Sourcing บันทึกเป็น \"Pending\" + releasedTo=Sales → Sales เห็นราคาโดยไม่มีใครอนุมัติ/ปล่อย",
+   "vulnerable": true,
+   "ev": {
+    "status": "Pending",
+    "salesSees": true
+   }
+  },
+  {
+   "name": "Sourcing บันทึกใบที่อนุมัติไปแล้ว 1 ฝ่าย → ล้างการอนุมัติ/ประวัติอนุมัติทิ้งได้",
+   "vulnerable": true,
+   "ev": {
+    "approvalsAfter": 0
+   }
+  },
+  {
+   "name": "client ส่ง auditLogs มาเองได้ (server ไม่ต่อท้ายให้ · ประวัติแก้/ลบได้)",
+   "vulnerable": true,
+   "ev": [
+    {
+     "timestamp": "2020-01-01",
+     "user": "ปลอม",
+     "action": "แก้ประวัติ"
+    }
+   ]
+  },
+  {
+   "name": "Sales แก้ SR หลังมี QT แล้ว",
+   "vulnerable": false,
+   "ev": {
+    "ok": false,
+    "error": "SR_LOCKED",
+    "code": 409
+   }
+  },
+  {
+   "name": "ฝ่ายใน (Sourcing อีกคน) เขียนทับ SR หลังมี QT แล้ว (หลักฐานคำขอลูกค้าถูกแก้)",
+   "vulnerable": true,
+   "ev": {
+    "ok": true
+   }
+  },
+  {
+   "name": "ฝ่ายในเปลี่ยนชนิดเอกสาร SR → QT (Approved) ด้วย id เดิม",
+   "vulnerable": true,
+   "ev": {
+    "docType": "QT",
+    "status": "Approved"
+   }
+  },
+  {
+   "name": "Sales เขียนทับใบ QT ผ่าน saveSR",
+   "vulnerable": false,
+   "ev": {
+    "ok": false,
+    "error": "ACCESS_DENIED",
+    "code": 403
+   }
+  },
+  {
+   "name": "Sales คนอื่นแก้หมายเหตุงานของ BOSS",
+   "vulnerable": false,
+   "ev": {
+    "ok": false,
+    "error": "ACCESS_DENIED",
+    "code": 403
+   }
+  },
+  {
+   "name": "Sales ที่ไม่ใช่ผู้ปล่อยราคา กดปล่อยราคา",
+   "vulnerable": false,
+   "ev": {
+    "ok": false,
+    "error": "ACCESS_DENIED",
+    "code": 403
+   }
+  },
+  {
+   "name": "Sourcing กดอนุมัติ",
+   "vulnerable": false,
+   "ev": {
+    "ok": false,
+    "error": "ACCESS_DENIED",
+    "code": 403,
+    "need": "approve"
+   }
+  },
+  {
+   "name": "Total/Cost/Profit/GP ในชีทมาจาก client ทั้งหมด (server ไม่คำนวณ/ตรวจ) — ตัวเลขไม่ตรงกับรายการได้",
+   "vulnerable": true,
+   "ev": {
+    "Cost": 999999,
+    "GP": -99
+   }
+  },
+  {
+   "name": "ราคาที่ Sales เห็น (SalesDetail) ส่งมาจาก client แยกจาก Detail — ไม่ตรวจว่าตรงกับรายการจริง",
+   "vulnerable": true,
+   "ev": {
+    "salesSees": "{\"id\":\"B6\",\"lines\":[{\"code\":\"X\",\"unitPrice\":1,\"amount\":1}],\"total\":1}"
+   }
+  }
+ ],
+ "idem": [
+  {
+   "case": "กดส่ง 2 ครั้ง id เดิม (กดรัว)",
+   "rows": 1,
+   "docNos": [
+    "SR-2610-001",
+    "SR-2610-001"
+   ]
+  },
+  {
+   "case": "refresh แล้วส่งใหม่ (id ใหม่ เนื้อหาเดิม)",
+   "rows": 2
+  },
+  {
+   "case": "Lark cards from 4 submits",
+   "n": 3
+  }
+ ],
+ "conc": [
+  {
+   "case": "QT: base เดียวกัน 2 คน",
+   "first": true,
+   "second": true
+  },
+  {
+   "case": "QT: ไม่ส่ง baseUpdatedAt",
+   "result": true,
+   "remarks": [
+    "C ไม่ส่ง base"
+   ]
+  },
+  {
+   "case": "SR: 2 Sourcing กดรับงานพร้อมกัน",
+   "a": true,
+   "b": true,
+   "finalAssigned": "src2"
+  },
+  {
+   "case": "อนุมัติ 2 ฝ่ายติดกัน",
+   "status": "Approved",
+   "roles": [
+    "Procurement Mgr",
+    "BD Mgr"
+   ]
+  }
+ ],
+ "auth": [
+  {
+   "case": "token หมดอายุ",
+   "resp": {
+    "ok": false,
+    "error": "AUTH_REQUIRED",
+    "code": 401,
+    "reason": "SESSION_EXPIRED"
+   }
+  },
+  {
+   "case": "ปิดบัญชีระหว่างใช้งาน",
+   "resp": {
+    "ok": false,
+    "error": "AUTH_REQUIRED",
+    "code": 401,
+    "reason": "ACCOUNT_DISABLED"
+   }
+  }
+ ],
+ "auditTrail": [
+  {
+   "logRows": [
+    "2026-10-13T14:43:47.095Z | lark-config |  | - | mode dryrun · ยังไม่ได้ตั้ง LARK_BOT_URL (Bot A ในกลุ่มคำขอราคา) — ส่งจริงไม่ได้",
+    "2026-10-13T14:43:47.095Z | setup |  | - | schema v4.2 (RBAC + Live Sync + Email login)",
+    "2026-10-13T14:43:47.103Z | login | boss | BOSS | Sales · password",
+    "2026-10-13T14:43:47.110Z | login | pair | PAIR | Sales · password",
+    "2026-10-13T14:43:47.117Z | login | sales_non | NON | Sales · password",
+    "2026-10-13T14:43:47.124Z | login | smgr | SalesMgr | Sales Manager · password",
+    "2026-10-13T14:43:47.131Z | login | src | Chatraporn | Sourcing · password",
+    "2026-10-13T14:43:47.137Z | login | src2 | Napasorn | Sourcing · password",
+    "2026-10-13T14:43:47.144Z | login | pm | Procure | Procurement Mgr · password",
+    "2026-10-13T14:43:47.150Z | login | bd | BD | BD Mgr · password",
+    "2026-10-13T14:43:47.157Z | login | gm | GM | GM · password",
+    "2026-10-13T14:43:47.164Z | login | adm | Admin | Admin · password",
+    "2026-10-13T14:43:47.165Z | saveSR SR-2610-001 | SR1 | BOSS | ",
+    "2026-10-13T14:43:47.167Z | save SR-2610-001 | SR1 | Chatraporn | ",
+    "2026-10-13T14:43:47.168Z | save QT-QT1 | QT1 | Chatraporn | ",
+    "2026-10-13T14:43:47.169Z | save SR-2610-001 | SR1 | Chatraporn | ",
+    "2026-10-13T14:43:47.170Z | save QT-QT1 | QT1 | Chatraporn | ",
+    "2026-10-13T14:43:47.171Z | approve QT-QT1 | QT1 | BD | BD Mgr [BD Mgr] → Partial Approved",
+    "2026-10-13T14:43:47.172Z | approve QT-QT1 | QT1 | Procure | Procurement Mgr [Procurement Mgr] → Approved",
+    "2026-10-13T14:43:47.173Z | release QT-QT1 | QT1 | NON | boss",
+    "2026-10-13T14:43:47.175Z | salesPatch QT-QT1 | QT1 | BOSS | salesUpdate",
+    "2026-10-13T14:43:47.176Z | save QT-QT1 | QT1 | Chatraporn | "
+   ]
+  }
+ ],
+ "keys": [
+  {
+   "case": "เรียงแถวใหม่แล้วอนุมัติ K2",
+   "ok": true
+  },
+  {
+   "case": "แทรกคอลัมน์กลางชีทแล้วอนุมัติ",
+   "ok": true
+  },
+  {
+   "case": "เปลี่ยนชื่อ header Status",
+   "statusRead": "",
+   "headerTail": [
+    "Detail",
+    "SalesDetail",
+    "Status"
+   ]
+  }
+ ],
+ "config": [
+  {
+   "case": "Settings ว่าง",
+   "settings": true,
+   "quotations": true
+  },
+  {
+   "case": "แท็บ Log ถูกลบ",
+   "save": true,
+   "recreated": true
+  },
+  {
+   "case": "live แต่ไม่มี LARK_BOT_URL",
+   "save": true,
+   "queue": [
+    "SKIPPED:ยังไม่ได้ตั้ง LARK_BOT_URL"
+   ]
+  }
+ ],
+ "growth": {
+  "QT_5lines_20audit": {
+   "detailChars": 4510,
+   "salesDetailChars": 118,
+   "auditKept": 20,
+   "oversize": false
+  },
+  "QT_10lines_60audit": {
+   "detailChars": 11214,
+   "salesDetailChars": 119,
+   "auditKept": 60,
+   "oversize": false
+  },
+  "QT_30lines_100audit": {
+   "detailChars": 21854,
+   "salesDetailChars": 119,
+   "auditKept": 100,
+   "oversize": false
+  },
+  "QT_80lines_100audit": {
+   "detailChars": 34954,
+   "salesDetailChars": 119,
+   "auditKept": 100,
+   "oversize": false
+  },
+  "big_120": {
+   "saveOk": true,
+   "note": "",
+   "oversize": false,
+   "linesKept": 120
+  },
+  "big_160": {
+   "saveOk": true,
+   "note": "",
+   "oversize": false,
+   "linesKept": 160
+  },
+  "big_220": {
+   "saveOk": true,
+   "note": "",
+   "oversize": true,
+   "linesKept": 0
+  }
+ },
+ "del": {
+  "boss": {
+   "qtApproved": "ACCESS_DENIED",
+   "srWithQt": "ACCESS_DENIED",
+   "logged": 0
+  },
+  "smgr": {
+   "qtApproved": "ACCESS_DENIED",
+   "srWithQt": "ACCESS_DENIED",
+   "logged": 0
+  },
+  "src2": {
+   "qtApproved": "ลบได้",
+   "srWithQt": "ลบได้",
+   "logged": 2
+  },
+  "pm": {
+   "qtApproved": "ลบได้",
+   "srWithQt": "ลบได้",
+   "logged": 2
+  },
+  "adm": {
+   "qtApproved": "ลบได้",
+   "srWithQt": "ลบได้",
+   "logged": 2
+  }
+ }
+}

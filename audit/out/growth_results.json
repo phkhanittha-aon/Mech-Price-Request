@@ -1,0 +1,38 @@
+[
+ {
+  "QT": 100,
+  "SR": 70,
+  "quotationRows": 170,
+  "cellsAllTabs": 8109,
+  "detailMB": 0.74,
+  "fullPullMB": 0.84,
+  "fullPullMs_mock": 25,
+  "salesViewKB": 302,
+  "salesViewMs_mock": 23,
+  "localStorageEstMB": 1.68
+ },
+ {
+  "QT": 500,
+  "SR": 350,
+  "quotationRows": 850,
+  "cellsAllTabs": 38949,
+  "detailMB": 3.82,
+  "fullPullMB": 4.31,
+  "fullPullMs_mock": 87,
+  "salesViewKB": 1518,
+  "salesViewMs_mock": 173,
+  "localStorageEstMB": 8.63
+ },
+ {
+  "QT": 1500,
+  "SR": 1050,
+  "quotationRows": 2550,
+  "cellsAllTabs": 116049,
+  "detailMB": 11.52,
+  "fullPullMB": 5.5,
+  "fullPullMs_mock": 160,
+  "salesViewKB": 2721,
+  "salesViewMs_mock": 240,
+  "localStorageEstMB": 11.01
+ }
+]

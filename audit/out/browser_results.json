@@ -1,0 +1,514 @@
+{
+ "roles": {
+  "boss": {
+   "role": "Sales",
+   "loggedIn": false,
+   "landing": "dashboard",
+   "nav": [],
+   "routes": {},
+   "pageErrors": [],
+   "xssFired": 0,
+   "localStorage": [
+    [
+     "mgs_settings",
+     3165
+    ],
+    [
+     "mgs_users",
+     1107
+    ],
+    [
+     "mgs_token",
+     2
+    ],
+    [
+     "mgs_caps",
+     4
+    ]
+   ],
+   "bodyIfNoLogin": "M Global Sourcing\nPROJECT PRICING\nเข้าสู่ระบบ\nระบบทำราคา Mechanical Costing\nชื่อผู้ใช้ หรือ อีเมล\nรหัสผ่าน\nเข้าสู่ระบบ →\nลืมรหัสผ่าน / บัญชีถูกล็อก? ติดต่อผู้ดู"
+  },
+  "sales_non": {
+   "role": "Sales",
+   "loggedIn": false,
+   "landing": "dashboard",
+   "nav": [],
+   "routes": {},
+   "pageErrors": [],
+   "xssFired": 0,
+   "localStorage": [
+    [
+     "mgs_settings",
+     3165
+    ],
+    [
+     "mgs_users",
+     1049
+    ],
+    [
+     "mgs_token",
+     2
+    ],
+    [
+     "mgs_caps",
+     4
+    ]
+   ],
+   "bodyIfNoLogin": "M Global Sourcing\nPROJECT PRICING\nเข้าสู่ระบบ\nระบบทำราคา Mechanical Costing\nชื่อผู้ใช้ หรือ อีเมล\nรหัสผ่าน\nเข้าสู่ระบบ →\nลืมรหัสผ่าน / บัญชีถูกล็อก? ติดต่อผู้ดู"
+  },
+  "smgr": {
+   "role": "Sales Manager",
+   "loggedIn": false,
+   "landing": "dashboard",
+   "nav": [],
+   "routes": {},
+   "pageErrors": [],
+   "xssFired": 0,
+   "localStorage": [
+    [
+     "mgs_settings",
+     3165
+    ],
+    [
+     "mgs_users",
+     1119
+    ],
+    [
+     "mgs_token",
+     2
+    ],
+    [
+     "mgs_caps",
+     4
+    ]
+   ],
+   "bodyIfNoLogin": "M Global Sourcing\nPROJECT PRICING\nเข้าสู่ระบบ\nระบบทำราคา Mechanical Costing\nชื่อผู้ใช้ หรือ อีเมล\nรหัสผ่าน\nเข้าสู่ระบบ →\nลืมรหัสผ่าน / บัญชีถูกล็อก? ติดต่อผู้ดู"
+  },
+  "src": {
+   "role": "Sourcing",
+   "loggedIn": true,
+   "landing": "srqueue",
+   "nav": [
+    "ภาพรวม",
+    "คำขอราคา (SR)",
+    "ทำราคาใหม่",
+    "ใบเสนอราคา (QT)",
+    "ติดตามงาน",
+    "สรุปทีมขาย (ผู้บริหาร)",
+    "อัพเดตโครงการ (Sales)",
+    "ข้อมูลสินค้า/ราคา"
+   ],
+   "routes": {
+    "settings": "DENIED",
+    "users": "DENIED",
+    "larkbot": "DENIED",
+    "summary": "OPEN",
+    "master": "OPEN",
+    "new": "OPEN",
+    "preview": "OPEN",
+    "quotes": "OPEN",
+    "followup": "OPEN",
+    "salesupdate": "OPEN",
+    "srqueue": "OPEN",
+    "salessummary": "OPEN",
+    "dashboard": "OPEN",
+    "denied": "DENIED",
+    "approvals": "DENIED"
+   },
+   "pageErrors": [],
+   "xssFired": 0,
+   "localStorage": [
+    [
+     "mgs_session",
+     5
+    ],
+    [
+     "mgs_quotes",
+     6683
+    ],
+    [
+     "mgs_token",
+     42
+    ],
+    [
+     "mgs_caps",
+     131
+    ],
+    [
+     "mgs_settings",
+     3165
+    ],
+    [
+     "mgs_syncMark",
+     87
+    ],
+    [
+     "mgs_users",
+     1668
+    ],
+    [
+     "mgs_lastUser",
+     5
+    ]
+   ],
+   "bodyIfNoLogin": ""
+  },
+  "pm": {
+   "role": "Procurement Mgr",
+   "loggedIn": true,
+   "landing": "approvals",
+   "nav": [
+    "ภาพรวม",
+    "รออนุมัติ",
+    "สรุปยอดขาย/GP",
+    "คำขอราคา (SR)",
+    "ทำราคาใหม่",
+    "ใบเสนอราคา (QT)",
+    "ติดตามงาน",
+    "สรุปทีมขาย (ผู้บริหาร)",
+    "อัพเดตโครงการ (Sales)",
+    "ข้อมูลสินค้า/ราคา",
+    "ตั้งค่า Default"
+   ],
+   "routes": {
+    "settings": "OPEN",
+    "users": "DENIED",
+    "larkbot": "DENIED",
+    "summary": "OPEN",
+    "master": "OPEN",
+    "new": "OPEN",
+    "preview": "OPEN",
+    "quotes": "OPEN",
+    "followup": "OPEN",
+    "salesupdate": "OPEN",
+    "srqueue": "OPEN",
+    "salessummary": "OPEN",
+    "dashboard": "OPEN",
+    "denied": "DENIED",
+    "approvals": "OPEN"
+   },
+   "pageErrors": [],
+   "xssFired": 0,
+   "localStorage": [
+    [
+     "mgs_session",
+     4
+    ],
+    [
+     "mgs_quotes",
+     6683
+    ],
+    [
+     "mgs_token",
+     42
+    ],
+    [
+     "mgs_caps",
+     131
+    ],
+    [
+     "mgs_settings",
+     3165
+    ],
+    [
+     "mgs_syncMark",
+     86
+    ],
+    [
+     "mgs_users",
+     1668
+    ],
+    [
+     "mgs_lastUser",
+     4
+    ]
+   ],
+   "bodyIfNoLogin": ""
+  },
+  "bd": {
+   "role": "BD Mgr",
+   "loggedIn": true,
+   "landing": "approvals",
+   "nav": [
+    "ภาพรวม",
+    "รออนุมัติ",
+    "สรุปยอดขาย/GP",
+    "คำขอราคา (SR)",
+    "ทำราคาใหม่",
+    "ใบเสนอราคา (QT)",
+    "ติดตามงาน",
+    "สรุปทีมขาย (ผู้บริหาร)",
+    "อัพเดตโครงการ (Sales)",
+    "ข้อมูลสินค้า/ราคา",
+    "ตั้งค่า Default"
+   ],
+   "routes": {
+    "settings": "OPEN",
+    "users": "DENIED",
+    "larkbot": "DENIED",
+    "summary": "OPEN",
+    "master": "OPEN",
+    "new": "OPEN",
+    "preview": "OPEN",
+    "quotes": "OPEN",
+    "followup": "OPEN",
+    "salesupdate": "OPEN",
+    "srqueue": "OPEN",
+    "salessummary": "OPEN",
+    "dashboard": "OPEN",
+    "denied": "DENIED",
+    "approvals": "OPEN"
+   },
+   "pageErrors": [],
+   "xssFired": 0,
+   "localStorage": [
+    [
+     "mgs_session",
+     4
+    ],
+    [
+     "mgs_quotes",
+     6683
+    ],
+    [
+     "mgs_token",
+     42
+    ],
+    [
+     "mgs_caps",
+     131
+    ],
+    [
+     "mgs_settings",
+     3165
+    ],
+    [
+     "mgs_syncMark",
+     86
+    ],
+    [
+     "mgs_users",
+     1688
+    ],
+    [
+     "mgs_lastUser",
+     4
+    ]
+   ],
+   "bodyIfNoLogin": ""
+  },
+  "gm": {
+   "role": "GM",
+   "loggedIn": true,
+   "landing": "approvals",
+   "nav": [
+    "ภาพรวม",
+    "รออนุมัติ",
+    "สรุปยอดขาย/GP",
+    "คำขอราคา (SR)",
+    "ทำราคาใหม่",
+    "ใบเสนอราคา (QT)",
+    "ติดตามงาน",
+    "สรุปทีมขาย (ผู้บริหาร)",
+    "อัพเดตโครงการ (Sales)",
+    "ข้อมูลสินค้า/ราคา",
+    "ตั้งค่า Default",
+    "จัดการผู้ใช้",
+    "ตั้งค่า Lark Bot"
+   ],
+   "routes": {
+    "settings": "OPEN",
+    "users": "OPEN",
+    "larkbot": "OPEN",
+    "summary": "OPEN",
+    "master": "OPEN",
+    "new": "OPEN",
+    "preview": "OPEN",
+    "quotes": "OPEN",
+    "followup": "OPEN",
+    "salesupdate": "OPEN",
+    "srqueue": "OPEN",
+    "salessummary": "OPEN",
+    "dashboard": "OPEN",
+    "denied": "DENIED",
+    "approvals": "OPEN"
+   },
+   "pageErrors": [],
+   "xssFired": 0,
+   "localStorage": [
+    [
+     "mgs_session",
+     4
+    ],
+    [
+     "mgs_quotes",
+     6683
+    ],
+    [
+     "mgs_token",
+     42
+    ],
+    [
+     "mgs_caps",
+     125
+    ],
+    [
+     "mgs_settings",
+     3165
+    ],
+    [
+     "mgs_syncMark",
+     86
+    ],
+    [
+     "mgs_users",
+     1740
+    ],
+    [
+     "mgs_lastUser",
+     4
+    ]
+   ],
+   "bodyIfNoLogin": ""
+  },
+  "adm": {
+   "role": "Admin",
+   "loggedIn": true,
+   "landing": "dashboard",
+   "nav": [
+    "ภาพรวม",
+    "รออนุมัติ",
+    "สรุปยอดขาย/GP",
+    "คำขอราคา (SR)",
+    "ทำราคาใหม่",
+    "ใบเสนอราคา (QT)",
+    "ติดตามงาน",
+    "สรุปทีมขาย (ผู้บริหาร)",
+    "อัพเดตโครงการ (Sales)",
+    "ข้อมูลสินค้า/ราคา",
+    "ตั้งค่า Default",
+    "จัดการผู้ใช้",
+    "ตั้งค่า Lark Bot"
+   ],
+   "routes": {
+    "settings": "OPEN",
+    "users": "OPEN",
+    "larkbot": "OPEN",
+    "summary": "OPEN",
+    "master": "OPEN",
+    "new": "OPEN",
+    "preview": "OPEN",
+    "quotes": "OPEN",
+    "followup": "OPEN",
+    "salesupdate": "OPEN",
+    "srqueue": "OPEN",
+    "salessummary": "OPEN",
+    "dashboard": "OPEN",
+    "denied": "DENIED",
+    "approvals": "OPEN"
+   },
+   "pageErrors": [],
+   "xssFired": 0,
+   "localStorage": [
+    [
+     "mgs_session",
+     5
+    ],
+    [
+     "mgs_quotes",
+     6683
+    ],
+    [
+     "mgs_token",
+     42
+    ],
+    [
+     "mgs_caps",
+     125
+    ],
+    [
+     "mgs_settings",
+     3165
+    ],
+    [
+     "mgs_syncMark",
+     87
+    ],
+    [
+     "mgs_users",
+     1740
+    ],
+    [
+     "mgs_lastUser",
+     5
+    ]
+   ],
+   "bodyIfNoLogin": ""
+  }
+ },
+ "xss": {
+  "index": {
+   "dashboard": 0,
+   "srqueue": 0,
+   "quotes": 0,
+   "followup": 0,
+   "salesupdate": 0,
+   "approvals": 0,
+   "editQT": 0,
+   "openSR": 0,
+   "preview": 0,
+   "needBy_in_srqueue": 3,
+   "evilId_click": 1,
+   "offerDate_in_preview": 4,
+   "reqDate_in_editor": 1,
+   "serverAccepted": {
+    "needBy": true,
+    "evilId": true
+   }
+  },
+  "sales": {
+   "list": 0,
+   "detail": 0,
+   "pageErrors": []
+  }
+ },
+ "sales": {
+  "netHasCost": false,
+  "lsHasCost": false,
+  "lsKeys": [
+   "mgs_sales_lastUser",
+   "mgs_sales_user",
+   "mgs_sales_token"
+  ],
+  "lsBytes": 372,
+  "overflowX": false,
+  "text": " /* ============================================================ BOOT GUARD (v4.2.1) ถ้าสคริปต์หลักพัง / ไฟล์ถูกวางไม่ครบ / เบราว์เซอร์บล็อก — แสดงสาเหตุบนจอแทน \"หน้าว่าง\" สคริปต์หลักต้องตั้ง window._"
+ },
+ "expiry": {
+  "sales": {
+   "prompt": true,
+   "text": "MODAL: ⏱ เซสชันหมดอายุแล้ว — ยืนยันตัวตนอีกครั้ง คุณยังอยู่ที่หน้าเดิม ข้อมูลที่กรอกค้างยังอยู่ครบ บัญชี: BOSS · boss@m.co รหัสผ่าน ออกจากระบบ ทำงานต่อ"
+  }
+ },
+ "size": {
+  "Index.html": {
+   "bytes": 912043,
+   "lines": 6641
+  },
+  "Sales.html": {
+   "bytes": 191914,
+   "lines": 1128
+  },
+  "Code.gs": {
+   "bytes": 169441,
+   "lines": 2239
+  },
+  "Lark.gs": {
+   "bytes": 71009,
+   "lines": 834
+  },
+  "blob_CATALOG": 146499,
+  "blob_LOGO": 27862,
+  "blob_EXCEL_LEGACY_LINES": 119750
+ }
+}

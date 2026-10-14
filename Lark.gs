@@ -41,11 +41,13 @@
  *   ค่าของ v4.9 (LARK_WEBHOOK_*, LARK_APP_ID, LARK_CHAT_*) ไม่ใช้แล้ว — ยกเว้น LARK_WEBHOOK_REQUESTS ใช้แทน Bot A ได้ชั่วคราว
  *************************************************************/
 
-var LARK_VERSION = '5.8';
+var LARK_VERSION = '5.10';
 
 /* ============================================================ 1) EVENT TABLE */
 /**
  * bot      = A (ทุกขั้นตอน) | B (เตือนเกินกำหนด)
+ * approval = v5.10: การ์ดขออนุมัติ → Bot C (กลุ่มผู้อนุมัติ: Procurement Mgr / BD Mgr / GM) พร้อมยอด · กำไร · คอมเรท · ค่าคอม
+ *            ยังไม่ได้ตั้ง Bot C = ส่งเข้า Bot A แบบไม่มีตัวเลขเหมือนเดิม (ห้ามส่งตัวเลขเข้ากลุ่มที่มี Sales)
  * mention  = ใครถูกแท็กในช่อง "ผู้ดำเนินการ": 'actor' = คนที่ต้องทำต่อตามสถานะปัจจุบัน (row.follow.actor)
  *            'requester' = Sales เจ้าของคำขอ · 'pricer' = Sourcing ผู้ทำราคา/ผู้รับคำขอ
  * dedupMin = ไม่ส่ง event เดิมของเอกสารเดิม (รอบเดิม) ซ้ำภายในกี่นาที
@@ -60,10 +62,10 @@ var LARK_EVENTS = {
                         when:'Sourcing กดรับคำขอ' },
   SR_CANCELLED:       { bot:'A', th:'ยกเลิกคำขอราคา',                    icon:'🚫', color:'grey',      mention:'pricer',    dedupMin:24 * 60,
                         when:'คำขอถูกยกเลิก' },
-  QT_SUBMITTED:       { bot:'A', th:'ทำราคาเสร็จ · รออนุมัติ 2 ฝ่าย', icon:'📊', color:'orange', mention:'actor', dedupMin:120,
+  QT_SUBMITTED:       { bot:'A', approval:true, th:'ทำราคาเสร็จ · รออนุมัติ 2 ฝ่าย', icon:'📊', color:'orange', mention:'actor', dedupMin:120,
                         when:'Sourcing กด “บันทึก & ส่งขออนุมัติ”' },
-  QT_PARTIAL_APPROVED:{ bot:'A', th:'อนุมัติแล้ว 1 ฝ่าย · รออีกฝ่าย', icon:'🏁', color:'purple', mention:'actor', dedupMin:120,
-                        when:'Sourcing Manager หรือ BD Manager อนุมัติก่อน (ลำดับไหนก็ได้ · หรือ GM อนุมัติแทน 1 ฝ่าย)' },
+  QT_PARTIAL_APPROVED:{ bot:'A', approval:true, th:'อนุมัติแล้ว 1 ฝ่าย · รออีกฝ่าย', icon:'🏁', color:'purple', mention:'actor', dedupMin:120,
+                        when:'Sourcing Manager อนุมัติแล้ว รอ BD Manager (v5.9 ลำดับ Sourcing Manager → BD · หรือ GM อนุมัติแทน 1 ฝ่าย)' },
   QT_APPROVED:        { bot:'A', th:'อนุมัติครบ 2 ฝ่าย · รอปล่อยราคา',    icon:'✅', color:'green',     mention:'actor',     dedupMin:24 * 60,
                         when:'ฝ่ายที่สองอนุมัติ (หรือ GM อนุมัติแทนครบ)' },
   QT_RETURNED:        { bot:'A', th:'ตีกลับแก้ราคา',                     icon:'↩️', color:'red',       mention:'actor',     dedupMin:120,
@@ -75,8 +77,13 @@ var LARK_EVENTS = {
 };
 var LARK_BOTS = {
   A: { th:'MGS Price Request', url:'LARK_BOT_URL',      secret:'LARK_BOT_SECRET' },
-  B: { th:'MGS Reminder',      url:'LARK_REMINDER_URL', secret:'LARK_REMINDER_SECRET', fallback:'A' }
+  B: { th:'MGS Reminder',      url:'LARK_REMINDER_URL', secret:'LARK_REMINDER_SECRET', fallback:'A' },
+  // v5.10: กลุ่มผู้อนุมัติ — การ์ดมีตัวเลขการเงิน จึง "ไม่มี fallback" (ยังไม่ตั้ง = การ์ดขออนุมัติไปกลุ่ม A แบบไม่มีตัวเลข)
+  C: { th:'MGS Approval',      url:'LARK_APPROVAL_URL', secret:'LARK_APPROVAL_SECRET', money:true }
 };
+/** Target ในแท็บ NotifyQueue ↔ บอท */
+var LARK_TARGET = { A:'BOT', B:'REMINDER', C:'APPROVAL' };
+function larkBotOfTarget_(t) { return t === 'REMINDER' ? 'B' : t === 'APPROVAL' ? 'C' : 'A'; }
 var LARK_HOOK_RE = /^https:\/\/open\.(larksuite\.com|feishu\.cn)\/open-apis\/bot\/v2\/hook\/[A-Za-z0-9_-]{8,}$/;
 var LARK_EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 var LARK_LEGACY_PROPS = ['LARK_APP_ID', 'LARK_APP_SECRET', 'LARK_CHAT_SOURCING', 'LARK_CHAT_APPROVERS', 'LARK_CHAT_RELEASE', 'LARK_CHAT_SALES',
@@ -89,6 +96,7 @@ var LARK_REMIND_MAX = 30;                         // การ์ดเตือ
 var LARK_REMIND_HOUR_DEFAULT = 9;                 // v5.8: รอบเตือนงานเกินกำหนด วันละครั้ง (ชั่วโมง เวลาไทย)
 var LARK_WORK = { start:8 * 60 + 30, end:17 * 60 + 30 };   // เวลาทำงาน (นาทีของวัน เวลาไทย) — เตือนเฉพาะช่วงนี้ จ.–ศ.
 var LARK_ITEMS_MAX = 8;                           // รายการสินค้าในการ์ดสูงสุด
+var LARK_DESC_MAX = 60;                           // v5.10: ตัดชื่อสินค้าในตาราง (ชื่อเต็มดูบนเว็บ)
 
 /* ============================================================ CONFIG */
 function larkProps_() {
@@ -127,11 +135,11 @@ function larkValidateConfig_(props) {
   var mode = larkMode_(props), problems = [], warnings = [], targets = {};
   var raw = String(props.LARK_MODE || '').toLowerCase().trim();
   if (raw && ['off', 'dryrun', 'live'].indexOf(raw) < 0) problems.push('LARK_MODE ต้องเป็น off / dryrun / live (ตอนนี้ใช้ dryrun แทน)');
-  ['LARK_BOT_URL', 'LARK_REMINDER_URL', 'LARK_WEBHOOK_REQUESTS'].forEach(function (k) {
+  ['LARK_BOT_URL', 'LARK_REMINDER_URL', 'LARK_APPROVAL_URL', 'LARK_WEBHOOK_REQUESTS'].forEach(function (k) {
     var v = String(props[k] || '').trim();
     if (v && !LARK_HOOK_RE.test(v)) problems.push(k + ' ไม่ใช่รูปแบบ webhook ของ Lark (https://open.larksuite.com/open-apis/bot/v2/hook/…)');
   });
-  ['LARK_BOT_SECRET', 'LARK_REMINDER_SECRET'].forEach(function (k) {
+  ['LARK_BOT_SECRET', 'LARK_REMINDER_SECRET', 'LARK_APPROVAL_SECRET'].forEach(function (k) {
     var v = String(props[k] || '');
     if (v && (/\s/.test(v) || v.length > 200)) problems.push(k + ' ไม่ถูกต้อง (คัดลอกใหม่จาก Security settings ของบอท)');
   });
@@ -145,6 +153,7 @@ function larkValidateConfig_(props) {
     if (!a.secret) warnings.push('Bot A ไม่ได้เปิด Signature verification — แนะนำให้เปิดแล้วใส่ LARK_BOT_SECRET');
     if (a.via !== 'A') warnings.push('ใช้ LARK_WEBHOOK_REQUESTS (v4.9) แทน Bot A อยู่ — ตั้ง LARK_BOT_URL แล้วลบค่าเก่าได้');
     if (!props.LARK_REMINDER_URL) warnings.push('ยังไม่ได้ตั้ง Bot B (LARK_REMINDER_URL) — การ์ดเตือนเกินกำหนดจะส่งผ่าน Bot A');
+    if (!props.LARK_APPROVAL_URL) warnings.push('ยังไม่ได้ตั้ง Bot C (LARK_APPROVAL_URL) — การ์ดขออนุมัติส่งเข้า Bot A แบบไม่มียอด / กำไร / ค่าคอม');
   }
   var legacy = LARK_LEGACY_PROPS.filter(function (k) { return String(props[k] || '').trim(); });
   if (legacy.length) warnings.push('ค่าของ v4.9 ไม่ใช้แล้ว (ลบได้): ' + legacy.join(', '));
@@ -183,13 +192,70 @@ function larkDateTH_(ymd) {
   return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
 }
 function larkUserKey_(u) { return String(u && (u.email || u.name || u.id) || '').toLowerCase(); }
+/** ตัวเลขมีคอมมา · dec = ทศนิยม · trim = ตัด .00 ทิ้ง (ใช้กับจำนวนสินค้า) */
+function larkNum_(n, dec, trim) {
+  var x = Number(n); if (n === null || n === undefined || n === '' || !isFinite(x)) return '-';
+  var s = x.toFixed(dec == null ? 2 : dec);
+  if (trim) s = s.replace(/\.?0+$/, '');
+  var parts = s.split('.'); parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return parts.join('.');
+}
+/** แถวตารางในการ์ด (column_set) — cells = [{w, md, right}] · head = แถวหัวตาราง (พื้นเทา) */
+function larkRow_(cells, head) {
+  return { tag:'column_set', flex_mode:'none', background_style:head ? 'grey' : 'default', horizontal_spacing:'small',
+           columns:cells.map(function (c) { return { tag:'column', width:'weighted', weight:c.w, vertical_align:'top',
+             elements:[{ tag:'markdown', content:head ? '**' + c.md + '**' : c.md, text_align:c.right ? 'right' : 'left' }] }; }) };
+}
+/** v5.10: รายการสินค้าเป็นตาราง (# · รหัส · รายการ · จำนวน) แทนบรรทัดยาวต่อกัน — items = [{code, desc, qty, uom}] (ข้อมูลเก่าที่เป็นข้อความก็ได้) */
+function larkItemsTable_(items) {
+  items = items || [];
+  var list = items.slice(0, LARK_ITEMS_MAX), rest = items.length - list.length;
+  if (!list.length) return [];
+  var out = [{ tag:'markdown', content:'**สินค้า** (' + items.length + ' รายการ)' },
+             larkRow_([{ w:1, md:'#' }, { w:3, md:'รหัส' }, { w:6, md:'รายการ' }, { w:2, md:'จำนวน', right:true }], true)];
+  list.forEach(function (x, i) {
+    var it = typeof x === 'string' ? { desc:x } : (x || {});
+    var code = larkSafe_(it.code || '', 30), desc = larkSafe_(it.desc || '', 200);
+    if (code && desc.toUpperCase().indexOf(code.toUpperCase()) === 0) desc = desc.slice(code.length).replace(/^[\s,·:-]+/, '');   // ชื่อที่ขึ้นต้นด้วยรหัสซ้ำ
+    if (desc.length > LARK_DESC_MAX) desc = desc.slice(0, LARK_DESC_MAX - 1) + '…';
+    var q = Number(it.qty), qty = isFinite(q) && q > 0 ? larkNum_(q, 2, true) + (it.uom ? ' ' + larkSafe_(it.uom, 12) : '') : '-';
+    out.push(larkRow_([{ w:1, md:String(i + 1) }, { w:3, md:code || '-' }, { w:6, md:desc || '-' }, { w:2, md:qty, right:true }]));
+  });
+  if (rest > 0) out.push({ tag:'note', elements:[{ tag:'plain_text', content:'… และอีก ' + rest + ' รายการ — ดูทั้งหมดบนเว็บ' }] });
+  return out;
+}
+/** v5.10: ตัวเลขการเงินของโครงการ — ใช้เฉพาะการ์ดของ Bot C (กลุ่มผู้อนุมัติ) เท่านั้น
+ *  m = { cur, total, profit, gp, comAmt, comRate, byCat:[{cat, grade, rate, comAmt, total}], comDeal, supplierCom, supplierComPct, lowGp } */
+function larkMoneyBlock_(m) {
+  if (!m) return [];
+  var cur = larkSafe_(m.cur || 'THB', 6), money = function (n) { return larkNum_(n, 2) + ' ' + cur; };
+  var pct = function (n) { return larkNum_(n, 2) + '%'; };
+  var field = function (label, value) { return { is_short:true, text:{ tag:'lark_md', content:'**' + label + '**\n' + value } }; };
+  var hasCom = m.comAmt !== null && m.comAmt !== undefined && m.comAmt !== '';
+  var fields = [field('มูลค่าทั้งโครงการ', money(m.total)),
+                field(m.comDeal ? 'รายได้ (ค่าคอม Supplier)' : 'กำไรรวม', money(m.profit) + ' · ' + (m.comDeal ? pct(m.supplierComPct) : 'GP ' + pct(m.gp)) + (m.lowGp ? ' ⚠ ต่ำกว่าเกณฑ์' : ''))];
+  if (m.comDeal) fields.push(field('ค่าคอม Sales', 'ไม่มี (ดีลค่าคอม Supplier · เกรด D)'));
+  else if (hasCom) {
+    fields.push(field('ค่าคอม Sales', money(m.comAmt) + ' · คอมเรทเฉลี่ย ' + pct(m.comRate)));
+    fields.push(field('กำไรหลังหักค่าคอม', money(Number(m.profit) - Number(m.comAmt))));
+  } else fields.push(field('ค่าคอม Sales', '— (ใบนี้บันทึกจากหน้าเว็บรุ่นเก่า · เปิดใบแล้วบันทึกอีกครั้งเพื่อคำนวณ)'));
+  var out = [{ tag:'hr' }, { tag:'markdown', content:'💰 **ตัวเลขสำหรับผู้อนุมัติ** (กลุ่มนี้เท่านั้น)' }, { tag:'div', fields:fields }];
+  var cats = (m.byCat || []).filter(function (c) { return c && c.cat; });
+  if (cats.length && !m.comDeal) {
+    out.push(larkRow_([{ w:4, md:'กลุ่มสินค้า' }, { w:2, md:'เกรด' }, { w:2, md:'คอมเรท', right:true }, { w:4, md:'ค่าคอม', right:true }], true));
+    cats.slice(0, 8).forEach(function (c) {
+      out.push(larkRow_([{ w:4, md:larkSafe_(c.cat, 30) }, { w:2, md:larkSafe_(c.grade || '-', 4) }, { w:2, md:pct(c.rate), right:true }, { w:4, md:larkNum_(c.comAmt, 2), right:true }]));
+    });
+  }
+  return out;
+}
 /**
  * สร้างการ์ดของ event หนึ่งรายการ (pure)
  * @param {string} event  คีย์ใน LARK_EVENTS
  * @param {Object} info   { id, docNo, title, customer, requester:{name,email}, actors:[{name,email}], actorLabel,
  *                          statusLabel, step, due, late, items:[string], priced, round, by, note }
  * @param {string} appUrl URL ของ Web App
- * @param {Object=} opt   { mentionRequester:boolean }
+ * @param {Object=} opt   { mentionRequester:boolean, money:boolean (v5.10: แสดงตัวเลขการเงิน — Bot C เท่านั้น) }
  * @return {{title:string, card:Object, text:string}}
  */
 function larkBuild_(event, info, appUrl, opt) {
@@ -216,10 +282,10 @@ function larkBuild_(event, info, appUrl, opt) {
   var elements = [{ tag:'div', fields:fields }];
   var stp = larkStepper_(info.step, info.approved);
   if (stp) elements.push({ tag:'div', text:{ tag:'lark_md', content:'**ขั้นตอน**\n' + stp } });
-  var items = (info.items || []).slice(0, LARK_ITEMS_MAX).map(function (x) { return '• ' + larkSafe_(x, 140); });
-  if ((info.items || []).length > LARK_ITEMS_MAX) items.push('… และอีก ' + (info.items.length - LARK_ITEMS_MAX) + ' รายการ');
-  if (items.length) elements.push({ tag:'div', text:{ tag:'lark_md', content:'**สินค้า**\n' + items.join('\n') } });
-  if (info.priced) elements.push({ tag:'div', text:{ tag:'lark_md', content:'💰 **มีราคาแล้ว** — ดูราคาบนเว็บ (เห็นเฉพาะผู้มีสิทธิ์ · Sales เห็นเมื่อปล่อยราคาแล้ว)' } });
+  elements = elements.concat(larkItemsTable_(info.items));                              // v5.10: ตารางแทนบรรทัดยาว
+  // v5.10: ตัวเลขการเงินแสดงเฉพาะเมื่อผู้เรียกระบุ opt.money (การ์ดของ Bot C กลุ่มผู้อนุมัติ) — กลุ่มอื่นเห็นแค่ "มีราคาแล้ว"
+  if (opt.money && info.money) elements = elements.concat(larkMoneyBlock_(info.money));
+  else if (info.priced) elements.push({ tag:'div', text:{ tag:'lark_md', content:'💰 **มีราคาแล้ว** — ดูราคาบนเว็บ (เห็นเฉพาะผู้มีสิทธิ์ · Sales เห็นเมื่อปล่อยราคาแล้ว)' } });
   var notes = [info.note ? larkSafe_(info.note, 200) : '', info.by ? 'โดย ' + larkSafe_(info.by, 60) : ''].filter(String);
   if (notes.length) elements.push({ tag:'note', elements:notes.map(function (t) { return { tag:'plain_text', content:t }; }) });
   var url = larkLink_(appUrl, info.id);
@@ -232,8 +298,10 @@ function larkCardText_(card) {
   var out = [card.header.title.content];
   card.elements.forEach(function (e) {
     if (e.text) out.push(e.text.content);
+    if (e.tag === 'markdown') out.push(e.content);
     (e.fields || []).forEach(function (f) { out.push(f.text.content); });
     (e.elements || []).forEach(function (n) { out.push(n.content); });
+    (e.columns || []).forEach(function (c, i) { (c.elements || []).forEach(function (n) { out.push((i ? '· ' : '') + n.content); }); });   // แถวตาราง
     (e.actions || []).forEach(function (a) { if (a.url) out.push(a.url); });
   });
   return out.join(' | ').replace(/\*\*/g, '').replace(/\n/g, ' ');
@@ -248,12 +316,10 @@ function larkInfoFromRow_(r, idx, people, follow) {
   try { d = JSON.parse(String(cell_(r, idx, 'Detail') || '{}')) || {}; } catch (e) { d = {}; }
   var docType = String(cell_(r, idx, 'DocType') || 'QT');
   var owner = String(cell_(r, idx, 'SalesUserId') || ''), reqU = people.byId[owner] || null;
-  var items = (d.lines || []).map(function (L) {
-    if (!L) return '';
-    var name = [L.code, L.desc].filter(function (x) { return x; }).join(' ');
-    var q = Number(L.qty);
-    return name ? name + (isFinite(q) && q > 0 ? ' — ' + (Math.round(q * 100) / 100) + ' ' + (L.uom || '') : '') : '';
-  }).filter(String);
+  var items = (d.lines || []).map(function (L) {                                     // v5.10: เก็บเป็นช่อง (ตาราง) ไม่ต่อเป็นบรรทัดเดียว
+    if (!L || !(L.code || L.desc)) return null;
+    return { code:String(L.code || ''), desc:String(L.desc || ''), qty:L.qty, uom:String(L.uom || '') };
+  }).filter(function (x) { return !!x; });
   var f = follow || {}, pricerId = String(cell_(r, idx, 'AssignedTo') || '') || String(d.routedTo || '');
   var pick = function (u) { return { name:u.name, email:u.email, id:u.id }; };
   return {
@@ -266,6 +332,19 @@ function larkInfoFromRow_(r, idx, people, follow) {
     owner:f.owner || '', level:f.level || 'ok', waitingDays:f.waitingDays, slaDays:f.slaDays,
     items:items, priced:docType !== 'SR' && f.step >= 2, round:num_(cell_(r, idx, 'Round'), 1), approved:f.approvedRoles || []
   };
+}
+
+/** v5.10: ตัวเลขการเงินของใบ (เฉพาะการ์ด Bot C กลุ่มผู้อนุมัติ) — หน้าเว็บคำนวณไว้ใน Detail.apprSummary ตอนบันทึก
+ *  (สูตรค่าคอมอยู่ฝั่งหน้าเว็บ) · ใบที่บันทึกจากหน้าเว็บรุ่นเก่า = ใช้คอลัมน์ Total / Profit / GP และไม่มีค่าคอม */
+function larkMoneyFromRow_(r, idx) {
+  var d = {};
+  try { d = JSON.parse(String(cell_(r, idx, 'Detail') || '{}')) || {}; } catch (e) { d = {}; }
+  var s = (d.apprSummary && typeof d.apprSummary === 'object') ? d.apprSummary : null, H = d.header || {};
+  var lowGp = String(cell_(r, idx, 'NeedsApproval') || '').toUpperCase() === 'TRUE';
+  if (s) return { cur:s.cur || H.currency || 'THB', total:s.total, profit:s.profit, gp:s.gp, comAmt:s.comAmt, comRate:s.comRate, byCat:s.byCat || [],
+                  comDeal:!!s.comDeal, supplierCom:s.supplierCom, supplierComPct:s.supplierComPct, lowGp:lowGp };
+  return { cur:String(cell_(r, idx, 'Currency') || H.currency || 'THB'), total:num_(cell_(r, idx, 'Total'), 0), profit:num_(cell_(r, idx, 'Profit'), 0),
+           gp:num_(cell_(r, idx, 'GP'), 0), comAmt:null, comRate:null, byCat:[], lowGp:lowGp };
 }
 
 /* ============================================================ 3) QUEUE + DEDUP */
@@ -308,14 +387,16 @@ function larkEnqueueMany_(items) {
       var info = it.info || {}, key = it.key || larkDedupKey_(it.event, info, day);   // การเตือนส่งคีย์ของวันที่ตรวจมาเอง
       if (recent[key] && now - recent[key] < ev.dedupMin * 60000) { out.deduped++; return; }
       recent[key] = now;
-      var msg = larkBuild_(it.event, info, appUrl, opt), dest = larkBotDest_(ev.bot, props);
+      // v5.10: การ์ดขออนุมัติ → Bot C (กลุ่มผู้อนุมัติ) พร้อมตัวเลข · ยังไม่ตั้ง Bot C → Bot A แบบไม่มีตัวเลข
+      var bot = (ev.approval && larkBotDest_('C', props)) ? 'C' : ev.bot;
+      var msg = larkBuild_(it.event, info, appUrl, Object.assign({}, opt, { money:bot === 'C' })), dest = larkBotDest_(bot, props);
       var r = new Array(width).fill('');
       var set = function (h, v) { if (idx[h]) r[idx[h] - 1] = v; };
       set('Id', Utilities.getUuid()); set('Event', it.event); set('DocId', info.id || '');
-      set('DedupKey', key); set('Target', ev.bot === 'B' ? 'REMINDER' : 'BOT'); set('Title', msg.title);
+      set('DedupKey', key); set('Target', LARK_TARGET[bot]); set('Title', msg.title);
       set('Payload', JSON.stringify({ card:msg.card, text:msg.text }).slice(0, CELL_LIMIT));
       set('Status', 'PENDING'); set('Tries', 0); set('NextAt', stamp); set('CreatedAt', stamp);
-      var missing = 'ยังไม่ได้ตั้ง ' + LARK_BOTS[ev.bot].url;
+      var missing = 'ยังไม่ได้ตั้ง ' + LARK_BOTS[bot].url;
       if (!dest && mode === 'live') { set('Status', 'SKIPPED'); set('LastError', missing); out.skipped++; }
       else { out.queued++; if (!dest) set('LastError', missing + ' (dry-run: ไม่กระทบ)'); }
       rows.push(r);
@@ -344,6 +425,7 @@ function larkOnStatus_(sh, idx, row, prevStatus, newStatus, sess, extra) {
     var follow = followActors_(followState_(followInfo_(r, idx), followCfg_(), Date.now()), people);
     var info = larkInfoFromRow_(r, idx, people, follow), ev = LARK_EVENTS[event];
     info.by = sess ? sess.name : '';
+    if (ev.approval) info.money = larkMoneyFromRow_(r, idx);       // v5.10: ใช้เฉพาะเมื่อการ์ดไป Bot C (larkBuild_ ตรวจ opt.money)
     if (ev.mention === 'requester') info.actors = [info.requester];
     if (ev.mention === 'pricer') info.actors = info.pricer;
     if (event === 'QT_RETURNED') info.note = 'ส่งกลับให้ Sourcing แก้ราคา — ต้องขออนุมัติใหม่ทั้ง 2 ฝ่าย';
@@ -385,7 +467,7 @@ function larkHookRequest_(dest, card) {
 }
 function larkRequestFor_(item, props) {
   var p = JSON.parse(item.payload || '{}');
-  var dest = larkBotDest_(item.target === 'REMINDER' ? 'B' : 'A', props);
+  var dest = larkBotDest_(larkBotOfTarget_(item.target), props);   // APPROVAL → Bot C เท่านั้น (ไม่มี fallback: การ์ดมีตัวเลข)
   return dest && p.card ? larkHookRequest_(dest, p.card) : null;
 }
 /* v5.7: Lark ปฏิเสธการ์ด "ทั้งใบ" ถ้ามี @อีเมลที่ไม่ใช่บัญชีในองค์กร Lark
@@ -457,7 +539,7 @@ function larkFlush() {
       picked.forEach(function (it, k) {
         var rq = null; try { rq = larkRequestFor_(it, props); } catch (e) { rq = null; }
         if (rq) { reqs.push(rq); map.push(k); }
-        else outcome[k] = { status:'SKIPPED', err:'ไม่มีปลายทาง (' + (it.target === 'REMINDER' ? 'LARK_REMINDER_URL / LARK_BOT_URL' : 'LARK_BOT_URL') + ')' };
+        else outcome[k] = { status:'SKIPPED', err:'ไม่มีปลายทาง (' + (it.target === 'REMINDER' ? 'LARK_REMINDER_URL / LARK_BOT_URL' : it.target === 'APPROVAL' ? 'LARK_APPROVAL_URL' : 'LARK_BOT_URL') + ')' };
       });
       var resps = [];
       try { resps = reqs.length ? UrlFetchApp.fetchAll(reqs) : []; }                // HTTP ครั้งเดียวทั้งชุด
@@ -606,10 +688,11 @@ function larkSampleInfo_(me) {
   return {
     sr: { id:'SR-DEMO', docNo:'SR-2610-003', title:'Factory Rooftop 500 kW', customer:'CP Group', requester:{ name:'BOSS', email:u.email },
           actors:[{ name:'Napasorn', email:u.email }], statusLabel:'รอ Sourcing รับคำขอราคา', step:1, due:'2026-10-14',
-          items:['MOUNTING-RAIL Aluminium rail 4.2 m — 320 pcs', 'MID-CLAMP 35mm — 640 pcs'], priced:false, by:'BOSS' },
+          items:[{ code:'MOUNTING-RAIL', desc:'Aluminium rail 4.2 m', qty:320, uom:'pcs' }, { code:'MID-CLAMP', desc:'Mid clamp 35mm', qty:640, uom:'pcs' }], priced:false, by:'BOSS' },
     qt: { id:'Q-DEMO', docNo:'QT-IN-2610-007', title:'Thaibev Solar Rooftop 1MW', customer:'Thai Beverage PCL', requester:{ name:'BOSS', email:u.email },
           actors:[{ name:u.name, email:u.email }], statusLabel:'รอ Sourcing Manager + BD Manager อนุมัติ (0/2)', step:2, approved:[], due:'2026-10-13',
-          items:['SG110CX-P2 Inverter 110 kW — 9 pcs', 'Logger3000 — 1 pcs'], priced:true, round:2, by:'Chatraporn' }
+          items:[{ code:'SG110CX-P2', desc:'Inverter 110 kW', qty:9, uom:'pcs' }, { code:'Logger3000', desc:'Data logger', qty:1, uom:'pcs' }], priced:true, round:2, by:'Chatraporn',
+          money:{ cur:'THB', total:2430000, profit:388800, gp:16, comAmt:24300, comRate:1, byCat:[{ cat:'Inverter', grade:'B', rate:1, comAmt:24300, total:2430000 }] } }
   };
 }
 /**
@@ -688,15 +771,15 @@ function larkMaskUrl_(u) {
 }
 /** การส่งล่าสุดของบอทจากแท็บ NotifyQueue (อ่านครั้งเดียว ย้อนหลังไม่เกิน LARK_DEDUP_SCAN แถว) */
 function larkLastFromQueue_() {
-  var out = { A:null, B:null };
+  var out = { A:null, B:null, C:null };
   try {
     var sh = sheet_(SH.NOTIFY), last = sh.getLastRow(); if (last < 2) return out;
     var idx = headerIndex_(sh), from = Math.max(2, last - LARK_DEDUP_SCAN + 1);
     var data = sh.getRange(from, 1, last - from + 1, sh.getLastColumn()).getValues();
-    for (var i = data.length - 1; i >= 0 && (!out.A || !out.B); i--) {
+    for (var i = data.length - 1; i >= 0 && (!out.A || !out.B || !out.C); i--) {
       var st = String(cell_(data[i], idx, 'Status'));
       if (['SENT', 'FAILED', 'RETRY', 'DRYRUN', 'SKIPPED'].indexOf(st) < 0) continue;
-      var b = String(cell_(data[i], idx, 'Target')) === 'REMINDER' ? 'B' : 'A';
+      var b = larkBotOfTarget_(String(cell_(data[i], idx, 'Target')));
       if (out[b]) continue;
       out[b] = { at:toIso_(cell_(data[i], idx, 'SentAt') || cell_(data[i], idx, 'NextAt') || cell_(data[i], idx, 'CreatedAt')),
                  what:String(cell_(data[i], idx, 'Event')), status:st, err:String(cell_(data[i], idx, 'LastError') || '').slice(0, 200) };
@@ -778,7 +861,7 @@ function larkAdmin_(action, p, sess) {
     var s = larkSampleInfo_({ name:sess.name, email:String(sess.email || '').toLowerCase() });
     var ev = bot === 'B' ? 'SLA_REMINDER' : 'QT_SUBMITTED';
     var info = Object.assign({}, s.qt, { docNo:'TEST-' + s.qt.docNo }, bot === 'B' ? { late:'เกินกำหนด 1 วันทำการ' } : {});
-    var card = larkBuild_(ev, info, larkAppUrl_(props)).card;
+    var card = larkBuild_(ev, info, larkAppUrl_(props), { money:!!def.money }).card;   // v5.10: Bot C ทดสอบพร้อมตัวเลขตัวอย่าง
     card.header.title.content = '[ทดสอบจากหน้าตั้งค่า] ' + card.header.title.content;
     var res, code = 0, j = {}, err = '';
     // fetchAll เท่านั้น (กติกาของไฟล์นี้)

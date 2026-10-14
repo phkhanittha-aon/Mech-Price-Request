@@ -67,7 +67,8 @@ ok('SR ส่งจริง (กลุ่ม Mounting) → SR_SUBMITTED 1 ใ�
 let c1 = W.card(q[0]), txt = c1.text;
 ok('การ์ดแบบ Food: เลขที่ / ลูกค้า / ผู้ขอ / สถานะ / ผู้ดำเนินการ / ครบกำหนด', ['เลขที่', 'ลูกค้า', 'ผู้ขอ', 'สถานะ', 'ผู้ดำเนินการ', 'ครบกำหนด'].every(k => c1.card.elements[0].fields.some(f => f.text.content.startsWith('**' + k + '**'))), c1.card.elements[0]);
 ok('@แท็ก Sourcing ที่ดูแลกลุ่ม Mounting (Napasorn) ในช่องผู้ดำเนินการ · @แท็ก Sales ผู้ขอ', /ผู้ดำเนินการ\*\*\n<at email=src2@m\.co><\/at>/.test(flat(c1.card)) && /ผู้ขอ\*\*\n<at email=boss@m\.co>/.test(flat(c1.card)), c1.card.elements[0]);
-ok('รายการสินค้า (ไม่มีราคา) + แถบขั้นตอน (อยู่ที่ Sourcing ทำราคา) + ปุ่มเปิดรายการ', /RAIL-4M Aluminium rail — 320 pcs/.test(txt) && /✅ ส่งคำขอ +› +🔶 Sourcing ทำราคา/.test(txt) &&
+// v5.10 (ตั้งใจ): รายการสินค้าเป็นตาราง (# · รหัส · รายการ · จำนวน) แทนบรรทัด "รหัส ชื่อ — จำนวน" → ข้อความในคิวคั่นช่องด้วย " | · "
+ok('รายการสินค้า (ไม่มีราคา) + แถบขั้นตอน (อยู่ที่ Sourcing ทำราคา) + ปุ่มเปิดรายการ', /RAIL-4M \| · Aluminium rail \| · 320 pcs/.test(txt) && /✅ ส่งคำขอ +› +🔶 Sourcing ทำราคา/.test(txt) &&
   c1.card.elements.some(e => e.tag === 'action' && e.actions[0].url === 'https://script.google.com/macros/s/TEST/exec?doc=SR1'), txt);
 ok('ลิงก์ไม่ระบุแอป (ระบบเลือกหน้าตามอีเมลผู้กด)', !/app=/.test(txt));
 W.saveSR('SR1', 'Submitted', { groupType: 'Mounting', title: 'Factory 2' });

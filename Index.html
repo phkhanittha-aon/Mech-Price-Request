@@ -644,7 +644,7 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='5.9';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const APP_VERSION='5.10';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
 const BUILD='2026-10-12 · build 5.8 · Reminder วันละครั้ง';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
@@ -2474,6 +2474,12 @@ function stampComGrades(q){
       L.comCat=cat;                          // ชื่อหมวด (ไม่ใช่ต้นทุน) — ให้ Sales จัดกลุ่มได้
     });
     q.comGrades=gradeByCat;                   // สรุปเกรดต่อหมวด (ตัวอักษรล้วน) ไว้ที่หัวใบ
+    // v5.10: สรุปตัวเลขสำหรับการ์ดขออนุมัติใน Lark (กลุ่มผู้อนุมัติเท่านั้น) — server ตัดคีย์นี้ทิ้งจากทุกอย่างที่ Sales ได้รับ (COST_KEYS)
+    const r2=n=>Math.round((+n||0)*100)/100,cats=Object.keys(c.com||{}).filter(k=>(c.com[k].total||0)>0);
+    const comAmt=cats.reduce((s,k)=>s+(+c.com[k].comAmt||0),0);
+    q.apprSummary={cur:curOf(q),total:r2(c.total),profit:r2(c.profit),gp:r2(c.gp),comAmt:r2(comAmt),comRate:c.total>0?r2(comAmt/c.total*100):0,
+      byCat:cats.map(k=>({cat:k,grade:c.com[k].grade||'',rate:r2(c.com[k].rate),comAmt:r2(c.com[k].comAmt),total:r2(c.com[k].total)})),
+      comDeal:!!c.isCommission,supplierCom:r2(c.supplierCom),supplierComPct:r2(c.supplierComPct),at:new Date().toISOString()};
   }catch(e){/* ไม่ให้ล้มการบันทึกเพราะการประทับเกรด */}
   return q;
 }
@@ -4773,7 +4779,8 @@ function saveSettings(){
    ไม่เก็บค่าที่พิมพ์ไว้ใน localStorage / ตัวแปร: ส่งแล้วล้างช่องทันที · สิทธิ์ตรวจที่ server ทุกคำขอ           */
 const LARK_HOOK_RE=/^https:\/\/open\.(larksuite\.com|feishu\.cn)\/open-apis\/bot\/v2\/hook\/[A-Za-z0-9_-]{8,}$/;
 const LARK_BOT_UI={A:{icon:'🤖',name:'MGS Price Request',sub:'แจ้งทุกขั้นตอนของคำขอราคา · ใบเสนอราคา'},
-                   B:{icon:'⏰',name:'MGS Reminder',sub:'แจ้งเฉพาะงานที่เกินกำหนด · วันละครั้ง จ.–ศ.'}};
+                   B:{icon:'⏰',name:'MGS Reminder',sub:'แจ้งเฉพาะงานที่เกินกำหนด · วันละครั้ง จ.–ศ.'},
+                   C:{icon:'💼',name:'MGS Approval',sub:'v5.10: การ์ดขออนุมัติราคา + ยอดทั้งโครงการ · กำไร · คอมเรท · ค่าคอม — ตั้งในกลุ่มที่มีแค่ Procurement Mgr · BD Mgr · GM'}};
 const LARK_MODE_TH={dryrun:'ทดสอบ — สร้างการ์ดเก็บไว้ในแท็บ NotifyQueue ยังไม่ส่งเข้ากลุ่ม',live:'ส่งจริงเข้ากลุ่ม Lark',off:'ปิดการแจ้งเตือน'};
 const LARK_ERR_TH={BAD_WEBHOOK:'Webhook URL ไม่ถูกรูปแบบ — ต้องขึ้นต้นด้วย https://open.larksuite.com/open-apis/bot/v2/hook/',
   BAD_SECRET:'Secret ไม่ถูกต้อง (มีช่องว่าง หรือยาวเกิน) — คัดลอกใหม่จาก Security settings',NOTHING_TO_SAVE:'ยังไม่ได้กรอก Webhook URL หรือ Secret ใหม่',
@@ -4806,7 +4813,7 @@ function larkBotCard(b){
     <div class="lark-h"><span style="font-size:18px">${ui.icon}</span><b>${esc(ui.name)}</b><span class="hint">${esc(ui.sub)}</span></div>
     <div class="lark-kv">
       <span class="hint">Webhook URL</span><span>${s.urlSet?`<b style="color:var(--green)">✓ ตั้งแล้ว</b> <span class="mono" style="font-size:12px">${esc(s.url)}</span>`
-        :`<b style="color:var(--amber)">ยังไม่ได้ตั้ง</b>${b==='B'?' <span class="hint">— การ์ดเตือนจะส่งผ่าน '+esc(LARK_BOT_UI.A.name)+' แทน</span>':''}`}</span>
+        :`<b style="color:var(--amber)">ยังไม่ได้ตั้ง</b>${b==='B'?' <span class="hint">— การ์ดเตือนจะส่งผ่าน '+esc(LARK_BOT_UI.A.name)+' แทน</span>':b==='C'?' <span class="hint">— การ์ดขออนุมัติจะส่งเข้า '+esc(LARK_BOT_UI.A.name)+' แบบไม่มีตัวเลข</span>':''}`}</span>
       <span class="hint">Secret</span><span>${s.secretSet?'<b style="color:var(--green)">✓ ตั้งแล้ว</b> <span class="hint">(ซ่อนไว้)</span>'
         :(s.urlSet?'<b style="color:var(--amber)">ยังไม่ได้ตั้ง</b> <span class="hint">— แนะนำให้เปิด Signature verification</span>':'<span class="hint">—</span>')}</span>
       <span class="hint">ส่งล่าสุด</span><span>${larkStamp(s.last)}</span></div>
@@ -4814,6 +4821,7 @@ function larkBotCard(b){
       <div class="f"><label class="lbl">Webhook URL ใหม่</label><input class="inp mono" id="lkUrl${b}" autocomplete="off" spellcheck="false" placeholder="https://open.larksuite.com/open-apis/bot/v2/hook/…" oninput="larkCheckUrl(${jsa(b)})"></div>
       <div class="f"><label class="lbl">Secret ใหม่</label><input class="inp mono" id="lkSec${b}" type="password" autocomplete="new-password" spellcheck="false" placeholder="จาก Security settings → Signature verification"></div></div>
     <div class="hint" id="lkHint${b}" style="margin-top:6px">เว้นว่างช่องที่ไม่ต้องการเปลี่ยน · ค่าที่บันทึกเก็บใน Script Properties (<span class="mono">${esc(s.urlKey||'')}</span>, <span class="mono">${esc(s.secretKey||'')}</span>) ไม่อยู่ใน Sheet</div>
+    ${b==='C'?`<div class="lark-msg bad" style="margin-top:8px">⚠ การ์ดของบอทนี้มี <b>มูลค่า · กำไร · ค่าคอม</b> — ตั้งในกลุ่มที่มีเฉพาะ Procurement Mgr · BD Mgr · GM เท่านั้น (ห้ามมี Sales / Sourcing)</div>`:''}
     ${m?`<div class="lark-msg ${m.ok?'ok':'bad'}">${m.html}</div>`:''}
     <div class="row-flex" style="gap:8px;margin-top:12px;flex-wrap:wrap">
       <button class="btn" onclick="larkSave(${jsa(b)})" ${_lark.busy?'disabled':''}>💾 บันทึก</button>
@@ -4824,8 +4832,8 @@ function larkBotCard(b){
 function viewLarkBot(){
   const st=_lark.st;
   const how=`<div class="card"><div class="card-b" style="font-size:13px;line-height:1.75">
-    <b>วิธีสร้างบอท (ทำ 2 ตัวในกลุ่มเดียวกัน):</b> กลุ่ม Lark → ⚙️ Settings → <b>Bots</b> → <b>Add Bot</b> → <b>Custom Bot</b> →
-    ตั้งชื่อ “${esc(LARK_BOT_UI.A.name)}” / “${esc(LARK_BOT_UI.B.name)}” → <b>Security settings:</b> ✅ <b>Set signature verification</b>
+    <b>วิธีสร้างบอท:</b> กลุ่ม Lark → ⚙️ Settings → <b>Bots</b> → <b>Add Bot</b> → <b>Custom Bot</b> →
+    ตั้งชื่อ “${esc(LARK_BOT_UI.A.name)}” / “${esc(LARK_BOT_UI.B.name)}” (กลุ่มคำขอราคา) · “${esc(LARK_BOT_UI.C.name)}” (<b>อีกกลุ่ม</b> เฉพาะผู้อนุมัติ) → <b>Security settings:</b> ✅ <b>Set signature verification</b>
     (ไม่ต้องตั้ง keywords / IP) → คัดลอก Webhook URL และ Secret มาวางด้านล่าง → บันทึก → กด “ส่งการ์ดทดสอบ”</div></div>`;
   if(!st)return `${how}<div class="card" style="margin-top:14px"><div class="card-b">${_lark.err?`<div class="lark-msg bad">${esc(_lark.err)}</div><button class="btn sm" style="margin-top:10px" onclick="_lark.loaded=false;larkLoad()">ลองใหม่</button>`
     :'<div class="hint"><span class="live-spin"></span> กำลังอ่านการตั้งค่าจาก server…</div>'}</div></div>`;
@@ -4854,7 +4862,7 @@ function viewLarkBot(){
     ${(st.problems||[]).length?`<div class="lark-msg bad">${st.problems.map(esc).join('<br>')}</div>`:''}
     ${_lark.msg.mode?`<div class="lark-msg ${_lark.msg.mode.ok?'ok':'bad'}">${_lark.msg.mode.html}</div>`:''}
   </div></div>
-  ${larkBotCard('A')}${larkBotCard('B')}</div>`;
+  ${larkBotCard('A')}${larkBotCard('B')}${larkBotCard('C')}</div>`;
 }
 function larkCheckUrl(b){
   const el=document.getElementById('lkUrl'+b),h=document.getElementById('lkHint'+b);if(!el)return;
@@ -4881,7 +4889,7 @@ async function larkTest(b){
   render();
 }
 function larkClear(b){
-  confirmModal('ลบค่าของ '+esc(LARK_BOT_UI[b].name)+'?','ลบ Webhook URL และ Secret ของบอทนี้ออกจาก Script Properties'+(b==='A'?'<br><b style="color:var(--red)">การแจ้งเตือนทุกขั้นตอนจะหยุดส่ง</b>':'<br>การ์ดเตือนจะส่งผ่าน '+esc(LARK_BOT_UI.A.name)+' แทน'),
+  confirmModal('ลบค่าของ '+esc(LARK_BOT_UI[b].name)+'?','ลบ Webhook URL และ Secret ของบอทนี้ออกจาก Script Properties'+(b==='A'?'<br><b style="color:var(--red)">การแจ้งเตือนทุกขั้นตอนจะหยุดส่ง</b>':b==='C'?'<br>การ์ดขออนุมัติจะส่งเข้า '+esc(LARK_BOT_UI.A.name)+' แบบไม่มีตัวเลข':'<br>การ์ดเตือนจะส่งผ่าน '+esc(LARK_BOT_UI.A.name)+' แทน'),
     async()=>{closeModal();const r=await larkCall({action:'larkClear',bot:b});_lark.msg[b]=(r&&r.ok&&r.data&&r.data.ok!==false)?{ok:true,html:'ลบค่าแล้ว'}:{ok:false,html:esc(larkErrTh(r))};render();},'ยืนยันลบค่า');
 }
 function larkSetMode(m){

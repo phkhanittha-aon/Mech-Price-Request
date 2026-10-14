@@ -42,6 +42,8 @@
  *     · ทั้ง SR และ QT วิ่งถึงผู้ดูแลหมวดของรายการส่วนใหญ่ในใบ (routeFor_) · QT ที่มีผู้รับงานแล้ว (AssignedTo) ใช้คนนั้น
  *     · row.follow.resp = ผู้รับผิดชอบเอกสาร (ทุกขั้น) · follow.actor.uids = Id ของคนที่ต้องทำต่อ → หน้าติดตามงานกรอง "งานของฉัน" ได้ตรง
  *     · ไม่มีคอลัมน์ใหม่ · ใบเก่าที่ไม่มี routedSig ยังใช้ผู้รับเดิมตราบที่กลุ่มงานไม่เปลี่ยน (ไม่ย้ายงานที่ส่งไปแล้ว)
+ *  R) v5.10: การ์ด Lark — รายการสินค้าเป็นตาราง · บอทตัวที่ 3 (Bot C · LARK_APPROVAL_URL) กลุ่มผู้อนุมัติเท่านั้น
+ *     การ์ดขออนุมัติแสดง ยอดทั้งโครงการ · กำไร · คอมเรท · ค่าคอม (จาก Detail.apprSummary ที่หน้าเว็บคำนวณ — อยู่ใน COST_KEYS ไม่หลุดถึง Sales)
  *  Q) v5.9 (ออดิตชุด 1 — ปิดรูด่วน): server ตัดสินสถานะเอง client ส่งมาแค่ "ขอ"
  *     · save ตั้ง Partial Approved / Approved / Pending ไม่ได้ (STATUS_LOCKED) — เกิดจาก approve_ / release_ เท่านั้น
  *       ReleasedTo / approvalRoles / approvals / statusLog อ่านจากชีทเสมอ · ส่งกลับไปแก้ = server ล้างการอนุมัติเอง
@@ -80,7 +82,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '5.9';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '5.10';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -285,7 +287,7 @@ var COST_KEYS = ['up','costcur','dutypct','clearancepct','freep','oppct','extras
   'cost','linecost','basecost','pricepc','duty','clearance','profit','lineprofit','op',
   'gp','gppct','gppercent','margin','purchasecost','supplierprice','supplier','landedcost',
   'internaldiscount','commission','comgroup','boiprice','defaultprice','needsapproval',
-  'rawup','approvalroles','auditlogs','globalextras',
+  'rawup','approvalroles','auditlogs','globalextras','apprsummary',
   'suppliercom'];   // v5.3 ค่าคอมที่ Supplier จ่าย MGS (ดีลค่าคอม) — ข้อมูลภายใน
 
 function stripCost_(v) {

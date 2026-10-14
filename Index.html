@@ -644,7 +644,7 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='5.8';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const APP_VERSION='5.9';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
 const BUILD='2026-10-12 · build 5.8 · Reminder วันละครั้ง';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
@@ -798,7 +798,10 @@ function quoteTHB(q){return toTHB(q,quoteTotals(q).total)}
 const pp=n=>(n==null||isNaN(n))?'—':(Math.round(n*100)/100)+'%';   // percent points -> "10%"
 const todayISO=()=>new Date().toISOString().slice(0,10);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=s=>(s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* v5.9: ค่าที่ฝังในปุ่ม onclick="f(…)" ต้องเป็นสตริง JS ที่ปลอดภัย — esc() อย่างเดียวไม่พอ (เบราว์เซอร์แปลง &#39; กลับเป็น ' ก่อนรัน)
+   jsa(x) → "x" (JSON) แล้ว escape เป็น attribute → ใช้แบบ onclick="openQuote(${jsa(q.id)})" (ไม่ต้องใส่ ' ครอบ) */
+const jsa=v=>esc(JSON.stringify(v==null?'':String(v)));
 
 /* ---------- USERS / ROLES ---------- */
 // User 2 (Napasorn) sees ONLY these; User 1 (Chatraporn) sees everything EXCEPT these
@@ -898,11 +901,27 @@ const SR_STATUSES=['Draft','Submitted','Accepted','Quoted','Cancelled'];
 const QT_STATUSES=['Requested','In Progress','Submitted','Partial Approved','Approved','Pending','Won','Closed'];
 const QT_DEFAULT_STATUS='In Progress';
 
-/* ---- 1. อนุมัติ 2 ฝ่าย (v5.1: กดก่อนหลังได้ ต้องครบทั้งคู่) — ต้องตรงกับ REQUIRED_APPROVAL_ROLES / APPROVAL_OVERRIDE_ROLES ใน Code.gs ---- */
+/* ---- 1. อนุมัติ 2 ฝ่าย (v5.1: ต้องครบทั้งคู่ · v5.9: ลำดับ Sourcing Manager → BD Manager, BD อนุมัติแทนได้) — ต้องตรงกับ REQUIRED_APPROVAL_ROLES / APPROVAL_OVERRIDE_ROLES ใน Code.gs ---- */
 // BUSINESS RULE: Sourcing Manager (role Procurement Mgr) + BD Manager ต้องอนุมัติครบทั้งคู่ · ใครกดก่อนก็ได้
 const REQUIRED_APPROVAL_ROLES=['Procurement Mgr','BD Mgr'];
 // BUSINESS RULE: GM อนุมัติแทนได้ทุกฝ่าย — ทีละฝ่าย หรือ "แทนทั้ง 2 ฝ่าย" ในครั้งเดียว · บันทึกในประวัติว่าอนุมัติแทน
 const APPROVAL_OVERRIDE_ROLES=['GM'];
+// v5.9: ลำดับ Sourcing Manager → BD Manager · BD อนุมัติแทน Sourcing Manager ได้ (กดครั้งเดียวผ่านทั้ง 2 ขั้น) — ตรงกับ APPROVAL_SUBSTITUTE ใน Code.gs
+const APPROVAL_SUBSTITUTE={'BD Mgr':['Procurement Mgr']};
+/* v5.9: กติกาสถานะของ server (saveQuote_) — ใช้กรองตัวเลือกในหน้าจอให้ตรงกับที่ server ยอม (server ตัดสินจริง) */
+const QT_SAVE_STATUSES=['Requested','In Progress','Submitted','Closed'];
+const QT_FROZEN_NEXT={'Partial Approved':['Partial Approved','In Progress','Submitted','Closed'],'Approved':['Approved','In Progress','Submitted','Closed'],
+  'Pending':['Pending','Won','Closed'],'Won':['Won','Closed'],'Closed':['Closed']};
+const QT_NO_DELETE_STATUSES=['Approved','Pending','Won','Closed'];       // v5.9: ใบที่อนุมัติครบแล้วห้ามลบ ให้ปิดเป็น Closed
+const QT_PRICE_LOCKED=['Pending','Won','Closed'];                        // v5.9: ปล่อยราคาแล้ว → แก้ราคาไม่ได้ ใช้ "ทำรอบใหม่"
+function serverAllowsQT(cur,next){const f=QT_FROZEN_NEXT[cur];return f?f.indexOf(next)>=0:QT_SAVE_STATUSES.indexOf(next)>=0}
+function srHasQT(q){return !!q&&q.docType==='SR'&&(q.status==='Quoted'||(Array.isArray(q.quoteIds)&&q.quoteIds.length>0))}
+/* v5.9: เหตุผลที่ลบไม่ได้ ('' = ลบ / ขอลบได้) — ตรงกับ deleteQuote_ ใน Code.gs */
+function deleteBlockedWhy(q){
+  if(!q)return 'ไม่พบเอกสาร';
+  if(q.docType==='SR')return srHasQT(q)?ERR_TH.SR_HAS_QT:'';
+  return QT_NO_DELETE_STATUSES.indexOf(q.status||QT_DEFAULT_STATUS)>=0?ERR_TH.DELETE_LOCKED:'';
+}
 /* v5.0: ชื่อที่แสดงของ role (ค่าในแท็บ Users ยังเป็นชื่อมาตรฐานเดิม — ต้องตรงกับ ROLE_LABEL ใน Code.gs) */
 const ROLE_LABEL={'Procurement Mgr':'Sourcing Manager','BD Mgr':'BD Manager'};
 function roleTH(r){return ROLE_LABEL[r]||r||''}
@@ -1099,7 +1118,7 @@ function optOther(el,k){
     <div class="modal-b"><label class="lbl">${esc(CFG.labels[k]||'ค่าใหม่')}</label>
       <input class="inp" id="optNewVal" ${k==='validity'?'inputmode="numeric" placeholder="เช่น 120"':'placeholder="พิมพ์ค่าใหม่"'} maxlength="60" autocomplete="off">
       <div class="hint">ค่าที่เพิ่มจะอยู่ในรายการให้ทุกคนเลือกครั้งต่อไป · Admin ซ่อนหรือตั้งเป็นค่าเริ่มต้นได้ที่หน้า ตั้งค่า</div></div>
-    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" onclick="optAddSubmit('${k}')">เพิ่ม & เลือก</button></div>`);
+    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" onclick="optAddSubmit(${jsa(k)})">เพิ่ม & เลือก</button></div>`);
   setTimeout(()=>{const e=$('#optNewVal');if(e){e.focus();e.addEventListener('keydown',ev=>{if(ev.key==='Enter')optAddSubmit(k)})}},40);
   return true;
 }
@@ -1154,8 +1173,18 @@ const ERR_TH={
   NOT_FOUND:'ไม่พบข้อมูลนี้แล้ว (อาจถูกลบ) — กดซิงค์แล้วลองใหม่',
   TIMEOUT:'เชื่อมต่อ Google Sheet ช้าเกินไป — ตรวจอินเทอร์เน็ตแล้วลองใหม่ (ข้อมูลยังอยู่ในเครื่อง)',
   OFFLINE:'ยังไม่ได้เชื่อมต่อ Google Sheet — ข้อมูลเก็บในเครื่องไว้ก่อน และจะซิงค์เมื่อเชื่อมต่อได้',
-  DATA_RESET:'ใบนี้ถูกล้างออกจากระบบแล้ว (ผู้ดูแลล้างข้อมูลชุดใหม่) — ไม่ได้บันทึก'
+  DATA_RESET:'ใบนี้ถูกล้างออกจากระบบแล้ว (ผู้ดูแลล้างข้อมูลชุดใหม่) — ไม่ได้บันทึก',
+  // v5.9: server ตัดสินสถานะ / การอนุมัติ / การลบเอง
+  STATUS_LOCKED:'เปลี่ยนสถานะนี้ไม่ได้ — สถานะอนุมัติ / ปล่อยราคาเกิดจากปุ่มอนุมัติและปุ่มปล่อยราคาของ NON เท่านั้น · ใบที่ปล่อยราคาแล้วแก้ราคาไม่ได้ ให้ใช้ “ทำรอบใหม่”',
+  SR_LOCKED:'คำขอนี้มีใบเสนอราคาแล้ว — คำขอของลูกค้าเป็นหลักฐาน แก้ไขไม่ได้',
+  SR_HAS_QT:'คำขอนี้มีใบเสนอราคาแล้ว — ลบไม่ได้',
+  DOC_TYPE_LOCKED:'เปลี่ยนชนิดเอกสาร (SR ↔ QT) ของใบเดิมไม่ได้',
+  DELETE_LOCKED:'ใบที่อนุมัติครบแล้วลบไม่ได้ — เปลี่ยนสถานะเป็น “ปิดงาน (Closed)” แทน',
+  APPROVE_REQUIRED:'ต้องให้ผู้บริหารอนุมัติการลบ — กด “ขอลบ” แทน',
+  BAD_ID:'รหัสเอกสารไม่ถูกต้อง — สร้างใบใหม่อีกครั้ง'
 };
+/* v5.9: server ปฏิเสธถาวร (ส่งซ้ำก็ไม่ผ่าน) → ไม่เข้าคิวซิงค์ แจ้งผู้ใช้ แล้วโหลดฉบับในชีทกลับมาแทน */
+const FINAL_REJECT=['STATUS_LOCKED','SR_LOCKED','SR_HAS_QT','DOC_TYPE_LOCKED','DELETE_LOCKED','APPROVE_REQUIRED','BAD_ID','ACCESS_DENIED','NOT_APPROVED','bad detail'];
 function errText(res){
   const code=res&&(res.error||res.code);
   if(code&&ERR_TH[code])return ERR_TH[code];
@@ -1396,8 +1425,8 @@ function repairBanner(qs){
   const fix=all.filter(q=>followOf(q).repair!=='NO_PRICE'&&repairable(q)),noPrice=all.filter(q=>!fix.includes(q));
   return `<div class="wl-repair no-print">🛠 <span style="flex:1;min-width:220px">มี <b>${all.length} ใบ</b> สถานะ “พร้อมเสนอลูกค้า” (ข้อมูลรุ่นเก่า) ที่ <b>Sales ยังไม่เห็นราคา</b>
       ${fix.length?` · <b>${fix.length}</b> ใบสร้างราคาฉบับ Sales ได้เลย แล้ว ${esc(gatekeeperName())} กดยืนยันปล่อยราคา`:''}
-      ${noPrice.length?` · <b style="color:var(--red)">${noPrice.length}</b> ใบไม่มีราคาในใบ ต้องเปิดใบใส่ราคาก่อน (${noPrice.slice(0,6).map(q=>`<a href="#" onclick="openQuote('${q.id}');return false">${esc(q.docNo||q.header.ref||'—')}</a>`).join(', ')}${noPrice.length>6?' …':''})`:''}</span>
-    ${fix.length?`<button class="btn sm" onclick='backfillSalesDetail(${JSON.stringify(fix.map(q=>q.id))})'>สร้างราคาฉบับ Sales ${fix.length} ใบ</button>`:''}</div>`;
+      ${noPrice.length?` · <b style="color:var(--red)">${noPrice.length}</b> ใบไม่มีราคาในใบ ต้องเปิดใบใส่ราคาก่อน (${noPrice.slice(0,6).map(q=>`<a href="#" onclick="openQuote(${jsa(q.id)});return false">${esc(q.docNo||q.header.ref||'—')}</a>`).join(', ')}${noPrice.length>6?' …':''})`:''}</span>
+    ${fix.length?`<button class="btn sm" onclick="backfillSalesDetail(${esc(JSON.stringify(fix.map(q=>q.id)))})">สร้างราคาฉบับ Sales ${fix.length} ใบ</button>`:''}</div>`;
 }
 /* ใบนี้สร้างราคาฉบับ Sales แล้วมีราคาจริงไหม (ไม่มีรายการ / ราคา 0 = สร้างไปก็ยังไม่มีราคาให้ Sales) */
 function repairable(q){try{return (buildSalesProjection(q).lines||[]).some(l=>+l.unitPrice>0)}catch(e){return false}}
@@ -1568,14 +1597,14 @@ function catSetupCard(){
     const hold=scopeHolders(c).map(u=>u.name);
     return `<tr>
     <td style="font-weight:600">${esc(c)}<div class="hint">${nProd[catKey(c)]||0} สินค้า</div></td>
-    <td><select class="inp cat-sel" onchange="setCatGroup('${esc(c)}',this.value)">${grpKeys.map(k=>`<option ${k===cg?'selected':''}>${esc(k)}</option>`).join('')}</select>
+    <td><select class="inp cat-sel" onchange="setCatGroup(${jsa(c)},this.value)">${grpKeys.map(k=>`<option ${k===cg?'selected':''}>${esc(k)}</option>`).join('')}</select>
       ${sug!==cg?`<div class="hint" style="color:var(--amber)">แนะนำ: ${esc(sug)}</div>`:''}</td>
-    <td><select class="inp cat-sel" onchange="setCatOwner('${esc(c)}',this.value)"><option value="">— ยังไม่ระบุ —</option>
+    <td><select class="inp cat-sel" onchange="setCatOwner(${jsa(c)},this.value)"><option value="">— ยังไม่ระบุ —</option>
       ${cand.map(u=>`<option value="${esc(u.id)}" ${own===u.id?'selected':''}>${esc(u.name)} · ${esc(roleTH(normRole(u.role)))}</option>`).join('')}</select>
       ${own?'':`<div class="hint">${hold.length?'สิทธิ์กลุ่มเดิม: '+esc(hold.join(', ')):'ไม่มีใครมีสิทธิ์กลุ่มนี้'} → ${auto&&auto.id?'ส่งถึง '+esc(auto.name):'ทีม Sourcing'}</div>`}</td>
-    <td><div class="pct-wrap"><input class="cell-inp" type="number" step="any" value="${g[c].duty}" onchange="setGroup('${esc(c)}','duty',this.value)"></div></td>
-    <td><div class="pct-wrap"><input class="cell-inp" type="number" step="any" value="${g[c].clearance}" onchange="setGroup('${esc(c)}','clearance',this.value)"></div></td>
-    <td><div class="pct-wrap"><input class="cell-inp" type="number" step="any" value="${g[c].op}" onchange="setGroup('${esc(c)}','op',this.value)"></div></td></tr>`}).join('');
+    <td><div class="pct-wrap"><input class="cell-inp" type="number" step="any" value="${g[c].duty}" onchange="setGroup(${jsa(c)},'duty',this.value)"></div></td>
+    <td><div class="pct-wrap"><input class="cell-inp" type="number" step="any" value="${g[c].clearance}" onchange="setGroup(${jsa(c)},'clearance',this.value)"></div></td>
+    <td><div class="pct-wrap"><input class="cell-inp" type="number" step="any" value="${g[c].op}" onchange="setGroup(${jsa(c)},'op',this.value)"></div></td></tr>`}).join('');
   const nSug=cats.filter(c=>catSuggest(c)!==comCategory(c)).length;
   return `<div class="card" style="margin-top:18px" id="catSetup"><div class="card-h"><h2>หมวดสินค้า · กลุ่มสินค้า · ผู้รับผิดชอบ</h2>
     <span class="hint ch-hint">หมวดสินค้า (ย่อย) อยู่ในกลุ่มสินค้า (ใช้คิดค่าคอม) · SR และ QT วิ่งถึงผู้รับผิดชอบหมวดของรายการส่วนใหญ่ในใบ</span>
@@ -1636,7 +1665,7 @@ function srRoutingCard(){
     <div class="card-b" style="padding:0"><div class="tw" style="border:none"><table><thead><tr><th>กลุ่มงาน</th><th>ส่งถึงตอนนี้</th><th style="min-width:180px">ตั้งผู้รับเอง</th></tr></thead><tbody>
     ${GROUP_TYPES.map(gt=>{const a=autoRouteOf(gt);return `<tr><td><span class="tag ${grpColor(gt)}">${esc(gt)}</span></td>
       <td>${a.id?`<b>${esc(a.name)}</b>`:'<span class="route-tag pool">👥 ทีม Sourcing</span>'}<div class="hint">${esc(ROUTE_WHY_TH[a.why]||'')}</div></td>
-      <td><select class="inp" onchange="setSrRoute('${esc(gt)}',this.value)"><option value="">— อัตโนมัติตามกลุ่มสินค้า —</option>
+      <td><select class="inp" onchange="setSrRoute(${jsa(gt)},this.value)"><option value="">— อัตโนมัติตามกลุ่มสินค้า —</option>
         ${internal.map(u=>`<option value="${esc(u.id)}" ${ov[gt]===u.id?'selected':''}>${esc(u.name)} · ${esc(roleTH(normRole(u.role)))}</option>`).join('')}</select></td></tr>`}).join('')}
     </tbody></table></div><div class="hint" style="padding:10px 16px">คำขอที่ส่งแล้วไม่ย้ายตาม — ใช้ปุ่ม “ส่งต่อ” ในหน้าคำขอราคา (SR) · ผลจริงตัดสินที่ server ตอน Sales กดส่งคำขอ</div></div></div>`;
 }
@@ -1648,7 +1677,7 @@ function openForwardSR(id){
   modal(`<div class="modal-h"><h3>ส่งต่อคำขอราคา ${esc(q.docNo||'')}</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-b"><div class="hint" style="margin-bottom:8px">ตอนนี้ส่งถึง: ${routeTag(q)} · ผู้รับคนใหม่จะถูก @แท็กในกลุ่ม Lark</div>
       <label class="lbl">ส่งต่อให้</label><select class="inp" id="fwdTo">${opts.map(u=>`<option value="${esc(u.id)}">${esc(u.name)} · ${esc(roleTH(normRole(u.role)))}</option>`).join('')}</select></div>
-    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" onclick="forwardSR('${esc(id)}')">ส่งต่อ</button></div>`);
+    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" onclick="forwardSR(${jsa(id)})">ส่งต่อ</button></div>`);
 }
 function forwardSR(id){
   const q=QUOTES.find(x=>x.id===id),el=document.getElementById('fwdTo');if(!q||!el||!el.value)return;
@@ -1701,7 +1730,7 @@ async function openSalesUpdate(id){
     <div class="hint" style="margin-top:10px">ระบบบันทึกชื่อและเวลาให้อัตโนมัติ เพื่อใช้รวมเป็นสรุปส่งผู้บริหาร</div>
   </div>
   <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button>
-    <button class="btn" onclick="saveSalesUpdate('${q.id}')">บันทึกการอัปเดต</button></div>`);
+    <button class="btn" onclick="saveSalesUpdate(${jsa(q.id)})">บันทึกการอัปเดต</button></div>`);
 }
 function saveSalesUpdate(id){
   const q=QUOTES.find(x=>x.id===id);if(!q)return;
@@ -1751,13 +1780,16 @@ function approvalState(q){
 }
 function isGMApprover(){return !!CURRENT&&APPROVAL_OVERRIDE_ROLES.indexOf(normRole(CURRENT.role))>=0}
 /* ป้ายปุ่มอนุมัติ: "อนุมัติ (BD Manager)" / GM: "อนุมัติแทน Sourcing Manager" */
-function approveBtnLabel(q){const a=approvalState(q);return isGMApprover()?('อนุมัติแทน '+roleTH(a.next)):('อนุมัติ ('+roleTH(normRole(CURRENT.role))+')')}
+function approveBtnLabel(q){const a=approvalState(q),r=normRole(CURRENT.role);
+  if(isGMApprover())return 'อนุมัติแทน '+roleTH(a.next);
+  const subs=(APPROVAL_SUBSTITUTE[r]||[]).filter(x=>a.missing.indexOf(x)>=0);   // v5.9: BD กดตอนที่ Sourcing Manager ยังไม่อนุมัติ = อนุมัติแทนด้วย
+  return subs.length?('อนุมัติ ('+roleTH(r)+') + แทน '+subs.map(roleTH).join(' + ')):('อนุมัติ ('+roleTH(r)+')')}
 /* ปุ่มอนุมัติ (+ ปุ่ม "แทนทั้ง 2 ฝ่าย" ของ GM เมื่อยังขาดมากกว่า 1 ฝ่าย) — ใช้ทุกหน้าจอ */
 function approveButtons(q,cls){
   if(!canApprove(q))return '';
   const a=approvalState(q),stop='event.stopPropagation();';
-  return `<button class="btn sm ${cls||''}" style="background:var(--green)" onclick="${stop}approve('${q.id}')" title="${esc(isGMApprover()?('GM อนุมัติแทน '+roleTH(a.next)):('อนุมัติในนาม '+roleTH(normRole(CURRENT.role))))}">✓ ${esc(approveBtnLabel(q))}</button>`+
-    (isGMApprover()&&a.missing.length>1?`<button class="btn sm ghost ${cls||''}" onclick="${stop}approve('${q.id}',true)" title="บันทึกว่า GM อนุมัติแทนทั้ง Sourcing Manager และ BD Manager">✓✓ แทนทั้ง ${a.missing.length} ฝ่าย</button>`:'');
+  return `<button class="btn sm ${cls||''}" style="background:var(--green)" onclick="${stop}approve(${jsa(q.id)})" title="${esc(isGMApprover()?('GM อนุมัติแทน '+roleTH(a.next)):('อนุมัติในนาม '+roleTH(normRole(CURRENT.role))))}">✓ ${esc(approveBtnLabel(q))}</button>`+
+    (isGMApprover()&&a.missing.length>1?`<button class="btn sm ghost ${cls||''}" onclick="${stop}approve(${jsa(q.id)},true)" title="บันทึกว่า GM อนุมัติแทนทั้ง Sourcing Manager และ BD Manager">✓✓ แทนทั้ง ${a.missing.length} ฝ่าย</button>`:'');
 }
 function inApprovalStage(q){return !!q&&q.docType!=='SR'&&['Submitted','Partial Approved'].indexOf(q.status||QT_DEFAULT_STATUS)>=0}   // v5.0: SR สถานะ Submitted ไม่ใช่ใบรออนุมัติ
 function canApprove(q){
@@ -1789,7 +1821,7 @@ function approvalBadges(q){
   const me=CURRENT?normRole(CURRENT.role):'';
   return REQUIRED_APPROVAL_ROLES.map(r=>{
     const done=a.roles.indexOf(r)>=0,by=done?byOf(r):null,mine=!done&&me===r&&canApprove(q);
-    const txt=done?('✓ '+roleTH(r)+' อนุมัติแล้ว'+(by&&by.onBehalfOf?' (GM แทน)':'')):(mine?'⏳ รอคุณ ('+roleTH(r)+')':'⏳ รอ '+roleTH(r));
+    const txt=done?('✓ '+roleTH(r)+' อนุมัติแล้ว'+(by&&by.onBehalfOf?' ('+(by.role==='GM'?'GM':roleTH(by.role))+' แทน)':'')):(mine?'⏳ รอคุณ ('+roleTH(r)+')':'⏳ รอ '+roleTH(r));
     return `<span class="abadge ${done?'ok':mine?'mine':'wait'}" title="${esc(r)}${by?' · '+esc(by.by||'')+' '+esc(fmtTime(by.at)):''}">${esc(txt)}</span>`;
   }).join('');
 }
@@ -1797,7 +1829,7 @@ function approvalBadges(q){
 function approvalCard(q){
   const t=quoteTotals(q),gc=gpClassQ(q,t),mine=canApprove(q);
   const lv=lvOf(q);
-  return `<div class="acard lv-card lv-${lv} ${mine?'mine':''} ${isFlash(q.id)?'flash':''}" onclick="openQuote('${q.id}')">
+  return `<div class="acard lv-card lv-${lv} ${mine?'mine':''} ${isFlash(q.id)?'flash':''}" onclick="openQuote(${jsa(q.id)})">
     <div class="ac-gp ${gc}"><b>${pp(t.isCommission?t.supplierComPct:t.gp)}</b><span>${gpWordQ(q)}</span></div>
     <div class="ac-body">
       <div class="ac-top"><span class="ac-title">${esc(q.header.title||q.header.customer||'(ไม่มีชื่อ)')}</span>
@@ -1825,6 +1857,7 @@ function openRelease(id){
   // "แชร์เพิ่ม" = ให้สิทธิ์ดูราคาแก่ผู้ใช้เพิ่มเติม — คนละเรื่องกับ "ปล่อยราคา" (Approved → Pending)
   // เดิมใช้ canRelease() ซึ่งบังคับสถานะต้องเป็น Approved เป๊ะ ทำให้ใบที่ปล่อยไปแล้ว (Pending/Won/Closed)
   // กดแล้วขึ้นข้อความว่า "ไม่มีสิทธิ์" ทั้งที่ผู้ใช้เป็นผู้จัดการจริง — แจ้งเหตุผลผิดและสับสนมาก
+  if(true){toast('v5.9: การแชร์ราคาเพิ่มถูกปิด — ปล่อยราคาได้เฉพาะ '+gatekeeperName()+' (ให้สิทธิ์เจ้าของงาน)','bad');return}
   if(!(perms().approve||isReleaser(CURRENT))){
     toast('เฉพาะ '+gatekeeperName()+' หรือผู้จัดการเท่านั้นที่แชร์ราคาเพิ่มได้','bad');return;
   }
@@ -1842,7 +1875,7 @@ function openRelease(id){
     </div></div>
   <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button>
     <button class="btn ghost" onclick="document.querySelectorAll('.relChk').forEach(c=>{if(!c.disabled)c.checked=true})">เลือกทั้งหมด</button>
-    <button class="btn" onclick="saveRelease('${q.id}')">บันทึกการปล่อยราคา</button></div>`);
+    <button class="btn" onclick="saveRelease(${jsa(q.id)})">บันทึกการปล่อยราคา</button></div>`);
 }
 function saveRelease(id){
   const q=QUOTES.find(x=>x.id===id);if(!q)return;
@@ -2495,7 +2528,7 @@ function viewDashboard(){
         <td><span class="tag ${grpColor(q.header.groupType)}" style="font-size:10px">${esc(q.header.groupType||'—')}</span></td>
         <td>${routeTag(q)}</td>
         <td style="font-size:12px">${esc(q.header.needBy||'—')}</td>
-        <td>${perms().create?`<button class="btn tiny" onclick="takeSRAndCost('${q.id}')">รับงาน &amp; ทำราคา</button>`:''}</td></tr>`).join('')}
+        <td>${perms().create?`<button class="btn tiny" onclick="takeSRAndCost(${jsa(q.id)})">รับงาน &amp; ทำราคา</button>`:''}</td></tr>`).join('')}
     </tbody></table></div></div></div>`:''}
   ${workloadCard()}
   ${showAppr?`<div class="card" style="border-left:4px solid var(--amber);margin-bottom:14px">
@@ -2511,7 +2544,7 @@ function viewDashboard(){
       <div class="card-b" style="padding:0">
         ${recent.length?`<div class="tw" style="border:none"><table><thead><tr>
           <th>โครงการ</th><th>QT No</th><th>ลูกค้า</th><th>Sales</th><th>กลุ่ม</th>${mgr?'<th>GP</th>':''}<th>สถานะ</th></tr></thead>
-          <tbody>${recent.map(q=>{const t=mgr?quoteTotals(q):null;return `<tr class="${isFlash(q.id)?'flash-row':''}" style="cursor:pointer" onclick="openQuote('${q.id}')">
+          <tbody>${recent.map(q=>{const t=mgr?quoteTotals(q):null;return `<tr class="${isFlash(q.id)?'flash-row':''}" style="cursor:pointer" onclick="openQuote(${jsa(q.id)})">
             <td style="font-weight:600">${esc(q.header.title||q.header.project||'(ไม่มีชื่อ)')}${q.round>1?` <span class="tag orange" style="font-size:10px">รอบ ${q.round}</span>`:''}</td>
             <td class="mono" style="font-size:11.5px">${esc(q.docNo||q.header.ref||'—')}</td>
             <td>${esc(q.header.customer||'—')}</td><td>${esc(q.header.sales||'—')}</td>
@@ -2559,10 +2592,10 @@ function workloadCard(){
       <div class="spacer"></div><span class="hint">SLA: Sourcing ${SLA_TXT('SOURCING')} · อนุมัติ ${SLA_TXT('MANAGEMENT')} · ปล่อยราคา ${SLA_TXT('RELEASER')} วันทำการ</span></div>
     <div class="card-b">
       ${repairBanner()}${false?`<div class="wl-repair">🛠 มี <b>${repair.length} ใบ</b> (สถานะพร้อมเสนอ ข้อมูลรุ่นเก่า) ที่ Sales ยังไม่เห็นราคา เพราะยังไม่มีราคาฉบับ Sales
-        <button class="btn sm" onclick='backfillSalesDetail(${JSON.stringify(repair)})'>สร้างข้อมูลสำหรับ Sales ${repair.length} ใบ</button></div>`:''}
+        <button class="btn sm" onclick="backfillSalesDetail(${esc(JSON.stringify(repair))})">สร้างข้อมูลสำหรับ Sales ${repair.length} ใบ</button></div>`:''}
       <div class="wl-tiles">${tiles}</div>
       <div class="tw" style="border:none;margin-top:10px"><table><thead><tr><th></th><th>เอกสาร</th><th>โครงการ / ลูกค้า</th><th>รออยู่ที่</th><th class="r">รอมาแล้ว</th><th></th></tr></thead><tbody>
-      ${worst.map(({q,f})=>`<tr class="wl-row lv-${f.level}" style="cursor:pointer" onclick="openQuote('${q.id}')">
+      ${worst.map(({q,f})=>`<tr class="wl-row lv-${f.level}" style="cursor:pointer" onclick="openQuote(${jsa(q.id)})">
         <td style="width:28px;text-align:center">${f.level==='over'?'⛔':f.level==='watch'?'⚠':'·'}</td>
         <td class="mono" style="font-size:11px">${esc(q.docNo||q.header.ref||'—')}</td>
         <td><b>${esc(q.header.title||q.header.customer||'(ไม่มีชื่อ)')}</b><div class="hint">${esc(q.header.customer||'')} · ${esc(salesNameOf(q)||'—')}</div></td>
@@ -2587,7 +2620,7 @@ function viewApprovals(){
   ${others.length?`<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>อยู่ระหว่างอนุมัติ (${others.length})</h2><span class="hint" style="margin-left:8px">คุณอนุมัติฝั่งของคุณแล้ว · รออีกฝ่าย</span></div>
     <div class="card-b"><div class="agrid">${others.sort(byWait).map(approvalCard).join('')}</div></div></div>`:''}
   ${recent.length?`<div class="card"><div class="card-h"><h2>ที่คุณอนุมัติล่าสุด</h2></div><div class="card-b" style="padding:0"><div class="tw" style="border:none"><table><tbody>
-    ${recent.map(q=>`<tr style="cursor:pointer" onclick="openQuote('${q.id}')"><td class="mono" style="font-size:11px">${esc(q.docNo||q.header.ref||'')}</td>
+    ${recent.map(q=>`<tr style="cursor:pointer" onclick="openQuote(${jsa(q.id)})"><td class="mono" style="font-size:11px">${esc(q.docNo||q.header.ref||'')}</td>
       <td><b>${esc(q.header.title||q.header.customer||'')}</b><div class="hint">${esc(q.header.customer||'')}</div></td>
       <td>${ballChip(q)}</td><td class="r mono">${money(quoteTotals(q).total,curOf(q))}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}`;
 }
@@ -2653,7 +2686,7 @@ function viewSummary(){
       <option value="all">ลูกค้า: ทั้งหมด</option>${customers.map(c=>`<option value="${esc(c)}" ${sCustomer===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
     <select class="inp" style="width:auto;padding:9px 30px 9px 11px" onchange="sSales=this.value;render()">
       <option value="all">Sales: ทั้งหมด</option>${salesList.map(c=>`<option value="${esc(c)}" ${sSales===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
-    <div class="seg">${['all',...QT_STATUSES].map(s=>`<button class="${sStatus===s?'on':''}" onclick="sStatus='${s}';render()">${s==='all'?'ทุกสถานะ':s}</button>`).join('')}</div>
+    <div class="seg">${['all',...QT_STATUSES].map(s=>`<button class="${sStatus===s?'on':''}" onclick="sStatus=${jsa(s)};render()">${s==='all'?'ทุกสถานะ':s}</button>`).join('')}</div>
     ${(sSearch||sCustomer!=='all'||sSales!=='all'||sStatus!=='all')?`<button class="btn tiny ghost" onclick="sSearch='';sCustomer='all';sSales='all';sStatus='all';render()">✕ ล้างตัวกรอง</button>`:''}
     <div class="spacer" style="flex:1"></div>
     <button class="btn sm ghost" onclick="exportSummaryCSV()" title="ส่งออกตามตัวกรองปัจจุบันเป็น CSV">⤓ ส่งออก Excel/CSV</button>
@@ -2768,8 +2801,8 @@ function viewCosting(){
       <div class="fc"><label class="lbl">กลุ่มงาน</label><select class="inp" onchange="hsetGroup(this.value)">${opts(GROUP_TYPES,H.groupType)}</select></div>
       ${canSeeCost(CURRENT)?`<div class="fc"><label class="lbl" title="ปกติ = บวกกำไร %GP · ค่าคอมจาก Supplier = ขายราคาทุน รายได้มาจากค่าคอมที่ Supplier จ่าย">ประเภทดีล</label><select class="inp" id="dealSel" onchange="hsetDeal(this.value)">
         ${Object.keys(DEAL_TYPES).map(k=>`<option value="${k}" ${(isComDeal(H)?'commission':'normal')===k?'selected':''}>${esc(DEAL_TYPES[k])}</option>`).join('')}</select></div>`:''}
-      <div class="fc"><label class="lbl">วันที่ขอราคา</label><input class="inp" type="date" value="${H.reqDate}" oninput="hset('reqDate',this.value)"></div>
-      <div class="fc"><label class="lbl">วันที่เสนอ</label><input class="inp" type="date" value="${H.offerDate}" oninput="hset('offerDate',this.value)"></div>
+      <div class="fc"><label class="lbl">วันที่ขอราคา</label><input class="inp" type="date" value="${esc(H.reqDate||'')}" oninput="hset('reqDate',this.value)"></div>
+      <div class="fc"><label class="lbl">วันที่เสนอ</label><input class="inp" type="date" value="${esc(H.offerDate||'')}" oninput="hset('offerDate',this.value)"></div>
       <div class="fc"><label class="lbl">สกุลเงินเสนอ</label><select class="inp" onchange="hset('currency',this.value);refreshLines()">${optOptions('currency',H.currency)}</select></div>
       <div class="fc w2"><label class="lbl">อัตราแลกเปลี่ยน → THB (ล็อกไว้ในใบนี้)</label><div class="fx-pair">
         <div class="fx"><span>USD</span><input class="inp r mono" type="number" step="0.01" title="USD→THB Rate" value="${(H.rates&&H.rates.USD)||H.exrate}" oninput="hsetRate('USD',this.value)"></div>
@@ -3601,6 +3634,8 @@ function doSaveQuote(stage,needsApproval){
   editing.stage=stage;editing.updated=todayISO();editing.updatedAt=new Date().toISOString();editing.rev=(editing.rev||0)+1;editing.isSynced=false;
   // sync new status field: Draft → keep Costing (or current); Submitted → Submitted
   if(!editing.status)editing.status=QT_DEFAULT_STATUS;
+  // v5.9: ใบที่อนุมัติแล้ว (บางส่วน/ครบ) ถูกแก้แล้วบันทึกร่าง = ส่งกลับไปแก้ → ต้องอนุมัติใหม่ (server ไม่รับการแก้ราคาในสถานะอนุมัติ)
+  if(stage!=='Submitted'&&['Partial Approved','Approved'].indexOf(editing.status)>=0){updateStatus(editing,'In Progress');toast('ใบนี้ถูกแก้หลังอนุมัติ — สถานะกลับเป็นกำลังทำราคา ต้องส่งอนุมัติใหม่','');}
   if(stage==='Submitted'){
     // ราคาถูกแก้แล้วส่งตรวจใหม่ → ล้างการอนุมัติเดิม ต้องผ่านครบ 2 ขาอีกครั้ง
     if(['Submitted','Partial Approved','Approved'].indexOf(editing.status)>=0)editing.approvalRoles=[];
@@ -3667,7 +3702,7 @@ function viewQuotes(){
       <input id="qSearchInp" placeholder="ค้นหา ลูกค้า / Sales / โครงการ / รหัสสินค้า..." value="${esc(qSearch)}" oninput="qSearch=this.value;document.getElementById('qListBody').innerHTML=quotesRows()"></div>
     <button class="btn sm" onclick="go('new')">+ ทำราคาใหม่</button></div>
   <div class="row-flex no-print" style="margin-bottom:14px">
-    <div class="seg">${['all',...QT_STATUSES].map(s=>`<button class="${qFilter===s?'on':''}" onclick="qFilter='${s}';render()">${s==='all'?'ทั้งหมด':s}</button>`).join('')}</div>
+    <div class="seg">${['all',...QT_STATUSES].map(s=>`<button class="${qFilter===s?'on':''}" onclick="qFilter=${jsa(s)};render()">${s==='all'?'ทั้งหมด':s}</button>`).join('')}</div>
     <label class="row-flex" style="gap:6px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer">
       <input type="checkbox" ${qLatestOnly?'checked':''} onchange="qLatestOnly=this.checked;render()" style="width:auto">
       แสดงเฉพาะรอบล่าสุด</label>
@@ -3697,23 +3732,24 @@ function quotesRows(){
   return list.map(q=>{const t=quoteTotals(q);const dr=q.deleteRequest;const st=q.status||QT_DEFAULT_STATUS;
     let delPart;
     if(dr){delPart=isMgr
-      ?`<button class="btn tiny" style="background:var(--red)" onclick="approveDelete('${q.id}')" title="อนุมัติการลบ (ลบถาวร)">✓ อนุมัติลบ</button><button class="btn tiny ghost" onclick="rejectDelete('${q.id}')" title="ยกเลิกคำขอลบ">✕</button>`
+      ?`<button class="btn tiny" style="background:var(--red)" onclick="approveDelete(${jsa(q.id)})" title="อนุมัติการลบ (ลบถาวร)">✓ อนุมัติลบ</button><button class="btn tiny ghost" onclick="rejectDelete(${jsa(q.id)})" title="ยกเลิกคำขอลบ">✕</button>`
       :`<span class="tag red" style="font-size:10px">รออนุมัติลบ</span>`;}
-    else{delPart=`<button class="btn tiny ghost" style="color:var(--red)" onclick="requestDelete('${q.id}')" title="${isMgr?'ลบใบนี้':'ขอลบ (ต้องให้ Manager อนุมัติ)'}">${isMgr?'ลบ':'ขอลบ'}</button>`;}
+    else if(deleteBlockedWhy(q)){delPart='';}                       // v5.9: ใบที่อนุมัติครบแล้ว / SR ที่มี QT → ไม่มีปุ่มลบ (server ไม่ยอม)
+    else{delPart=`<button class="btn tiny ghost" style="color:var(--red)" onclick="requestDelete(${jsa(q.id)})" title="${isMgr?'ลบใบนี้':'ขอลบ (ต้องให้ Manager อนุมัติ)'}">${isMgr?'ลบ':'ขอลบ'}</button>`;}
     return `<tr class="lv-${dr?'over':lvOf(q)}">
-      <td class="mono" style="font-size:11px;cursor:pointer" onclick="openQuote('${q.id}')">${esc(q.docNo||q.header.ref||'—')}</td>
-      <td style="cursor:pointer" onclick="openQuote('${q.id}')"><div style="font-weight:600">${esc(q.header.title||q.header.project||'(ไม่มีชื่อ)')}${dr?` <span class="tag red" style="font-size:9px">● ขอลบ</span>`:''}${q.needsApproval?` <span class="tag amber" style="font-size:9px" title="%GP ต่ำกว่าเกณฑ์ — ต้องให้ผู้จัดการอนุมัติ">⚠ รออนุมัติพิเศษ</span>`:''}</div>${dr?`<div class="hint" style="color:var(--red)">ขอลบโดย ${esc(dr.by)}</div>`:''}</td>
+      <td class="mono" style="font-size:11px;cursor:pointer" onclick="openQuote(${jsa(q.id)})">${esc(q.docNo||q.header.ref||'—')}</td>
+      <td style="cursor:pointer" onclick="openQuote(${jsa(q.id)})"><div style="font-weight:600">${esc(q.header.title||q.header.project||'(ไม่มีชื่อ)')}${dr?` <span class="tag red" style="font-size:9px">● ขอลบ</span>`:''}${q.needsApproval?` <span class="tag amber" style="font-size:9px" title="%GP ต่ำกว่าเกณฑ์ — ต้องให้ผู้จัดการอนุมัติ">⚠ รออนุมัติพิเศษ</span>`:''}</div>${dr?`<div class="hint" style="color:var(--red)">ขอลบโดย ${esc(dr.by)}</div>`:''}</td>
       <td>${esc(q.header.customer||'—')}</td><td>${ownerTag(q)}</td>
       <td style="font-size:12px">${esc(creatorName(q))}</td>
       <td>${q.round>1?`<span class="tag blue">R${q.round}</span>`:`<span class="hint">R1</span>`}</td>
       <td class="r mono" style="font-weight:600">${money(t.total,curOf(q))}</td><td>${gpTagQ(q,t)}</td>
       <td><span class="tag ${STATUS_TAG[st]||'grey'}" title="เปลี่ยนสถานะได้ในหน้ารายละเอียดใบ / หน้าติดตามงาน">${esc(STATUS_TH[st]||st)}</span>${inApprovalStage(q)?`<div class="row-flex" style="gap:3px;margin-top:3px">${approvalBadges(q)}</div>`:''}${(q._conflict||q._cloudNewer)?'<div><span class="abadge warn" title="ข้อมูลบน Cloud ถูกแก้โดยคนอื่น — เปิดแก้เพื่อเลือกเวอร์ชัน">⚠ Cloud ใหม่กว่า</span></div>':''}</td>
-      <td style="font-size:12px;color:var(--muted)">${q.updated||'—'}</td>
+      <td style="font-size:12px;color:var(--muted)">${esc(q.updated||'—')}</td>
       <td><div class="row-flex" style="flex-wrap:nowrap;gap:4px">
-        ${canRelease(q)?`<button class="btn tiny" style="background:var(--blue)" onclick="event.stopPropagation();releasePrice('${q.id}')" title="ปล่อยราคาให้ ${esc(salesNameOf(q)||'Sales')}">🔓 ปล่อยราคา</button>`:''}
-        <button class="btn tiny ghost" onclick="openQuote('${q.id}')" title="เปิดดู">เปิด</button>
-        <button class="btn tiny ghost" onclick="editQuote('${q.id}')" title="แก้ไข">แก้</button>
-        <button class="btn tiny ghost" onclick="duplicateQuote('${q.id}')" title="ทำรอบใหม่">⧉</button>
+        ${canRelease(q)?`<button class="btn tiny" style="background:var(--blue)" onclick="event.stopPropagation();releasePrice(${jsa(q.id)})" title="ปล่อยราคาให้ ${esc(salesNameOf(q)||'Sales')}">🔓 ปล่อยราคา</button>`:''}
+        <button class="btn tiny ghost" onclick="openQuote(${jsa(q.id)})" title="เปิดดู">เปิด</button>
+        <button class="btn tiny ghost" onclick="editQuote(${jsa(q.id)})" title="แก้ไข">แก้</button>
+        <button class="btn tiny ghost" onclick="duplicateQuote(${jsa(q.id)})" title="ทำรอบใหม่">⧉</button>
         ${delPart}
       </div></td></tr>`}).join('');
 }
@@ -3724,17 +3760,19 @@ const QT_CONTROLLED_STATUSES=['Partial Approved','Approved','Pending'];
 function allowedNextStatuses(q){
   const isSR=q.docType==='SR';
   const all=isSR?SR_STATUSES:QT_STATUSES;
-  if(perms().approve)return isSR?all.slice():all.filter(x=>QT_CONTROLLED_STATUSES.indexOf(x)<0);
   const cur=q.status||(isSR?'Submitted':QT_DEFAULT_STATUS);
+  // v5.9: ตัวเลือกต้องผ่านกติกาของ server ด้วย (เช่น ปล่อยราคาแล้วย้อนกลับไปแก้ไม่ได้ · SR ที่มี QT เปลี่ยนได้แค่ Quoted / Cancelled)
+  const srv=x=>isSR?(!srHasQT(q)||['Quoted','Cancelled'].indexOf(x)>=0):serverAllowsQT(cur,x);
+  if(perms().approve)return (isSR?all.slice():all.filter(x=>QT_CONTROLLED_STATUSES.indexOf(x)<0)).filter(srv);
   const map=isSR?SR_TRANSITIONS:QT_TRANSITIONS;
   const roleAllowed=(isSR?SR_ROLE_STATUSES:QT_ROLE_STATUSES)[CURRENT.role]||[];
-  return (map[cur]||[]).filter(x=>roleAllowed.indexOf(x)>=0);
+  return (map[cur]||[]).filter(x=>roleAllowed.indexOf(x)>=0).filter(srv);
 }
 function statusSelect(q){
   const cur=q.status||(q.docType==='SR'?'Submitted':QT_DEFAULT_STATUS);
   const next=allowedNextStatuses(q).filter(x=>x!==cur);
   if(!next.length)return `<span class="tag ${STATUS_TAG[cur]||'grey'}">${esc(cur)}</span>${statusWarn(q)}`;
-  return `<select class="inp" style="padding:4px 8px;font-size:12px;width:auto" onchange="setStatus('${q.id}',this.value)">
+  return `<select class="inp" style="padding:4px 8px;font-size:12px;width:auto" onchange="setStatus(${jsa(q.id)},this.value)">
   <option selected>${esc(cur)}</option>${next.map(x=>`<option>${x}</option>`).join('')}</select>${statusWarn(q)}`;}
 function updateStatus(q,newStatus){
   if(q.status!==newStatus){            // v4.3: เก็บเวลาเปลี่ยนสถานะ ใช้นับวัน SLA แยกช่วง (คีย์ใหม่แบบ optional)
@@ -3767,6 +3805,13 @@ function setStatus(id,s){const q=QUOTES.find(x=>x.id===id);if(!q)return;
   LS.set('quotes',QUOTES);toast('อัปเดตสถานะ → '+s,'good');syncCloud(q);renderNav();}
 function editQuote(id){
   const q=QUOTES.find(x=>x.id===id);if(!q)return;
+  // v5.9: ใบที่ปล่อยราคาแล้ว (พร้อมเสนอ / ปิดการขาย / ปิดงาน) แก้ราคาไม่ได้ — server ตรึงไว้ → เสนอ "ทำรอบใหม่" แทน
+  if(q.docType!=='SR'&&QT_PRICE_LOCKED.indexOf(q.status)>=0){
+    confirm2Modal('ใบนี้ปล่อยราคาแล้ว — แก้ราคาไม่ได้',
+      'ใบ <b>'+esc(q.docNo||q.header.ref||'')+'</b> ปล่อยราคาให้ Sales แล้ว ราคาในใบนี้ถูกตรึงไว้เป็นหลักฐาน<br>ถ้าต้องการเปลี่ยนราคา ให้ <b>ทำรอบใหม่</b> (สร้างใบรอบถัดไปจากใบนี้ แล้วส่งอนุมัติใหม่)',
+      '⧉ ทำรอบใหม่','ปิด',()=>duplicateQuote(id),()=>{});
+    return;
+  }
   editing=JSON.parse(JSON.stringify(q));go('new');
   // รู้อยู่แล้วว่า Cloud ใหม่กว่า (จาก sync รอบก่อน) → เปิดแก้ได้ แต่ขึ้นแถบเตือนทันที
   if(q._conflict||q._cloudNewer){
@@ -3797,6 +3842,7 @@ function confirm2Modal(title,msg,yesLabel,noLabel,onYes,onNo){
 }
 function requestDelete(id){
   const q=QUOTES.find(x=>x.id===id);if(!q)return;
+  if(deleteBlockedWhy(q)){toast(deleteBlockedWhy(q),'bad');return}          // v5.9
   const nm=q.header.title||q.header.ref||'ใบนี้';
   if(perms().approve){ // Manager: delete directly (with confirm)
     confirmModal('ลบใบเสนอราคา?', `ต้องการลบ <b>“${esc(nm)}”</b> ถาวรหรือไม่?<br>การลบไม่สามารถย้อนกลับได้`, ()=>deleteQuoteFinal(id));
@@ -3810,6 +3856,7 @@ function requestDelete(id){
 }
 function approveDelete(id){
   const q=QUOTES.find(x=>x.id===id);if(!q)return;
+  if(deleteBlockedWhy(q)){toast(deleteBlockedWhy(q),'bad');return}          // v5.9
   const nm=q.header.title||q.header.ref||'ใบนี้';
   confirmModal('อนุมัติการลบ?', `อนุมัติลบ <b>“${esc(nm)}”</b> ถาวร?<br><span class="hint">ขอลบโดย ${esc(q.deleteRequest?q.deleteRequest.by:'-')}</span>`, ()=>deleteQuoteFinal(id), 'อนุมัติลบถาวร');
 }
@@ -3822,6 +3869,7 @@ function rejectDelete(id){
 function deleteQuoteFinal(id){
   // BUSINESS RULE: soft delete — keeps local record for sync; filtered out of all views via latestQuotes
   const q=QUOTES.find(x=>x.id===id);
+  if(q&&deleteBlockedWhy(q)){closeModal();toast(deleteBlockedWhy(q),'bad');return}   // v5.9
   if(q){q.deleted=true;q.deletedAt=new Date().toISOString();q.deletedBy=CURRENT?CURRENT.name:'-';q.isSynced=false;
     logAction(q.id,'Deleted (approved)',null,q.header&&q.header.ref?q.header.ref:'');LS.set('quotes',QUOTES);}
   syncDelete(id);closeModal();renderNav();
@@ -3839,7 +3887,7 @@ function priceLockedState(q){
   const notApproved=!quoteApproved(q);
   return `
   <div class="row-flex no-print" style="margin-bottom:16px">
-    <button class="btn ghost sm" onclick="go('${CURRENT.role==='Sales'?'salesdash':'quotes'}')">← กลับ</button></div>
+    <button class="btn ghost sm" onclick="go(${jsa(CURRENT.role==='Sales'?'salesdash':'quotes')})">← กลับ</button></div>
   <div class="card"><div class="card-b"><div class="empty">
     <div style="font-size:36px;margin-bottom:8px">🔒</div>
     <div style="font-weight:700;color:var(--ink-2);font-size:15px">ยังไม่สามารถดูราคาของใบนี้ได้</div>
@@ -3894,7 +3942,7 @@ function viewPreview(){
   const relNames=(q.releasedTo||[]).map(id=>(USERS.find(u=>u.id===id)||{}).name||id);
   return `
   <div class="row-flex no-print" style="justify-content:space-between;margin-bottom:16px">
-    <button class="btn ghost sm" onclick="go('${CURRENT.role==='Sales'?'salesdash':'quotes'}')">← กลับ</button>
+    <button class="btn ghost sm" onclick="go(${jsa(CURRENT.role==='Sales'?'salesdash':'quotes')})">← กลับ</button>
     ${canInternal
       ?`<div class="seg"><button class="${internal?'on':''}" onclick="previewMode='mgmt';render()">ภายใน (มี %GP)</button>
         <button class="${!internal?'on':''}" onclick="previewMode='cust';render()">สำหรับลูกค้า</button></div>`
@@ -3902,18 +3950,19 @@ function viewPreview(){
     <span class="hint" id="qLive" style="font-size:11.5px"></span>
     <div class="row-flex">${canApprove(q)?approveButtons(q)
       :((perms().approve&&q.docType!=='SR')?`<span class="tag ${inApprovalStage(q)?'amber':'grey'}" style="font-size:11px" title="${esc(inApprovalStage(q)?approvalWhyNot(q):('อนุมัติได้เฉพาะตอนสถานะ รออนุมัติ · สถานะปัจจุบัน: '+(STATUS_TH[statusOf(q)]||statusOf(q))))}">${inApprovalStage(q)?esc(approvalWhyNot(q)):('อนุมัติไม่ได้ · '+esc(STATUS_TH[statusOf(q)]||statusOf(q)))}</span>`:'')}
-      ${canRelease(q)?`<button class="btn sm" style="background:var(--blue)" onclick="releasePrice('${q.id}')">🔓 ปล่อยราคาให้ ${esc(salesNameOf(q)||'Sales')}</button>`:''}
-      ${(perms().approve&&quoteApproved(q))?`<button class="btn sm ghost" onclick="openRelease('${q.id}')" title="แชร์ให้ผู้ใช้เพิ่มเติมนอกเหนือจากเจ้าของงาน">แชร์เพิ่ม</button>`:''}
-      <button class="btn sm ghost" onclick="duplicateQuote('${q.id}')">⧉ ทำรอบใหม่</button>
+      ${canRelease(q)?`<button class="btn sm" style="background:var(--blue)" onclick="releasePrice(${jsa(q.id)})">🔓 ปล่อยราคาให้ ${esc(salesNameOf(q)||'Sales')}</button>`:''}
+      ${''/* v5.9: ปุ่ม "แชร์เพิ่ม" (ผู้บริหารให้สิทธิ์เห็นราคาแก่ Sales คนอื่น) ถูกปิด — ปล่อยราคาได้เฉพาะ NON ผ่าน action release · server ไม่รับ releasedTo จาก save แล้ว */}
+      <button class="btn sm ghost" onclick="duplicateQuote(${jsa(q.id)})">⧉ ทำรอบใหม่</button>
       ${q.deleteRequest
         ?(perms().approve
-          ?`<button class="btn sm" style="background:var(--red)" onclick="approveDelete('${q.id}')">✓ อนุมัติลบ</button><button class="btn sm ghost" onclick="rejectDelete('${q.id}')">ปฏิเสธลบ</button>`
+          ?`<button class="btn sm" style="background:var(--red)" onclick="approveDelete(${jsa(q.id)})">✓ อนุมัติลบ</button><button class="btn sm ghost" onclick="rejectDelete(${jsa(q.id)})">ปฏิเสธลบ</button>`
           :`<span class="tag red">รออนุมัติลบ</span>`)
-        :`<button class="btn sm ghost" style="color:var(--red)" onclick="requestDelete('${q.id}')">🗑 ${perms().approve?'ลบใบนี้':'ขอลบ'}</button>`}
+        :(deleteBlockedWhy(q)?`<span class="tag grey" style="font-size:11px" title="${esc(deleteBlockedWhy(q))}">🔒 ลบไม่ได้</span>`
+          :`<button class="btn sm ghost" style="color:var(--red)" onclick="requestDelete(${jsa(q.id)})">🗑 ${perms().approve?'ลบใบนี้':'ขอลบ'}</button>`)}
       <button class="btn sm" onclick="window.print()">🖨 พิมพ์ / PDF</button></div></div>
   <div class="no-print card" style="margin-bottom:12px"><div class="card-b" style="padding:12px 16px">${flowStepper(q)}</div></div>
   ${inApprovalStage(q)?`<div class="no-print card" style="border-left:4px solid var(--amber);margin-bottom:12px"><div class="card-b" style="padding:11px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-    <b style="font-size:13px">อนุมัติ 2 ฝ่าย (ก่อนหลังได้):</b> <span class="ac-badges">${approvalBadges(q)}</span>
+    <b style="font-size:13px">อนุมัติ 2 ฝ่าย (Sourcing Manager → BD Manager · BD อนุมัติแทนได้):</b> <span class="ac-badges">${approvalBadges(q)}</span>
     <span class="hint">${apv.complete?'ครบแล้ว':'รอ '+esc(apv.missing.map(roleTH).join(' + '))}</span>
     ${internal?`<span style="margin-left:auto" class="row-flex"><span class="hint">${t.isCommission?'ค่าคอม Supplier':'%GP รวม'}</span>${gpBigQ(q,t)}</span>`:''}</div></div>`:''}
   ${((q.status||'')==='Approved')?`<div class="no-print card" style="border-left:4px solid var(--blue);background:var(--blue-soft);margin-bottom:12px"><div class="card-b" style="padding:11px 16px;font-size:13px">
@@ -3929,14 +3978,14 @@ function viewPreview(){
         ${companyHeadHTML()}</div></div>
       <div style="text-align:right;font-size:12px"><div class="mono" style="font-weight:700;font-size:15px">${esc(q.docNo||H.ref)}</div>
         ${q.docNo&&H.ref&&q.docNo!==H.ref?`<div class="mono" style="font-size:11px;color:var(--muted)">${esc(H.ref)}</div>`:''}
-        <div style="color:var(--muted)">Offer: ${H.offerDate||'—'}</div><div style="color:var(--muted)">Valid: ${validThru}</div>
+        <div style="color:var(--muted)">Offer: ${esc(H.offerDate||'—')}</div><div style="color:var(--muted)">Valid: ${validThru}</div>
         ${q.round>1?`<div class="tag blue" style="margin-top:4px">รอบที่ ${q.round}</div>`:''}</div></div>
     <div class="disp" style="font-size:17px;font-weight:700;margin-bottom:12px">${esc(H.title||H.project||'Price Proposal')}</div>
     <div class="q-head-grid" style="margin-bottom:16px">
       <b>Customer:</b><span>${esc(H.customer||'—')}</span>
       ${internal?`<b>Sales:</b><span>${esc(salesNameOf(q)||'—')}</span>`:''}
       <b>Currency:</b><span>${esc(H.currency)}</span><b>Terms:</b><span>${esc(H.priceTerm)}</span>${H.paymentTerm?`<b>Payment:</b><span>${esc(H.paymentTerm)}</span>`:''}
-      <b>Incoterm:</b><span>${esc(H.incoterm)}</span>${internal?`<b>Exchange rate:</b><span>${H.exrate}</span>`:''}
+      <b>Incoterm:</b><span>${esc(H.incoterm)}</span>${internal?`<b>Exchange rate:</b><span>${esc(H.exrate)}</span>`:''}
       ${(gp&&t.isCommission)?`<b>ดีลค่าคอม Supplier:</b><span><span class="grade ${COMDEAL_GRADE}" style="width:auto;padding:0 7px;height:20px;font-size:11px;vertical-align:middle">Sales ${COMDEAL_GRADE}</span> &nbsp;ค่าคอม ${money(t.supplierCom,H.currency)} (${pp(t.supplierComPct)}) · ขายราคาทุน</span>`:''}
       ${(gp&&!t.isCommission)?`<b>% GP โครงการรวม:</b><span>${com?`<span class="grade ${comObj.grade==='—'?'none':comObj.grade}" style="width:20px;height:20px;font-size:11px;vertical-align:middle">${comObj.grade}</span> &nbsp;`:''}${pp(t.gp)}</span>`:''}</div>
     <div class="tw" style="border:none"><table><thead><tr>
@@ -3963,7 +4012,7 @@ function viewPreview(){
         ${Object.entries(t.com).filter(([k])=>k!=='Mounting'||t.com[k].total>0).map(([c,v])=>`<span class="grade ${v.grade==='—'?'none':v.grade}" style="width:auto;min-width:0;padding:0 9px;height:21px;font-size:11px">${esc(c)} ${v.grade}</span>`).join(' ')||'<span class="hint">—</span>'}</div>`:''}</div>
     ${signatureHTML(q)}
     ${internal?`<div class="row-flex" style="margin-top:14px;justify-content:space-between;border-top:1px solid #e0e0e0;padding-top:10px;font-size:12px;color:#555">
-      <span>จัดทำโดย (Prepared by): <b style="color:#1c1610">${esc(creatorName(q))}</b> · ${q.created||''}</span>
+      <span>จัดทำโดย (Prepared by): <b style="color:#1c1610">${esc(creatorName(q))}</b> · ${esc(q.created||'')}</span>
       <span>${esc(co.name||'M Global Sourcing Ltd.')}</span></div>`
      :`<div style="margin-top:14px;border-top:1px solid #e0e0e0;padding-top:10px;font-size:11px;color:#777;text-align:center">${esc(co.name||'M Global Sourcing Ltd.')}${co.tel?' · โทร. '+esc(co.tel):''}${co.email?' · '+esc(co.email):''}</div>`}
     ${(q.approvals&&q.approvals.length)?`<div style="margin-top:16px;border-top:1px dashed var(--line-2);padding-top:10px" class="no-print">
@@ -3974,7 +4023,7 @@ function viewPreview(){
         <div class="hint" style="font-weight:700">🔍 ประวัติการแก้ไข (Audit Trail) — เฉพาะ Manager</div>
         <div class="row-flex" style="gap:8px">
           <span class="hint">${q.auditLogs.length} รายการ${q.isSynced===false?' · <span style="color:var(--red)">ยังไม่ซิงค์</span>':q.isSynced?' · <span style="color:var(--green)">ซิงค์แล้ว ✓</span>':''}</span>
-          <button class="btn tiny ghost" onclick="downloadAuditCSV('${q.id}')">⤓ ดาวน์โหลด CSV</button></div></div>
+          <button class="btn tiny ghost" onclick="downloadAuditCSV(${jsa(q.id)})">⤓ ดาวน์โหลด CSV</button></div></div>
       <div style="max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px">
         <table style="width:100%;font-size:11.5px;border-collapse:collapse"><thead><tr style="background:var(--surface-2);position:sticky;top:0">
           <th style="text-align:left;padding:6px 10px;white-space:nowrap">เวลา</th><th style="text-align:left;padding:6px 10px;white-space:nowrap">ผู้แก้ไข</th><th style="text-align:left;padding:6px 10px">การเปลี่ยนแปลง</th></tr></thead>
@@ -4013,7 +4062,8 @@ let _approving=false;
 async function approve(id,all){
   const q=QUOTES.find(x=>x.id===id);if(!q||_approving)return;
   if(!approveCheck(q))return;
-  if(!cloudReady()){approveLocal(id,all);return}           // ออฟไลน์ล้วน → แบบเดิม (เข้าคิว + conflict guard)
+  // v5.9: การอนุมัติตัดสินที่ server เท่านั้น — ออฟไลน์อนุมัติไม่ได้ (เดิมบันทึกในเครื่องแล้วส่ง save = ข้ามการตรวจของ server)
+  if(!cloudReady()){toast('ต้องเชื่อมต่อ Google Sheet ก่อนจึงจะอนุมัติได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่','bad');return}
   _approving=true;toast('กำลังบันทึกการอนุมัติ…','');
   try{
     const r=await postCloud({action:'approve',id,all:!!all});
@@ -4027,38 +4077,11 @@ async function approve(id,all){
         :'บันทึกการอนุมัติแล้ว · ยังรอ: '+(d.missingLabel||(d.missing||[]).map(roleTH).join(' + ')||'—'),'good');
       renderNav();render();return;
     }
-    if(/unknown action/i.test(r.error||'')){approveLocal(id,all);return}   // Code.gs รุ่นเก่า
     await refreshQuote(id);renderNav();render();
     toast((APPROVE_ERR_TH[r.error]||('อนุมัติไม่สำเร็จ — '+errText(r)))+' — แสดงข้อมูลล่าสุดแล้ว','bad');
   }finally{_approving=false}
 }
-function approveLocal(id,all){
-  const q=QUOTES.find(x=>x.id===id);if(!q||!approveCheck(q))return;
-  const role=normRole(CURRENT.role),gm=isGMApprover(),at=new Date().toISOString();
-
-  const old=q.status||QT_DEFAULT_STATUS;
-  if(!Array.isArray(q.approvalRoles))q.approvalRoles=[];
-  if(!Array.isArray(q.approvals))q.approvals=[];
-  const a0=approvalState(q);
-  const fill=gm?(all?a0.missing.slice():[a0.next]):[role];      // v5.0: กติกาเดียวกับ approve_ ใน Code.gs
-  fill.forEach(lv=>{
-    if(q.approvalRoles.indexOf(lv)<0)q.approvalRoles.push(lv);
-    const x={by:CURRENT.name,userId:CURRENT.id,role:role,level:REQUIRED_APPROVAL_ROLES.indexOf(lv)+1,levelRole:lv,act:gm?'อนุมัติแทน '+roleTH(lv):'อนุมัติ',at:at};   // level = ลำดับที่แสดง (เข้ากันกับ server)
-    if(gm)x.onBehalfOf=lv;
-    q.approvals.push(x);
-  });
-
-  const a=approvalState(q);
-  updateStatus(q,a.complete?'Approved':'Partial Approved');
-  if(a.complete)q.needsApproval=false;
-  q.isSynced=false;
-  logAction(q.id,(gm?'GM อนุมัติแทน ':'Approved ')+fill.map(roleTH).join(' + '),null,old+' → '+q.status+(a.complete?'':' (รอ '+a.missing.map(roleTH).join(' + ')+')'));
-  LS.set('quotes',QUOTES);
-  toast(a.complete
-    ? 'อนุมัติครบ 2 ฝ่ายแล้ว — '+gatekeeperName()+' จะเห็นราคาก่อนแล้วกดปล่อยให้ Sales'
-    : 'บันทึกการอนุมัติแล้ว · ยังรอ: '+a.missing.map(roleTH).join(' + '),'good');
-  syncCloud(q);renderNav();render();
-}
+/* v5.9: ลบ approveLocal() (อนุมัติในเครื่องแล้วส่ง save) — server ไม่ยอมให้ save ตั้งสถานะอนุมัติแล้ว */
 
 /* 2 & 3. Gatekeeper (NON) ปล่อยราคา — auto-grant ให้ Sales ต้นทางจาก header.salesUserId */
 function canRelease(q){
@@ -4067,20 +4090,17 @@ function canRelease(q){
   // v4.3: ใบ Pending รุ่นเก่าที่ยังไม่ได้ปล่อยให้เจ้าของงานจริง (server ระบุ owner=RELEASER) → ยืนยันปล่อยราคาได้
   const legacy=st==='Pending'&&followOf(q).owner==='RELEASER';
   if(st!=='Approved'&&!legacy)return false;
-  // ผู้ปล่อยราคา: gatekeeper หลัก / ผู้รับมอบหมายชั่วคราว / ผู้ที่ถูกทำเครื่องหมาย / ผู้จัดการ (สำรองกรณี NON ลา)
-  return isReleaser(CURRENT)||perms().approve;
+  // v5.9: ผู้ปล่อยราคา = NON (gatekeeper) คนเดียว — ไม่มีผู้สำรอง ผู้บริหารปล่อยแทนไม่ได้ (server ตัดสินที่ release_)
+  return isReleaser(CURRENT);
 }
 /* ผู้มีสิทธิ์ปล่อยราคา (นอกเหนือจากผู้จัดการ) — รองรับการมอบหมายเมื่อ NON ไม่อยู่ */
 function isReleaser(u){
   u=u||CURRENT; if(!u)return false;
-  if(u.id===gatekeeperId())return true;                                   // 1) gatekeeper หลัก
-  if(SETTINGS.releaseDelegateId&&u.id===SETTINGS.releaseDelegateId)return true;  // 2) ผู้รับมอบหมายชั่วคราว
-  if(u.isReleaseGatekeeper)return true;                                    // 3) ผู้ที่ถูกทำเครื่องหมายไว้
-  return false;
+  return u.id===gatekeeperId();                                           // v5.9: NON คนเดียว (ไม่มีผู้ปล่อยราคาสำรอง)
 }
 function releasePrice(id){
   const q=QUOTES.find(x=>x.id===id);if(!q)return;
-  if(!canRelease(q)){toast('เฉพาะ '+gatekeeperName()+' (หรือผู้จัดการ) เท่านั้นที่ปล่อยราคาได้','bad');return}
+  if(!canRelease(q)){toast('เฉพาะ '+gatekeeperName()+' เท่านั้นที่ปล่อยราคาได้','bad');return}
   const ownerId=q.header&&q.header.salesUserId;
   if(!ownerId){
     modal(`<div class="modal-h"><h3 style="color:var(--red)">ปล่อยราคาไม่ได้</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
@@ -4101,26 +4121,29 @@ function releasePrice(id){
     <div class="hint" style="margin-top:10px;line-height:1.7">เมื่อปล่อยแล้ว ${esc(ownerName)} จะเห็นราคานี้และนำไปเสนอลูกค้าได้ · ${statusOf(q)==='Pending'?'ใบนี้เป็นข้อมูลรุ่นเก่า — เป็นการ<b>ยืนยัน</b>สิทธิ์เห็นราคาให้เจ้าของงาน':'สถานะจะเปลี่ยนเป็น <b>พร้อมเสนอลูกค้า</b>'}</div>
   </div>
   <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button>
-    <button class="btn" style="background:var(--blue)" onclick="closeModal();doRelease('${q.id}')">🔓 ยืนยันปล่อยราคาให้ ${esc(ownerName)}</button></div>`);
+    <button class="btn" style="background:var(--blue)" onclick="closeModal();doRelease(${jsa(q.id)})">🔓 ยืนยันปล่อยราคาให้ ${esc(ownerName)}</button></div>`);
 }
-function doRelease(id){
-  const q=QUOTES.find(x=>x.id===id);if(!q)return;
+/* v5.9: ปล่อยราคาผ่าน action release ของ server เท่านั้น (เดิมตั้ง Pending ในเครื่องแล้วส่ง save = ข้ามการตรวจของ server) */
+let _releasing=false;
+async function doRelease(id){
+  const q=QUOTES.find(x=>x.id===id);if(!q||_releasing)return;
   if(!canRelease(q)){toast('ไม่มีสิทธิ์ปล่อยราคา','bad');return}
-  const ownerId=q.header&&q.header.salesUserId;if(!ownerId)return;
-  const owner=USERS.find(u=>u.id===ownerId);
-  const ownerName=owner?owner.name:ownerId;
-  const before=(q.releasedTo||[]).slice();
-  q.releasedTo=[...new Set([...(q.releasedTo||[]),ownerId])];   // auto-grant กลับไปที่ Sales ต้นทาง
-  q.releasedAt=new Date().toISOString();
-  q.releasedBy=CURRENT.id;
-  q.ownerLockedAt=q.ownerLockedAt||new Date().toISOString();    // ตรึงเจ้าของงาน ณ เวลาปล่อยราคา
-  updateStatus(q,'Pending');                                    // Approved → Pending
-  q.isSynced=false;
-  logAction(q.id,'Released price',null,'Approved → Pending · ให้สิทธิ์ '+ownerName+' โดย '+CURRENT.name+
-    (before.length?(' (เดิม: '+before.map(i=>(USERS.find(u=>u.id===i)||{}).name||i).join(', ')+')'):''));
-  LS.set('quotes',QUOTES);
-  toast('ปล่อยราคาให้ '+ownerName+' แล้ว — สถานะเปลี่ยนเป็น Pending','good');
-  syncCloud(q);renderNav();render();
+  if(!cloudReady()){toast('ต้องเชื่อมต่อ Google Sheet ก่อนจึงจะปล่อยราคาได้','bad');return}
+  const owner=USERS.find(u=>u.id===(q.header&&q.header.salesUserId));
+  _releasing=true;toast('กำลังปล่อยราคา…','');
+  try{
+    const r=await postCloud({action:'release',id});
+    if(r.ok&&r.data){
+      const d=r.data;
+      const m=d.detail?mergeRemoteRow({id,detail:d.detail,updatedAt:d.updatedAt,by:CURRENT.name,follow:d.follow},{force:true}):null;
+      if(!m)await refreshQuote(id,{force:true});
+      LS.set('quotes',QUOTES);_flashIds[id]=Date.now();
+      toast('ปล่อยราคา '+(q.docNo||'')+' ให้ '+(owner?owner.name:'Sales')+' แล้ว — สถานะเปลี่ยนเป็น พร้อมเสนอลูกค้า','good');
+      renderNav();render();return;
+    }
+    await refreshQuote(id);renderNav();render();
+    toast('ปล่อยราคาไม่สำเร็จ — '+errText(r),'bad');
+  }finally{_releasing=false}
 }
 
 /* ============================================================ สรุปทีมขาย (รวมของ Sales ทุกคน → ส่งผู้บริหาร)
@@ -4153,7 +4176,7 @@ function kanbanCard(q){
   // v4.1: ผู้บริหารเห็น %GP ตัวใหญ่ + ป้ายรออนุมัติฝั่งไหน บนหน้าการ์ดเลย
   const gpBox=(canSeeCost(CURRENT)&&appr)?(()=>{const t=quoteTotals(q);return `<div class="kc-gp ${gpClassQ(q,t)}">${pp(t.isCommission?t.supplierComPct:t.gp)}<span>${gpWordQ(q)}</span></div>`})():'';
   const lv=stale&&lvOf(q)==='ok'?'over':lvOf(q);
-  return `<div class="kcard lv-card lv-${lv} ${appr&&canApprove(q)?'mine':''} ${isFlash(q.id)?'flash':''}" onclick="openQuote('${q.id}')">
+  return `<div class="kcard lv-card lv-${lv} ${appr&&canApprove(q)?'mine':''} ${isFlash(q.id)?'flash':''}" onclick="openQuote(${jsa(q.id)})">
     <div class="kc-top">
       <div style="min-width:0">
         <div class="kc-cust">${esc(q.header.customer||'—')}</div>
@@ -4262,7 +4285,7 @@ function viewTeamSummary(){
     <div class="card-b" style="padding:0"><div class="tw" style="border:none"><table><thead><tr>
       <th>Sales</th><th class="r">งานเปิด</th><th class="r">อยู่ในมือ</th><th class="r">มูลค่าในมือ</th>
       <th class="r">ค้างอัปเดต</th><th class="r">เลยนัด</th><th class="r">Won</th><th class="r">มูลค่า Won</th><th>อัปเดตล่าสุด</th></tr></thead>
-      <tbody>${stats.map(r=>`<tr style="cursor:pointer;${sumSalesFilter===r.id?'background:var(--orange-soft)':''}" onclick="setSumFilter('${esc(r.id)}')">
+      <tbody>${stats.map(r=>`<tr style="cursor:pointer;${sumSalesFilter===r.id?'background:var(--orange-soft)':''}" onclick="setSumFilter(${jsa(r.id)})">
         <td style="font-weight:600">${esc(r.name)}</td>
         <td class="r mono">${r.open}</td><td class="r mono">${r.inHand}</td>
         <td class="r mono" style="font-weight:600">${fmt(r.value)}</td>
@@ -4296,12 +4319,12 @@ function viewTeamSummary(){
     <div class="card-b" style="padding:0"><div class="tw" style="border:none"><table><thead><tr>
       <th>เอกสาร</th><th>โครงการ / ลูกค้า</th><th>Sales</th><th class="r">มูลค่า</th><th>อัปเดตล่าสุด</th><th class="no-print"></th></tr></thead>
       <tbody>${stale.map(q=>{const u=lastUpdate(q);return `<tr>
-        <td class="mono" style="font-size:11px;cursor:pointer" onclick="openQuote('${q.id}')">${esc(q.docNo||q.header.ref||'—')}</td>
+        <td class="mono" style="font-size:11px;cursor:pointer" onclick="openQuote(${jsa(q.id)})">${esc(q.docNo||q.header.ref||'—')}</td>
         <td><b>${esc(q.header.title||'(ไม่มีชื่อ)')}</b><div class="hint">${esc(q.header.customer||'')}</div></td>
         <td>${ownerTag(q)}</td>
         <td class="r mono">${money(quoteTotals(q).total,curOf(q))}</td>
         <td><span class="tag red">${u?esc(agoTH(u.at)):'ยังไม่เคย'}</span></td>
-        <td class="no-print"><button class="btn tiny ghost" onclick="openSalesUpdate('${q.id}')">📝 อัปเดตแทน</button></td></tr>`}).join('')}
+        <td class="no-print"><button class="btn tiny ghost" onclick="openSalesUpdate(${jsa(q.id)})">📝 อัปเดตแทน</button></td></tr>`}).join('')}
       </tbody></table></div></div></div>`:''}
 
   ${detail?`<div class="card"><div class="card-h"><h2>งานที่เปิดอยู่ของ ${esc(detail.name)}</h2>
@@ -4311,7 +4334,7 @@ function viewTeamSummary(){
       <th>สถานะกับลูกค้า</th><th>นัดถัดไป</th><th>อัปเดต</th></tr></thead>
       <tbody>${QUOTES.filter(q=>!q.deleted&&((q.header&&q.header.salesUserId)||'')===detail.id&&ballOf(q).who!=='done')
         .map(q=>{const u=lastUpdate(q);return `<tr>
-          <td class="mono" style="font-size:11px;cursor:pointer" onclick="openQuote('${q.id}')">${esc(q.docNo||q.header.ref||'—')}</td>
+          <td class="mono" style="font-size:11px;cursor:pointer" onclick="openQuote(${jsa(q.id)})">${esc(q.docNo||q.header.ref||'—')}</td>
           <td><b>${esc(q.header.title||'(ไม่มีชื่อ)')}</b><div class="hint">${esc(q.header.customer||'')}</div></td>
           <td>${ballChip(q)}</td>
           <td class="r mono">${money(quoteTotals(q).total,curOf(q))}</td>
@@ -4379,12 +4402,12 @@ function viewFollowup(){
     ${kpi(STATUS_TH.Pending,counts.Pending||0,counts.NOPRICE?('Sales เห็นราคาแล้ว · อีก '+counts.NOPRICE+' ใบ Sales ยังไม่เห็นราคา'):'Sales เห็นราคาแล้ว · รอลูกค้าตัดสินใจ','amber')}${kpi(STATUS_TH.Won,counts.Won||0,'ได้งาน','green')}${kpi(STATUS_TH.Closed,counts.Closed||0,'ไม่ได้งาน','grey')}</div>
   <div class="row-flex no-print" style="justify-content:space-between;margin-bottom:14px;align-items:flex-start">
     <div class="row-flex">
-      <div class="seg">${['all',...GROUP_TYPES].map(g=>`<button class="${fGroup===g?'on':''}" onclick="fGroup='${g}';render()">${g==='all'?'ทุกกลุ่ม':g}</button>`).join('')}</div>
+      <div class="seg">${['all',...GROUP_TYPES].map(g=>`<button class="${fGroup===g?'on':''}" onclick="fGroup=${jsa(g)};render()">${g==='all'?'ทุกกลุ่ม':g}</button>`).join('')}</div>
     </div>
     <div class="row-flex">
       <select class="inp" style="width:auto;padding:7px 30px 7px 11px" onchange="fSales=this.value;render()">
         <option value="all">Sales: ทั้งหมด</option>${salesList.map(s=>`<option value="${esc(s)}" ${fSales===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
-      <div class="seg">${tabs.map(s=>`<button class="${fStatus===s?'on':''}" onclick="fStatus='${s}';render()">${s==='all'?'ทุกสถานะ':s==='NOPRICE'?esc(NOPRICE_TH)+' ('+counts.NOPRICE+')':esc(STATUS_TH[s]||s)}</button>`).join('')}</div>
+      <div class="seg">${tabs.map(s=>`<button class="${fStatus===s?'on':''}" onclick="fStatus=${jsa(s)};render()">${s==='all'?'ทุกสถานะ':s==='NOPRICE'?esc(NOPRICE_TH)+' ('+counts.NOPRICE+')':esc(STATUS_TH[s]||s)}</button>`).join('')}</div>
     </div></div>
   <div class="card"><div class="card-h" style="padding:11px 18px"><h2>${list.length} งาน</h2>${lvSummary(list)}<span class="hint">งานเร่งด่วนขึ้นก่อน</span></div><div class="card-b" style="padding:0">
   ${list.length?`<div class="tw" style="border:none"><table><thead><tr>
@@ -4394,13 +4417,13 @@ function viewFollowup(){
       <td><span class="tag ${grpColor(q.header.groupType)}">${esc(q.header.groupType||'Inverter')}</span></td>
       <td style="font-weight:600">${esc(q.header.title||q.header.project||'(ไม่มีชื่อ)')}</td>
       <td class="mono" style="font-size:11px">${esc(q.header.ref)}</td>
-      <td style="font-size:12px">${q.header.reqDate||q.created}</td>
+      <td style="font-size:12px">${esc(q.header.reqDate||q.created||'')}</td>
       <td>${esc(q.header.customer||'—')}</td><td>${ownerTag(q)}</td><td>${respChip(q)}</td>
       <td>${ballChip(q)} ${lvBadge(lvOf(q))}</td><td>${updateChip(q)}</td>
       <td>${q.round>1?`<span class="tag blue">R${q.round}</span>`:'R1'}</td>
       <td>${statusSelect(q)}</td>
-      <td><input class="cell-inp txt" style="min-width:170px" value="${esc(q.salesNote||'')}" placeholder="เพิ่มหมายเหตุ..." onchange="saveNote('${q.id}',this.value,this)"></td>
-      <td><button class="btn tiny ghost" onclick="openCustomerQuote('${q.id}')" title="ดูใบเสนอราคาสำหรับ Sales">ดูใบ Sales</button></td></tr>`).join('')}
+      <td><input class="cell-inp txt" style="min-width:170px" value="${esc(q.salesNote||'')}" placeholder="เพิ่มหมายเหตุ..." onchange="saveNote(${jsa(q.id)},this.value,this)"></td>
+      <td><button class="btn tiny ghost" onclick="openCustomerQuote(${jsa(q.id)})" title="ดูใบเสนอราคาสำหรับ Sales">ดูใบ Sales</button></td></tr>`).join('')}
   </tbody></table></div>`:emptyState('ไม่มีงานในตัวกรองนี้','')}
   </div></div>`;
 }
@@ -4415,11 +4438,11 @@ function unassignedOwnersCard(){
     <div class="card-b" style="padding:0"><div class="tw" style="border:none;max-height:320px;overflow:auto"><table><thead><tr>
       <th>เอกสาร</th><th>ชนิด</th><th>โปรเจค / ลูกค้า</th><th>ชื่อ Sales เดิม</th><th style="min-width:190px">ผูกเจ้าของงาน</th></tr></thead><tbody>
       ${list.map(q=>`<tr>
-        <td class="mono" style="font-size:11px;cursor:pointer" onclick="openQuote('${q.id}')">${esc(q.docNo||q.header.ref||'—')}</td>
+        <td class="mono" style="font-size:11px;cursor:pointer" onclick="openQuote(${jsa(q.id)})">${esc(q.docNo||q.header.ref||'—')}</td>
         <td><span class="tag ${q.docType==='SR'?'orange':'blue'}" style="font-size:10px">${esc(q.docType||'QT')}</span></td>
         <td style="font-size:12.5px"><b>${esc(q.header.title||'(ไม่มีชื่อ)')}</b><div class="hint">${esc(q.header.customer||'')}</div></td>
         <td style="font-size:12px;color:var(--muted)">${esc(q.header.sales||'—')}</td>
-        <td><select class="inp" style="padding:5px 26px 5px 9px;font-size:12px" onchange="setSalesOwner('${q.id}',this.value)">
+        <td><select class="inp" style="padding:5px 26px 5px 9px;font-size:12px" onchange="setSalesOwner(${jsa(q.id)},this.value)">
           ${salesSelectOptions(q.header)}</select></td></tr>`).join('')}
     </tbody></table></div></div></div>`;
 }
@@ -4505,18 +4528,18 @@ function masterRows(){
     <td style="white-space:normal;max-width:260px;font-size:12px">${esc(p.desc)}</td>
     <td><span class="tag grey" style="font-size:10px">${esc(p.group)}</span></td>
     <td style="font-size:12px">${esc(p.uom)}</td>
-    <td style="display:flex;align-items:center;gap:3px"><input class="cell-inp" style="width:82px" ${MGS.moneyAttrs(pr.price!=null?pr.price:'')} placeholder="—" onchange="onPriceEdit('${esc(p.code)}',this.value,null)">${pr.price!=null?`<button class="x" style="width:20px;height:20px;flex-shrink:0" onclick="clearItemPrice('${esc(p.code)}')" title="ล้างราคา"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`:''}</td>
-    <td><select class="cell-inp" style="width:64px;text-align:left;padding-left:5px" onchange="onPriceEdit('${esc(p.code)}',null,this.value)">
+    <td style="display:flex;align-items:center;gap:3px"><input class="cell-inp" style="width:82px" ${MGS.moneyAttrs(pr.price!=null?pr.price:'')} placeholder="—" onchange="onPriceEdit(${jsa(p.code)},this.value,null)">${pr.price!=null?`<button class="x" style="width:20px;height:20px;flex-shrink:0" onclick="clearItemPrice(${jsa(p.code)})" title="ล้างราคา"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`:''}</td>
+    <td><select class="cell-inp" style="width:64px;text-align:left;padding-left:5px" onchange="onPriceEdit(${jsa(p.code)},null,this.value)">
         ${['USD','CNY','THB'].map(c=>`<option ${(pr.cur||'USD')===c?'selected':''}>${c}</option>`).join('')}</select></td>
     <td><input class="cell-inp" style="width:92px" placeholder="—"
         ${MGS.moneyAttrs(BOIS[p.code]!=null?BOIS[p.code]:(p.boiPrice!=null?p.boiPrice:''))}
         title="ราคา BOI (ใช้อ้างอิงตอนขอสิทธิ์ BOI) — เว้นว่างเพื่อลบ"
-        onchange="onBoiEdit('${esc(p.code)}',this.value,this)"></td>
+        onchange="onBoiEdit(${jsa(p.code)},this.value,this)"></td>
     <td class="r mono" style="font-size:12px">${p.duty!=null?(p.duty*100)+'%':'—'}</td>
-    <td><select class="cell-inp" style="width:108px;text-align:left;padding-left:5px;font-size:11px" onchange="setItemComGroup('${esc(p.code)}',this.value);toast('ตั้งกลุ่มคอม: '+this.value,'good')" title="กลุ่มสำหรับคำนวณคอมมิชชั่น (ใช้แทนการเดาจากหมวด)">
+    <td><select class="cell-inp" style="width:108px;text-align:left;padding-left:5px;font-size:11px" onchange="setItemComGroup(${jsa(p.code)},this.value);toast('ตั้งกลุ่มคอม: '+this.value,'good')" title="กลุ่มสำหรับคำนวณคอมมิชชั่น (ใช้แทนการเดาจากหมวด)">
         ${COM_CATS.map(c=>`<option ${p.comGroup===c?'selected':''}>${c}</option>`).join('')}</select></td>
     <td style="font-size:12px">${esc(p.supplier||'—')}</td>
-    <td>${customCodes.has(p.code)?`<button class="x" style="width:26px;height:26px" onclick="delProduct('${esc(p.code)}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`:''}</td></tr>`}).join('')
+    <td>${customCodes.has(p.code)?`<button class="x" style="width:26px;height:26px" onclick="delProduct(${jsa(p.code)})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`:''}</td></tr>`}).join('')
     ||'<tr><td colspan="11"><div class="empty" style="padding:30px">ไม่พบสินค้าในกลุ่มที่คุณมีสิทธิ์</div></td></tr>')+footer;
 }
 function onPriceEdit(code,price,cur){
@@ -4623,11 +4646,8 @@ function viewSettings(){
         ${gatekeeperConfigured()
           ?`<div class="hint">ใบที่อนุมัติแล้วจะถึง <b>${esc(gatekeeperName())}</b> ก่อน แล้วเขาเป็นคนกดปล่อยราคาให้ Sales คนอื่น</div>`
           :`<div class="hint" style="color:var(--red)">⚠ ยังไม่มีผู้ใช้ที่ถูกตั้งเป็นผู้ปล่อยราคา — เลือกชื่อจากรายการด้านบน ไม่งั้นจะไม่มีใครกดปล่อยราคาได้เลย</div>`}</div>
-      <div><label class="lbl">ผู้ปล่อยราคาสำรอง (ใช้ตอน ${esc(gatekeeperName())} ลา)</label>
-        <select class="inp" onchange="setDelegate(this.value)">
-          <option value="">— ไม่มี —</option>
-          ${salesUsers().filter(u=>u.id!==gatekeeperId()).map(u=>`<option value="${esc(u.id)}" ${SETTINGS.releaseDelegateId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select>
-        <div class="hint">ผู้รับมอบหมายจะเห็นราคาและกดปล่อยราคาได้เช่นเดียวกับ ${esc(gatekeeperName())} — ล้างค่าเมื่อกลับมาทำงานปกติ</div></div>
+      <div><label class="lbl">ผู้ปล่อยราคาสำรอง</label>
+        <div class="hint" style="padding-top:8px">v5.9: ไม่มีผู้ปล่อยราคาสำรอง — <b>${esc(gatekeeperName())}</b> ปล่อยราคาคนเดียว (BD Manager อนุมัติแทน Sourcing Manager ได้)</div></div>
     </div></div>
   ${srRoutingCard()}
   <div class="card" style="margin-top:18px"><div class="card-h"><h2>รายชื่อพนักงานขาย (Sales)</h2>
@@ -4649,10 +4669,10 @@ function masterAdminHTML(){
       <div style="font-weight:600;font-size:13px;margin-bottom:7px">${esc(CFG.labels[k])}${locked?' <span class="hint">(เพิ่มไม่ได้ — สูตรแปลงค่าเงินรองรับ 3 สกุล)</span>':''}</div>
       <div class="row-flex" style="flex-wrap:wrap;gap:7px">${list.map((v,i)=>`
         <span class="tag ${String(v)===String(def)?'orange':'grey'}" style="font-size:12.5px;padding:5px 6px 5px 10px;display:inline-flex;align-items:center;gap:5px">
-          ${String(v)===String(def)?'<b title="ค่าเริ่มต้น">★</b>':`<button class="x" style="width:20px;height:20px" title="ตั้งเป็นค่าเริ่มต้น" onclick="masterOp('${k}','default',${i})">☆</button>`}
+          ${String(v)===String(def)?'<b title="ค่าเริ่มต้น">★</b>':`<button class="x" style="width:20px;height:20px" title="ตั้งเป็นค่าเริ่มต้น" onclick="masterOp(${jsa(k)},'default',${i})">☆</button>`}
           ${esc(v)}
-          ${locked||String(v)===String(def)?'':`<button class="x" style="width:20px;height:20px" title="ซ่อนตัวเลือกนี้" onclick="masterOp('${k}','hide',${i})">✕</button>`}</span>`).join('')}
-        ${locked?'':`<span class="row-flex" style="gap:5px"><input class="inp" id="mAdd_${k}" style="width:190px;height:32px;padding:5px 9px" placeholder="เพิ่ม${esc(CFG.labels[k])}" maxlength="60" onkeydown="if(event.key==='Enter')masterOp('${k}','add')"><button class="btn sm ghost" onclick="masterOp('${k}','add')">+ เพิ่ม</button></span>`}</div></div>`;
+          ${locked||String(v)===String(def)?'':`<button class="x" style="width:20px;height:20px" title="ซ่อนตัวเลือกนี้" onclick="masterOp(${jsa(k)},'hide',${i})">✕</button>`}</span>`).join('')}
+        ${locked?'':`<span class="row-flex" style="gap:5px"><input class="inp" id="mAdd_${k}" style="width:190px;height:32px;padding:5px 9px" placeholder="เพิ่ม${esc(CFG.labels[k])}" maxlength="60" onkeydown="if(event.key==='Enter')masterOp(${jsa(k)},'add')"><button class="btn sm ghost" onclick="masterOp(${jsa(k)},'add')">+ เพิ่ม</button></span>`}</div></div>`;
   }).join('');
 }
 async function masterOp(k,op,i){
@@ -4683,13 +4703,13 @@ function commissionEditor(){
     <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line)">
       <div class="row-flex" style="justify-content:space-between;margin-bottom:8px">
         <b style="font-size:13px">${esc(cat)}</b>
-        <button class="btn tiny ghost" onclick="addBand('${esc(cat)}')">+ ระดับ</button></div>
+        <button class="btn tiny ghost" onclick="addBand(${jsa(cat)})">+ ระดับ</button></div>
       <table style="font-size:12px"><thead><tr><th>GP ≥ (%)</th><th>เกรด</th><th>คอม (%)</th><th></th></tr></thead><tbody>
       ${bands.map((b,bi)=>`<tr>
-        <td><input class="cell-inp" type="number" step="any" value="${b.min}" style="width:64px" onchange="setBand('${esc(cat)}',${bi},'min',this.value)"></td>
-        <td><input class="cell-inp txt" value="${esc(b.grade)}" style="width:48px;text-align:center" onchange="setBand('${esc(cat)}',${bi},'grade',this.value)"></td>
-        <td><input class="cell-inp" type="number" step="any" value="${b.rate}" style="width:64px" onchange="setBand('${esc(cat)}',${bi},'rate',this.value)"></td>
-        <td><button class="x" style="width:24px;height:24px" onclick="delBand('${esc(cat)}',${bi})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></td></tr>`).join('')}
+        <td><input class="cell-inp" type="number" step="any" value="${b.min}" style="width:64px" onchange="setBand(${jsa(cat)},${bi},'min',this.value)"></td>
+        <td><input class="cell-inp txt" value="${esc(b.grade)}" style="width:48px;text-align:center" onchange="setBand(${jsa(cat)},${bi},'grade',this.value)"></td>
+        <td><input class="cell-inp" type="number" step="any" value="${b.rate}" style="width:64px" onchange="setBand(${jsa(cat)},${bi},'rate',this.value)"></td>
+        <td><button class="x" style="width:24px;height:24px" onclick="delBand(${jsa(cat)},${bi})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></td></tr>`).join('')}
       </tbody></table></div>`).join('')+
     `<div class="hint">เกรดคำนวณจาก %GP (markup) เฉลี่ยแต่ละหมวด · ระบบจะเลือกระดับสูงสุดที่ GP ถึงเกณฑ์</div>`;
 }
@@ -4791,14 +4811,14 @@ function larkBotCard(b){
         :(s.urlSet?'<b style="color:var(--amber)">ยังไม่ได้ตั้ง</b> <span class="hint">— แนะนำให้เปิด Signature verification</span>':'<span class="hint">—</span>')}</span>
       <span class="hint">ส่งล่าสุด</span><span>${larkStamp(s.last)}</span></div>
     <div class="lark-in">
-      <div class="f"><label class="lbl">Webhook URL ใหม่</label><input class="inp mono" id="lkUrl${b}" autocomplete="off" spellcheck="false" placeholder="https://open.larksuite.com/open-apis/bot/v2/hook/…" oninput="larkCheckUrl('${b}')"></div>
+      <div class="f"><label class="lbl">Webhook URL ใหม่</label><input class="inp mono" id="lkUrl${b}" autocomplete="off" spellcheck="false" placeholder="https://open.larksuite.com/open-apis/bot/v2/hook/…" oninput="larkCheckUrl(${jsa(b)})"></div>
       <div class="f"><label class="lbl">Secret ใหม่</label><input class="inp mono" id="lkSec${b}" type="password" autocomplete="new-password" spellcheck="false" placeholder="จาก Security settings → Signature verification"></div></div>
     <div class="hint" id="lkHint${b}" style="margin-top:6px">เว้นว่างช่องที่ไม่ต้องการเปลี่ยน · ค่าที่บันทึกเก็บใน Script Properties (<span class="mono">${esc(s.urlKey||'')}</span>, <span class="mono">${esc(s.secretKey||'')}</span>) ไม่อยู่ใน Sheet</div>
     ${m?`<div class="lark-msg ${m.ok?'ok':'bad'}">${m.html}</div>`:''}
     <div class="row-flex" style="gap:8px;margin-top:12px;flex-wrap:wrap">
-      <button class="btn" onclick="larkSave('${b}')" ${_lark.busy?'disabled':''}>💾 บันทึก</button>
-      <button class="btn ghost" onclick="larkTest('${b}')" ${(!s.urlSet||_lark.busy)?'disabled':''} title="${s.urlSet?'ส่งการ์ดทดสอบเข้ากลุ่มทันที (ไม่สนโหมด) แท็กอีเมลของคุณ':'ตั้ง Webhook URL ก่อน'}">📨 ส่งการ์ดทดสอบ</button>
-      <button class="btn ghost" style="color:var(--red);border-color:var(--red)" onclick="larkClear('${b}')" ${(!s.urlSet&&!s.secretSet)||_lark.busy?'disabled':''}>ลบค่า</button></div>
+      <button class="btn" onclick="larkSave(${jsa(b)})" ${_lark.busy?'disabled':''}>💾 บันทึก</button>
+      <button class="btn ghost" onclick="larkTest(${jsa(b)})" ${(!s.urlSet||_lark.busy)?'disabled':''} title="${s.urlSet?'ส่งการ์ดทดสอบเข้ากลุ่มทันที (ไม่สนโหมด) แท็กอีเมลของคุณ':'ตั้ง Webhook URL ก่อน'}">📨 ส่งการ์ดทดสอบ</button>
+      <button class="btn ghost" style="color:var(--red);border-color:var(--red)" onclick="larkClear(${jsa(b)})" ${(!s.urlSet&&!s.secretSet)||_lark.busy?'disabled':''}>ลบค่า</button></div>
   </div></div>`;
 }
 function viewLarkBot(){
@@ -4810,7 +4830,7 @@ function viewLarkBot(){
   if(!st)return `${how}<div class="card" style="margin-top:14px"><div class="card-b">${_lark.err?`<div class="lark-msg bad">${esc(_lark.err)}</div><button class="btn sm" style="margin-top:10px" onclick="_lark.loaded=false;larkLoad()">ลองใหม่</button>`
     :'<div class="hint"><span class="live-spin"></span> กำลังอ่านการตั้งค่าจาก server…</div>'}</div></div>`;
   const mode=st.mode||'dryrun',tg=st.triggers||{};
-  const modeBtn=(m,label)=>`<button class="${mode===m?'on':''}" onclick="larkSetMode('${m}')" ${_lark.busy?'disabled':''}>${label}</button>`;
+  const modeBtn=(m,label)=>`<button class="${mode===m?'on':''}" onclick="larkSetMode(${jsa(m)})" ${_lark.busy?'disabled':''}>${label}</button>`;
   return `<div class="lark-page">${how}
   <div class="card"><div class="card-b">
     <div class="lark-h"><span style="font-size:18px">⚙️</span><b>โหมดการแจ้งเตือน</b></div>
@@ -4940,10 +4960,10 @@ function viewUsers(){
       <td>${roleSelectHTML(u.role,`setUserField(${i},'role',this.value)`)}<div><span class="tag ${tierTag(u.role)}" style="font-size:10px;margin-top:3px">${esc(ROLE_DESC[u.role]||'ไม่รู้จัก → สิทธิ์ต่ำสุด (Sales)')}</span></div></td>
       <td><label class="row-flex" style="gap:6px;cursor:pointer;font-size:12.5px"><input type="checkbox" style="width:auto" ${off?'':'checked'} onchange="setUserField(${i},'active',this.checked)">${off?'ปิดใช้งาน':'ใช้งาน'}</label>
         ${u.lockedMinutes?`<div style="margin-top:4px"><span class="tag red" style="font-size:10px">🔒 ล็อก ${u.lockedMinutes} นาที</span>
-          <button class="btn tiny ghost" onclick="unlockUser('${esc(u.id)}')">ปลดล็อก</button></div>`:''}</td>
-      <td>${isSalesTier?'<span class="hint">—</span>':`<button class="btn tiny ghost" onclick="openScope('${esc(u.id)}')">${(u.scope==='all'||!u.scope)?'🌐 ทุกกลุ่ม':'🔒 '+scopeTxt}</button>`}</td>
+          <button class="btn tiny ghost" onclick="unlockUser(${jsa(u.id)})">ปลดล็อก</button></div>`:''}</td>
+      <td>${isSalesTier?'<span class="hint">—</span>':`<button class="btn tiny ghost" onclick="openScope(${jsa(u.id)})">${(u.scope==='all'||!u.scope)?'🌐 ทุกกลุ่ม':'🔒 '+scopeTxt}</button>`}</td>
       <td>${isSalesTier?`<button class="btn tiny ghost" onclick="copySalesLink(${i})" title="ลิงก์หน้าของ Sales คนนี้ในแอป Sales">🔗 หน้า Sales</button>`:'<span class="hint">ระบบทำราคา</span>'}</td>
-      <td><div class="pill-input" style="padding:2px 4px 2px 8px;width:150px"><input type="password" placeholder="ตั้งรหัสใหม่…" autocomplete="new-password" style="border:none;outline:none;width:100%;background:transparent" onchange="adminSetPassword('${esc(u.id)}',this)"></div>
+      <td><div class="pill-input" style="padding:2px 4px 2px 8px;width:150px"><input type="password" placeholder="ตั้งรหัสใหม่…" autocomplete="new-password" style="border:none;outline:none;width:100%;background:transparent" onchange="adminSetPassword(${jsa(u.id)},this)"></div>
         <div class="hint" style="font-size:10px">${(u.hasPassword||u.passHash)?'ตั้งรหัสแล้ว':'ยังไม่ตั้งรหัส'}</div></td></tr>`}).join('');
   return `<div class="card"><div class="card-h"><h2>ผู้ใช้งานในระบบ</h2><span class="hint" style="margin-left:6px">${USERS.length} บัญชี</span><div class="spacer"></div>
       <button class="btn sm ghost" onclick="copyText_(salesAppUrl(),'คัดลอกลิงก์แอป Sales แล้ว')">🔗 ลิงก์แอป Sales</button>
@@ -5006,17 +5026,17 @@ function openScope(uid){
   <div class="modal-b">
     <div class="hint" style="margin-bottom:8px">ใช้กำหนดว่าเห็นสินค้าหมวดไหนในการค้นหา/แคตตาล็อก · <b>ผู้รับผิดชอบงาน</b>ตั้งที่ ⚙️ ตั้งค่า → “หมวดสินค้า · กลุ่มสินค้า · ผู้รับผิดชอบ”</div>
     <div class="row-flex" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <button class="btn tiny ghost" onclick="scopeAll('${uid}',true)">เลือกทั้งหมด</button>
-      <button class="btn tiny ghost" onclick="scopeAll('${uid}',false)">ไม่เลือกเลย</button>
-      <button class="btn tiny ghost" onclick="scopePreset('${uid}','exMount')">ยกเว้น Mounting/Carport/DC</button>
-      <button class="btn tiny ghost" onclick="scopePreset('${uid}','onlyMount')">เฉพาะ Mounting/Carport/DC</button>
+      <button class="btn tiny ghost" onclick="scopeAll(${jsa(uid)},true)">เลือกทั้งหมด</button>
+      <button class="btn tiny ghost" onclick="scopeAll(${jsa(uid)},false)">ไม่เลือกเลย</button>
+      <button class="btn tiny ghost" onclick="scopePreset(${jsa(uid)},'exMount')">ยกเว้น Mounting/Carport/DC</button>
+      <button class="btn tiny ghost" onclick="scopePreset(${jsa(uid)},'onlyMount')">เฉพาะ Mounting/Carport/DC</button>
     </div>
     <div style="max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px">
       ${allG.map(g=>`<label class="row-flex" style="justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--line);cursor:pointer">
         <span style="font-size:13px">${esc(g)}</span>
         <input type="checkbox" class="scopeChk" data-g="${esc(g)}" ${set.has(g)?'checked':''} style="width:auto"></label>`).join('')}
     </div></div>
-  <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" onclick="saveScope('${uid}')">บันทึกสิทธิ์</button></div>`);
+  <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" onclick="saveScope(${jsa(uid)})">บันทึกสิทธิ์</button></div>`);
 }
 function scopeAll(uid,on){document.querySelectorAll('.scopeChk').forEach(c=>c.checked=on)}
 function scopePreset(uid,kind){
@@ -5356,13 +5376,22 @@ async function _syncCloud(q,opts){
   if(res.ok){ q.isSynced=true; delete q._conflict; delete q._cloudNewer; delete q._cloudNewerBy;
     if(res.data&&res.data.updatedAt)q._cloudAt=res.data.updatedAt;      // baseline ใหม่สำหรับการบันทึกครั้งถัดไป
     if(res.data&&res.data.follow)q._follow=res.data.follow;
-    persistQuote(q); setCloudDot('on'); }
+    persistQuote(q); setCloudDot('on');
+    // v5.9: server แก้ค่าที่ส่งไป (สถานะ / การอนุมัติ / ใบที่ถูกตรึง) → ใช้ฉบับในชีทแทนของในเครื่อง
+    if(res.data&&res.data.serverFixed&&res.data.detail){
+      mergeRemoteRow({id:q.id,detail:res.data.detail,updatedAt:res.data.updatedAt,by:CURRENT?CURRENT.name:'',follow:res.data.follow},{force:true});
+      LS.set('quotes',QUOTES);
+    } }
   else if(res.error==='CONFLICT'){                                        // มีคนเขียนบน Sheet ก่อนเรา → ห้ามเข้าคิวส่งซ้ำ
     q.isSynced=false; q._conflict=res.data||{}; persistQuote(q); setCloudDot('err');
     conflictModal(q.id,res.data||{});
   }
   else if(res.error==='DATA_RESET'){                                      // v5.1: ใบนี้ถูกล้างไปแล้ว → ไม่เข้าคิว ไม่สร้างกลับ
     toast(ERR_TH.DATA_RESET,'bad');initializeData({full:true}).then(()=>{renderNav();render()});
+  }
+  else if(FINAL_REJECT.indexOf(res.error)>=0){                             // v5.9: server ปฏิเสธถาวร → ไม่เข้าคิว · โหลดฉบับในชีทกลับมา
+    toast('บันทึกไม่ได้ — '+errText(res),'bad'); setCloudDot('on');
+    refreshQuote(q.id,{force:true}).then(()=>{renderNav();render()});
   }
   else{ q.isSynced=false; persistQuote(q); enqueueSync(payload);
     if(!res.offline)toast('ยังบันทึกขึ้น Google Sheet ไม่ได้ — '+errText(res)+' · งานเก็บไว้ในเครื่องแล้ว กด 🔄 ซิงค์ เพื่อส่งอีกครั้ง','bad');
@@ -5382,7 +5411,7 @@ async function flushQueue(){
   //       ไม่งั้นครั้งที่ 2 จะชน conflict guard ของครั้งที่ 1 ที่เพิ่งส่งสำเร็จ
   const lastSave={};q.forEach((it,i)=>{if(it.payload&&it.payload.action==='save')lastSave[it.payload.id]=i;});
   q=q.filter((it,i)=>!(it.payload&&it.payload.action==='save'&&lastSave[it.payload.id]!==i));
-  const remain=[];let done=0,conflicts=[];
+  const remain=[];let done=0,conflicts=[],rejected=[];
   for(const item of q){
     const tries=(item.tries||0);
     const r=await postCloud(item.payload);
@@ -5392,12 +5421,17 @@ async function flushQueue(){
     else if(r.error==='CONFLICT'){        // ไม่ส่งซ้ำ — ให้ผู้ใช้ตัดสินใจเอง (โหลดของ Cloud / บันทึกทับ)
       if(lq){lq.isSynced=false;lq._conflict=r.data||{};}conflicts.push(tid);}
     else if(r.error==='DATA_RESET'){}     // v5.1: ใบที่ถูกล้างไปแล้ว → ทิ้งรายการนี้ (ไม่ส่งซ้ำ)
+    else if(FINAL_REJECT.indexOf(r.error)>=0){rejected.push({id:tid,why:errText(r)});}   // v5.9: ปฏิเสธถาวร → ไม่ส่งซ้ำ แจ้งผู้ใช้ + โหลดฉบับในชีท
     else {item.tries=tries+1;
       // BUSINESS RULE: drop an item after 12 failed attempts so a poisoned payload can't block the queue forever
       if(item.tries<=12)remain.push(item);}
   }
   if(conflicts.length){toast('มี '+conflicts.length+' ใบที่ข้อมูลบน Cloud ถูกแก้โดยคนอื่นระหว่างออฟไลน์ — เปิดใบเพื่อเลือกเวอร์ชัน','bad');
     conflictModal(conflicts[0],(QUOTES.find(x=>x.id===conflicts[0])||{})._conflict||{});}
+  if(rejected.length){
+    toast('มี '+rejected.length+' รายการที่ระบบไม่รับ — '+rejected[0].why,'bad');
+    rejected.forEach(x=>refreshQuote(x.id,{force:true}).then(()=>{renderNav();render()}));
+  }
   setQueue(remain);if(done)LS.set('quotes',QUOTES);
   updateQueueBadge();
   _flushing=false;
@@ -5680,7 +5714,7 @@ function renderConflictBanner(){
     <div style="flex:1;min-width:220px"><b>ข้อมูลบน Cloud มีการเปลี่ยนแปลง</b>
       <div class="hint">ใบนี้ถูกแก้โดย <b>${esc(c.by||'ผู้ใช้อื่น')}</b> เมื่อ ${esc(fmtTime(c.at))}${c.status?(' · สถานะบน Cloud: <b>'+esc(STATUS_TH[c.status]||c.status)+'</b>'):''}
         หลังจากที่คุณเปิดหน้านี้ — ถ้าบันทึกตอนนี้จะทับงานของอีกฝ่าย</div></div>
-    <button class="btn sm" onclick="resolveConflict('${esc(c.id)}','cloud')">↺ โหลดเวอร์ชัน Cloud (ทิ้งที่แก้)</button>
+    <button class="btn sm" onclick="resolveConflict(${jsa(c.id)},'cloud')">↺ โหลดเวอร์ชัน Cloud (ทิ้งที่แก้)</button>
     <button class="btn sm ghost" onclick="keepMineOnSave()">เก็บของฉัน · บันทึกทับตอนกดบันทึก</button></div>`;
 }
 function keepMineOnSave(){
@@ -5698,8 +5732,8 @@ function conflictModal(id,info){
     หลังจากที่เครื่องนี้ดึงข้อมูลครั้งล่าสุด</p>
     <p class="hint" style="margin-top:8px">ระบบ <b>ยังไม่ได้บันทึกทับ</b> เพื่อกันงานของอีกฝ่ายหาย (เช่น การอนุมัติ / ปล่อยราคา / อัปเดตจาก Sales) — เลือกเวอร์ชันที่จะใช้</p></div>
   <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ตัดสินใจทีหลัง</button>
-    <button class="btn ghost" onclick="resolveConflict('${esc(id)}','mine')">บันทึกทับด้วยเวอร์ชันของฉัน</button>
-    <button class="btn" onclick="resolveConflict('${esc(id)}','cloud')">↺ ใช้เวอร์ชันบน Cloud</button></div>`);
+    <button class="btn ghost" onclick="resolveConflict(${jsa(id)},'mine')">บันทึกทับด้วยเวอร์ชันของฉัน</button>
+    <button class="btn" onclick="resolveConflict(${jsa(id)},'cloud')">↺ ใช้เวอร์ชันบน Cloud</button></div>`);
 }
 async function resolveConflict(id,mode){
   closeModal();
@@ -5831,7 +5865,7 @@ function viewFxAudit(){
         const curs=[...new Set(d.lines.map(x=>x.cur))].join(', ');
         const used=[...new Set(d.lines.map(x=>x.used))].join(', ');
         const should=[...new Set(d.lines.map(x=>x.should))].join(', ');
-        return `<tr style="cursor:pointer" onclick="closeModal();openQuote('${d.q.id}')">
+        return `<tr style="cursor:pointer" onclick="closeModal();openQuote(${jsa(d.q.id)})">
           <td class="mono" style="font-size:11px">${esc(d.q.docNo||d.q.header.ref||'—')}</td>
           <td style="font-size:12px">${esc(d.q.header.customer||'—')}</td>
           <td>${esc(curs)}</td>
@@ -6000,7 +6034,7 @@ function salesStatusSelect(q){
   // 2.7: Sales may only move Sent → Won / Lost → Delivered
   const next=allowedNextStatuses(q).filter(x=>x!==st);
   if(!next.length)return salesStatusBadge(st);
-  return `<select class="inp" style="padding:4px 8px;font-size:12px;width:auto" onchange="setStatus('${q.id}',this.value)">
+  return `<select class="inp" style="padding:4px 8px;font-size:12px;width:auto" onchange="setStatus(${jsa(q.id)},this.value)">
     <option selected>${esc(st)}</option>${next.map(x=>`<option>${x}</option>`).join('')}</select>`;
 }
 /* ---- 4. Sales Dashboard — จัดกลุ่มตามสถานะงาน, อัปเดตได้ในหน้าเดียว ---- */
@@ -6060,11 +6094,11 @@ function salesCard(q){
     <div style="margin-top:7px">${ballChip(q)}</div>
     ${linked.length?`<div class="hint" style="margin-top:6px">QT ที่เชื่อมโยง: ${linked.map(x=>`<span class="mono" style="font-size:10px;background:var(--surface-2);padding:2px 5px;border-radius:4px">${esc(x.docNo||x.header.ref||'—')}</span>`).join(' ')}</div>`:''}
     <div class="sc-actions">
-      ${(!isSR&&seePrice&&tot.total>0)?`<button class="btn tiny ghost" onclick="openCustomerQuote('${q.id}')">📄 ดูใบเสนอราคา</button>`:''}
-      ${(!isSR&&canRelease(q))?`<button class="btn tiny" style="background:var(--blue)" onclick="releasePrice('${q.id}')">🔓 ปล่อยราคาให้ ${esc(salesNameOf(q)||'Sales')}</button>`:''}
+      ${(!isSR&&seePrice&&tot.total>0)?`<button class="btn tiny ghost" onclick="openCustomerQuote(${jsa(q.id)})">📄 ดูใบเสนอราคา</button>`:''}
+      ${(!isSR&&canRelease(q))?`<button class="btn tiny" style="background:var(--blue)" onclick="releasePrice(${jsa(q.id)})">🔓 ปล่อยราคาให้ ${esc(salesNameOf(q)||'Sales')}</button>`:''}
       ${(isSR&&srEditable(q))?`
-        <button class="btn tiny ghost" onclick="editSalesRequest('${q.id}')">✏️ แก้ไขคำขอ</button>
-        <button class="btn tiny ghost" style="color:var(--red)" onclick="deleteSalesRequest('${q.id}')">🗑 ลบคำขอ</button>`:''}
+        <button class="btn tiny ghost" onclick="editSalesRequest(${jsa(q.id)})">✏️ แก้ไขคำขอ</button>
+        <button class="btn tiny ghost" style="color:var(--red)" onclick="deleteSalesRequest(${jsa(q.id)})">🗑 ลบคำขอ</button>`:''}
       ${(isSR&&!srEditable(q)&&!q.deleted)?`<span class="hint">🔒 Sourcing รับงานแล้ว — แก้ไข/ลบคำขอไม่ได้ ติดต่อทีม Sourcing</span>`:''}
       ${(!isSR&&st==='Pending')?`<span class="hint">อัปเดตผลการเสนอราคาไว้ด้านล่าง — สถานะโครงการปรับโดยทีม Sourcing</span>`:''}
     </div>
@@ -6078,16 +6112,16 @@ function salesCard(q){
                  ${u.next?`<div class="hint">ขั้นถัดไป: ${esc(u.next)}</div>`:''}`
                :`<span style="color:var(--red)">⚠ ยังไม่เคยอัปเดตความคืบหน้ากับลูกค้า</span>`}
           </div>
-          <button class="btn sm ${need?'':'ghost'}" onclick="openSalesUpdate('${q.id}')">📝 อัปเดตความคืบหน้า</button>
+          <button class="btn sm ${need?'':'ghost'}" onclick="openSalesUpdate(${jsa(q.id)})">📝 อัปเดตความคืบหน้า</button>
         </div>`})():''}
       <div class="row-flex" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
         <div style="flex:1;min-width:200px">
           <label class="lbl" style="font-size:10.5px">บันทึกย่อ <span class="hint">(บันทึกอัตโนมัติ)</span></label>
-          <textarea class="inp" rows="2" style="resize:vertical;font-size:13px" placeholder="เช่น ส่งราคาให้ลูกค้าแล้ว รอเปรียบเทียบกับเจ้าอื่น…" onchange="saveNote('${q.id}',this.value,this)">${esc(q.salesNote||'')}</textarea>
+          <textarea class="inp" rows="2" style="resize:vertical;font-size:13px" placeholder="เช่น ส่งราคาให้ลูกค้าแล้ว รอเปรียบเทียบกับเจ้าอื่น…" onchange="saveNote(${jsa(q.id)},this.value,this)">${esc(q.salesNote||'')}</textarea>
         </div>
         <div style="width:150px">
           <label class="lbl" style="font-size:10.5px">นัดติดตามครั้งถัดไป</label>
-          <input class="inp" type="date" style="font-size:12.5px" value="${esc(q.followUpDate||'')}" onchange="saveFollowUp('${q.id}',this.value,this)">
+          <input class="inp" type="date" style="font-size:12.5px" value="${esc(q.followUpDate||'')}" onchange="saveFollowUp(${jsa(q.id)},this.value,this)">
         </div>
       </div>
       <div class="hint" style="margin-top:5px">อัปเดตล่าสุด ${esc(q.updated||q.created||'—')}${overdue?' · <b style="color:var(--red)">เลยนัดติดตามแล้ว</b>':''}</div>
@@ -6126,7 +6160,7 @@ function viewSalesDashboard(){
         <td><b>${esc(q.header.title||'(ไม่มีชื่อ)')}</b><div class="hint">${esc(q.header.customer||'')}</div></td>
         <td>${ownerTag(q)}</td>
         <td class="r mono" style="font-weight:700">${money(quoteTotals(q).total,curOf(q))}</td>
-        <td><button class="btn tiny" style="background:var(--blue)" onclick="releasePrice('${q.id}')">🔓 ปล่อยราคา</button></td></tr>`).join('')}
+        <td><button class="btn tiny" style="background:var(--blue)" onclick="releasePrice(${jsa(q.id)})">🔓 ปล่อยราคา</button></td></tr>`).join('')}
     </tbody></table></div></div></div>`:''}
   <div class="row-flex no-print" style="justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap">
     <div class="row-flex" style="gap:10px;flex-wrap:wrap">
@@ -6140,7 +6174,7 @@ function viewSalesDashboard(){
     if(!b.items.length)return '';
     const open=!salesCollapsed[b.key];
     return `<div class="card" style="margin-bottom:16px;border-left:4px solid var(--${b.color})">
-      <div class="card-h" style="cursor:pointer;padding:13px 18px" onclick="toggleSalesBucket('${b.key}')">
+      <div class="card-h" style="cursor:pointer;padding:13px 18px" onclick="toggleSalesBucket(${jsa(b.key)})">
         <span style="font-size:17px">${b.icon}</span>
         <h2 style="margin-left:4px">${b.title}</h2>
         <span class="tag ${b.color}" style="margin-left:6px">${b.items.length}</span>
@@ -6320,7 +6354,7 @@ function viewSalesRequest(){
 
       <div style="display:flex;gap:10px;padding-top:4px;flex-wrap:wrap">
         <button class="btn ghost" onclick="go('salesdash')">← ยกเลิก</button>
-        ${srEditId?`<button class="btn ghost" style="color:var(--red)" onclick="deleteSalesRequest('${srEditId}')">🗑 ลบคำขอนี้</button>`:''}
+        ${srEditId?`<button class="btn ghost" style="color:var(--red)" onclick="deleteSalesRequest(${jsa(srEditId)})">🗑 ลบคำขอนี้</button>`:''}
         <div class="spacer"></div>
         <button class="btn" onclick="submitSalesRequest()">${srEditId?'บันทึกการแก้ไข →':'ส่งให้ Sourcing →'}</button>
       </div>
@@ -6427,10 +6461,10 @@ function viewSalesUpdate(){
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input placeholder="ค้นหา Ref / ลูกค้า / โปรเจค..." value="${esc(suSearch)}" oninput="suSearch=this.value;document.getElementById('suBody').innerHTML=suRows()">
       </div>
-      <div class="seg">${['all',...GROUP_TYPES].map(g=>`<button class="${suGroup===g?'on':''}" onclick="suGroup='${g}';document.getElementById('suBody').innerHTML=suRows()">${g==='all'?'ทุกกลุ่ม':g}</button>`).join('')}</div>
+      <div class="seg">${['all',...GROUP_TYPES].map(g=>`<button class="${suGroup===g?'on':''}" onclick="suGroup=${jsa(g)};document.getElementById('suBody').innerHTML=suRows()">${g==='all'?'ทุกกลุ่ม':g}</button>`).join('')}</div>
       <select class="inp" style="width:auto;padding:7px 30px 7px 11px" onchange="suSales=this.value;document.getElementById('suBody').innerHTML=suRows()">
         <option value="all">Sales: ทั้งหมด</option>${salesList.map(s=>`<option value="${esc(s)}" ${suSales===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
-      <div class="seg">${['all',...QT_STATUSES].map(s=>`<button class="${suStatus===s?'on':''}" onclick="suStatus='${s}';document.getElementById('suBody').innerHTML=suRows()">${s==='all'?'ทุกสถานะ':s}</button>`).join('')}</div>
+      <div class="seg">${['all',...QT_STATUSES].map(s=>`<button class="${suStatus===s?'on':''}" onclick="suStatus=${jsa(s)};document.getElementById('suBody').innerHTML=suRows()">${s==='all'?'ทุกสถานะ':s}</button>`).join('')}</div>
     </div>
   </div>
   <div class="card">
@@ -6471,7 +6505,7 @@ function suSRcard(){
         <td><span class="tag ${grpColor(q.header.groupType)}" style="font-size:10px">${esc(q.header.groupType||'—')}</span></td>
         <td>${routeTag(q)}</td>
         <td style="font-size:12px">${esc(q.header.needBy||'—')}</td>
-        <td>${perms().create?`<button class="btn tiny" onclick="takeSRAndCost('${q.id}')">รับงาน &amp; ทำราคา</button>`:''}</td></tr>`).join('')}
+        <td>${perms().create?`<button class="btn tiny" onclick="takeSRAndCost(${jsa(q.id)})">รับงาน &amp; ทำราคา</button>`:''}</td></tr>`).join('')}
     </tbody></table></div></div></div>`;
 }
 function suRows(){
@@ -6487,13 +6521,13 @@ function suRows(){
     const staleFmt=daysAgo!=null&&daysAgo>14&&st==='Pending'?'style="background:var(--amber-soft)"':'';
     return `<tr ${staleFmt}>
       <td class="mono" style="font-size:11px;font-weight:600">${esc(q.docNo||q.header.ref||'—')}</td>
-      <td style="font-size:12px;white-space:nowrap">${q.header.reqDate||q.created||'—'}</td>
+      <td style="font-size:12px;white-space:nowrap">${esc(q.header.reqDate||q.created||'—')}</td>
       <td style="font-weight:600;font-size:13px;white-space:normal;max-width:200px">${esc(q.header.title||q.header.project||q.header.customer||'(ไม่มีชื่อ)')}<br><span style="font-size:11px;color:var(--muted);font-weight:400">${esc(q.header.customer||'')}</span></td>
       <td style="font-size:12px">${esc(q.header.sales||'—')}</td>
       <td><span class="tag ${grpColor(q.header.groupType)}" style="font-size:10px">${esc(q.header.groupType||'Inverter')}</span></td>
       <td>${statusSelect(q)}</td>
-      <td><textarea class="cell-inp txt" rows="2" style="min-width:250px;width:100%;resize:vertical;padding:6px 8px;line-height:1.4" placeholder="เพิ่มหมายเหตุ / อัพเดตความคืบหน้า..." onchange="saveNote('${q.id}',this.value,this)">${esc(q.salesNote||'')}</textarea></td>
-      <td><div style="display:flex;flex-direction:column;gap:4px"><button class="btn tiny ghost" onclick="openCustomerQuote('${q.id}')" title="ดูใบเสนอราคาสำหรับ Sales">ดู QT</button>${q.legacy?'<span class="tag grey" style="font-size:9px;margin-top:2px">Legacy</span>':''}</div></td>
+      <td><textarea class="cell-inp txt" rows="2" style="min-width:250px;width:100%;resize:vertical;padding:6px 8px;line-height:1.4" placeholder="เพิ่มหมายเหตุ / อัพเดตความคืบหน้า..." onchange="saveNote(${jsa(q.id)},this.value,this)">${esc(q.salesNote||'')}</textarea></td>
+      <td><div style="display:flex;flex-direction:column;gap:4px"><button class="btn tiny ghost" onclick="openCustomerQuote(${jsa(q.id)})" title="ดูใบเสนอราคาสำหรับ Sales">ดู QT</button>${q.legacy?'<span class="tag grey" style="font-size:9px;margin-top:2px">Legacy</span>':''}</div></td>
     </tr>`;
   }).join('');
 }
@@ -6525,11 +6559,11 @@ function viewSRQueue(){
     ${list.map(q=>{
       const st=q.status||'Submitted';
       const linkedQTs=QUOTES.filter(x=>x.srId===q.id&&!x.deleted);
-      const needBy=q.header.needBy?`<span style="color:${q.header.needBy<todayISO()?'var(--red)':'var(--ink-2)'}">` +q.header.needBy+'</span>':'—';
+      const needBy=q.header.needBy?`<span style="color:${q.header.needBy<todayISO()?'var(--red)':'var(--ink-2)'}">` +esc(q.header.needBy)+'</span>':'—';   // v5.9: escape (ค่าจาก Sales)
       return `<tr class="lv-${lvOf(q)}">
-        <td class="mono" style="font-size:11px;font-weight:600;cursor:pointer" onclick="openQuote('${q.id}')">${esc(q.docNo||q.header.ref||'—')}</td>
-        <td style="font-size:12px;white-space:nowrap">${q.created||'—'}</td>
-        <td style="cursor:pointer" onclick="openQuote('${q.id}')">
+        <td class="mono" style="font-size:11px;font-weight:600;cursor:pointer" onclick="openQuote(${jsa(q.id)})">${esc(q.docNo||q.header.ref||'—')}</td>
+        <td style="font-size:12px;white-space:nowrap">${esc(q.created||'—')}</td>
+        <td style="cursor:pointer" onclick="openQuote(${jsa(q.id)})">
           <div style="font-weight:600">${esc(q.header.title||q.header.customer||'(ไม่มีชื่อ)')}</div>
           <div style="font-size:11px;color:var(--muted)">${esc(q.header.customer||'')}</div></td>
         <td style="font-size:12px">${esc(q.header.sales||'—')}</td>
@@ -6537,13 +6571,13 @@ function viewSRQueue(){
         <td>${routeTag(q)}${q.assignedTo?`<div class="hint">รับงาน: ${esc(assigneeName(q)||'—')}</div>`:''}</td>
         <td style="font-size:12px">${needBy}</td>
         <td><span class="tag ${STATUS_TAG[st]||'grey'}">${esc(statusTH(st,'SR'))}</span> ${lvBadge(lvOf(q))}${(followOf(q).waitingDays||0)>0&&waitTxt(followOf(q))?`<div class="hint">รอมาแล้ว ${waitTxt(followOf(q))}</div>`:''}</td>
-        <td style="font-size:12px">${linkedQTs.length?linkedQTs.map(x=>`<span class="mono" style="font-size:10px;background:var(--surface-2);padding:2px 5px;border-radius:4px;margin:1px;cursor:pointer" onclick="openQuote('${x.id}')">${esc(x.docNo||x.header.ref||'—')}</span>`).join(' '):'—'}</td>
+        <td style="font-size:12px">${linkedQTs.length?linkedQTs.map(x=>`<span class="mono" style="font-size:10px;background:var(--surface-2);padding:2px 5px;border-radius:4px;margin:1px;cursor:pointer" onclick="openQuote(${jsa(x.id)})">${esc(x.docNo||x.header.ref||'—')}</span>`).join(' '):'—'}</td>
         <td><div class="row-flex" style="flex-wrap:nowrap;gap:4px">
-          ${st==='Submitted'?`<button class="btn tiny" onclick="takeSRAndCost('${q.id}')">รับงาน &amp; ทำราคา</button>
-            <button class="btn tiny ghost" onclick="acceptSR('${q.id}')" title="รับงานไว้ก่อน ยังไม่ทำราคาตอนนี้">รับงานอย่างเดียว</button>`:''}
-          ${(st==='Accepted'||st==='Quoted')?`<button class="btn tiny ghost" onclick="createQTFromSR('${q.id}')">+ สร้าง QT</button>`:''}
-          ${(st==='Submitted'&&perms().create)?`<button class="btn tiny ghost" onclick="openForwardSR('${q.id}')" title="ส่งคำขอนี้ให้ Sourcing คนอื่น">ส่งต่อ</button>`:''}
-          <button class="btn tiny ghost" onclick="openQuote('${q.id}')">ดู</button>
+          ${st==='Submitted'?`<button class="btn tiny" onclick="takeSRAndCost(${jsa(q.id)})">รับงาน &amp; ทำราคา</button>
+            <button class="btn tiny ghost" onclick="acceptSR(${jsa(q.id)})" title="รับงานไว้ก่อน ยังไม่ทำราคาตอนนี้">รับงานอย่างเดียว</button>`:''}
+          ${(st==='Accepted'||st==='Quoted')?`<button class="btn tiny ghost" onclick="createQTFromSR(${jsa(q.id)})">+ สร้าง QT</button>`:''}
+          ${(st==='Submitted'&&perms().create)?`<button class="btn tiny ghost" onclick="openForwardSR(${jsa(q.id)})" title="ส่งคำขอนี้ให้ Sourcing คนอื่น">ส่งต่อ</button>`:''}
+          <button class="btn tiny ghost" onclick="openQuote(${jsa(q.id)})">ดู</button>
         </div></td>
       </tr>`;
     }).join('')}

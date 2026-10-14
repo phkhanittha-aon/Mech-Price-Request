@@ -3,6 +3,7 @@
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), crypto = require('crypto');
 const { makeRuntime } = require('./gasmock');
+const { seedSave } = require('./seed');
 const [, , DIR] = process.argv;
 const { ctx, sheets } = makeRuntime(DIR + '/Code.gs');
 const H = s => crypto.createHash('sha256').update(s + 'mgs-internal-2025').digest('hex');
@@ -11,7 +12,8 @@ const U = sheets['Users'], uh = U.rows[0];
 const post = p => JSON.parse(ctx.apiPost(JSON.stringify(p)));
 const tS = post({ action: 'login', user: 'src', passHash: H('pw123456') }).token;
 const hd = { title: 'Factory Rooftop', customer: 'CP Group', salesUserId: 'boss', sales: 'BOSS', currency: 'THB' };
-post({ token: tS, action: 'save', id: 'Q1', docType: 'QT', docNo: 'QT-IN-2610-001', status: 'Pending', releasedTo: 'boss', salesUserId: 'boss', title: 'Factory Rooftop', customer: 'CP Group', total: 270000, gp: 20,
+// v5.9: save ตั้ง Pending เองไม่ได้แล้ว → ใบที่ปล่อยราคาแล้วใส่ตรงลงชีทเป็นข้อมูลตั้งต้น
+seedSave(sheets, { token: tS, action: 'save', id: 'Q1', docType: 'QT', docNo: 'QT-IN-2610-001', status: 'Pending', releasedTo: 'boss', salesUserId: 'boss', title: 'Factory Rooftop', customer: 'CP Group', total: 270000, gp: 20,
   detail: JSON.stringify({ id: 'Q1', docType: 'QT', docNo: 'QT-IN-2610-001', status: 'Pending', releasedTo: ['boss'], header: hd, lines: [{ code: 'SG', desc: 'Inv', qty: 2, up: 3000, costCur: 'USD', opPct: 20 }] }),
   salesDetail: JSON.stringify({ id: 'Q1', status: 'Pending', header: hd, lines: [{ code: 'SG', desc: 'Inv', qty: 2, uom: 'pcs', unitPrice: 135000, amount: 270000 }], total: 270000 }) });
 const files = { '/': fs.readFileSync(DIR + '/Index.html', 'utf8'), '/sales': fs.readFileSync(DIR + '/Sales.html', 'utf8') };

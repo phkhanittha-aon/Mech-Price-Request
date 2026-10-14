@@ -1,4 +1,5 @@
 const { makeRuntime } = require('./gasmock');
+const { seedSave } = require('./seed');
 const crypto = require('crypto');
 const { ctx, sheets } = makeRuntime(process.argv[2]);
 const H = s => crypto.createHash('sha256').update(s + 'mgs-internal-2025').digest('hex');
@@ -46,7 +47,8 @@ ok('PAIR cannot edit BOSS SR', post({ token: tPair, action: 'saveSR', id: 'SR1',
 // visibility: sales sees own, sales mgr sees team, internal salesview
 const tSrc = post({ action: 'login', user: 'chat@mgs.co', passHash: H('1234') }).token;
 const q = { id: 'Q1', docType: 'QT', status: 'Pending', header: { customer: 'Thaibev', salesUserId: 'sales_boss' }, lines: [{ up: 100, opPct: 20 }] };
-post({ token: tSrc, action: 'save', id: 'Q1', status: 'Pending', salesUserId: 'sales_boss', releasedTo: 'sales_boss', total: 5000, gp: 21, cost: 3950, detail: JSON.stringify(q), salesDetail: JSON.stringify({ id: 'Q1', status: 'Pending', lines: [{ code: 'A', unitPrice: 2500, amount: 5000 }], total: 5000 }) });
+// v5.9: save ตั้ง Pending เองไม่ได้แล้ว (ต้องผ่านอนุมัติ + NON ปล่อยราคา) → ใบที่ปล่อยราคาแล้วใส่ตรงลงชีทเป็นข้อมูลตั้งต้น
+seedSave(sheets, { id: 'Q1', status: 'Pending', salesUserId: 'sales_boss', releasedTo: 'sales_boss', total: 5000, gp: 21, cost: 3950, detail: JSON.stringify(q), salesDetail: JSON.stringify({ id: 'Q1', status: 'Pending', lines: [{ code: 'A', unitPrice: 2500, amount: 5000 }], total: 5000 }) });
 post({ token: tSrc, action: 'save', id: 'Q2', status: 'Submitted', salesUserId: 'sales_pair', total: 9000, gp: 10, detail: JSON.stringify(Object.assign({}, q, { id: 'Q2', status: 'Submitted' })), salesDetail: JSON.stringify({ id: 'Q2', lines: [{ unitPrice: 1 }] }) });
 let v = get('salesview', tBoss).quotations;
 ok('Sales BOSS sees only own rows', v.every(x => x.salesUserId === 'sales_boss') && v.some(x => x.id === 'Q1') && v.some(x => x.id === 'SR1'), v.map(x => x.id));

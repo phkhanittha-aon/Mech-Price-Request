@@ -55,7 +55,8 @@ sleep(5);
 r = post({ token: tok.bd, action: 'approve', id: 'Q1' });
 ok('BD approve (stale client) keeps Procurement approval → Approved', r.ok && r.status === 'Approved' && r.approvalRoles.join() === 'Procurement Mgr,BD Mgr', r);
 const det = JSON.parse(r.detail);
-ok('approve returns full Detail with both approvals', det.approvalRoles.length === 2 && det.approvals.length === 2 && det.status === 'Approved');
+// v5.9 (ตั้งใจ): server บันทึก "ส่งตรวจ" ลง approvals เองตอนส่งอนุมัติ (client เพิ่มเองไม่ได้แล้ว) → นับเฉพาะรายการอนุมัติ (มี levelRole)
+ok('approve returns full Detail with both approvals', det.approvalRoles.length === 2 && det.approvals.filter(a => a.levelRole).length === 2 && det.status === 'Approved', det.approvals);
 r = post({ token: tok.bd, action: 'approve', id: 'Q1' });
 ok('approve again → NOT_IN_APPROVAL (409)', !r.ok && r.error === 'NOT_IN_APPROVAL', r);
 r = post({ token: tok.sourcing1, action: 'approve', id: 'Q1' });
@@ -106,11 +107,13 @@ let ch = get('changes', tok.gm, t0);
 ok('changes since now → 0 rows', ch.ok && ch.quotations.length === 0 && ch.serverTime, ch);
 sleep(5);
 const fresh = get('quote', tok.gm, 'Q1').quote.updatedAt;
-r = post({ token: tok.gm, action: 'save', id: 'Q1', salesUserId: 'sales_boss', status: 'Pending', detail: JSON.stringify(q), baseUpdatedAt: fresh });
+// v5.9 (ตั้งใจ): ใบนี้อยู่ที่ Closed (ตั้งในลูปด้านบน) — save ย้อน Closed → Pending ไม่ได้แล้ว (STATUS_LOCKED) จึงบันทึกสถานะเดิม
+//   เทสต์นี้ตรวจ conflict guard / changes ไม่ใช่สถานะ
+r = post({ token: tok.gm, action: 'save', id: 'Q1', salesUserId: 'sales_boss', status: 'Closed', detail: JSON.stringify(q), baseUpdatedAt: fresh });
 ok('save with fresh base → ok', r.ok, r);
 ch = get('changes', tok.gm, t0);
 ok('changes since t0 → returns the changed row', ch.ok && ch.quotations.length === 1 && ch.quotations[0].id === 'Q1');
-r = post({ token: tok.sourcing1, action: 'save', id: 'Q1', salesUserId: 'sales_boss', status: 'Pending', detail: JSON.stringify(q), baseUpdatedAt: base1, force: true });
+r = post({ token: tok.sourcing1, action: 'save', id: 'Q1', salesUserId: 'sales_boss', status: 'Closed', detail: JSON.stringify(q), baseUpdatedAt: base1, force: true });
 ok('force save overrides conflict (explicit user choice)', r.ok, r);
 ok('no-base save (legacy client) still works', post({ token: tok.sourcing1, action: 'save', id: 'Q2', detail: JSON.stringify(Object.assign({}, q, { id: 'Q2' })) }).ok);
 

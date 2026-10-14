@@ -4,6 +4,7 @@
 // ทุกหัวข้อเดิมยังถูกทดสอบในรูปแบบใหม่ (ดูตารางเทียบใน CHANGELOG_v4.1.md หัวข้อ v5.0)
 const fs = require('fs'), crypto = require('crypto');
 const { makeRuntime } = require('./gasmock');
+const { seedSave } = require('./seed');
 const DIR = process.argv[2] || '.', DOCS = process.argv[3] || '';
 let fails = 0;
 const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (!c && x !== undefined ? '  -> ' + JSON.stringify(x).slice(0, 500) : '')); if (!c) fails++; };
@@ -83,14 +84,17 @@ const sub = q.find(x => x.Event === 'QT_SUBMITTED');
 ok('ส่งขออนุมัติ → QT_SUBMITTED แท็กทั้ง Sourcing Manager และ BD Manager', sub && /<at email=pm@m\.co>/.test(sub.Payload) && /<at email=bd@m\.co>/.test(sub.Payload) && /2 ฝ่าย/.test(sub.Title), sub && W.card(sub).text);
 ok('มีราคาแล้ว → "💰 มีราคาแล้ว — ดูราคาบนเว็บ" (ไม่มีตัวเลข)', /มีราคาแล้ว/.test(W.card(sub).text));
 // v5.1 (ตั้งใจ): BD กดก่อน Sourcing Manager ได้ (เดิม v5.0 → WAIT_PREVIOUS_LEVEL)
-r = W.post({ token: W.T.bd, action: 'approve', id: 'Q1' }); q = W.Q();
-const l1 = q.find(x => x.Event === 'QT_PARTIAL_APPROVED');
-ok('BD Manager อนุมัติก่อน → QT_PARTIAL_APPROVED แท็ก Sourcing Manager (ฝ่ายที่ยังขาด) · แถบขั้นตอน ✅ BD Manager / 🔶 Sourcing Manager', r.ok && r.status === 'Partial Approved' && l1 && /<at email=pm@m\.co>/.test(l1.Payload) && !/<at email=bd@m\.co>/.test(l1.Payload) &&
-  /🔶 Sourcing Manager \+ ✅ BD Manager/.test(W.card(l1).text), l1 && W.card(l1).text);
+// v5.9 (ตั้งใจ — Aon สั่ง): ลำดับ Sourcing Manager → BD Manager (BD กดก่อน = อนุมัติแทนทั้ง 2 ขั้น ทดสอบใน test_v59) → ที่นี่เดินลำดับปกติ
 r = W.post({ token: W.T.pm, action: 'approve', id: 'Q1' }); q = W.Q();
+const l1 = q.find(x => x.Event === 'QT_PARTIAL_APPROVED');
+ok('Sourcing Manager อนุมัติก่อน → QT_PARTIAL_APPROVED แท็ก BD Manager (ฝ่ายที่ยังขาด) · แถบขั้นตอน ✅ Sourcing Manager / 🔶 BD Manager', r.ok && r.status === 'Partial Approved' && l1 && /<at email=bd@m\.co>/.test(l1.Payload) && !/<at email=pm@m\.co>/.test(l1.Payload) &&
+  /✅ Sourcing Manager \+ 🔶 BD Manager/.test(W.card(l1).text), l1 && W.card(l1).text);
+r = W.post({ token: W.T.bd, action: 'approve', id: 'Q1' }); q = W.Q();
 const ap = q.find(x => x.Event === 'QT_APPROVED');
 ok('ฝ่ายที่สองอนุมัติ → QT_APPROVED แท็กผู้ปล่อยราคา (NON)', r.ok && r.status === 'Approved' && ap && /<at email=sales_non@m\.co>/.test(ap.Payload) && q.filter(x => x.Event === 'QT_APPROVED').length === 1, ap && W.card(ap).text);
-r = W.post({ token: W.T.gm, action: 'release', id: 'Q1' }); q = W.Q();
+// v5.9 (ตั้งใจ): ปล่อยราคาได้เฉพาะ NON (เดิมเทสต์ใช้ GM)
+ok('v5.9: GM ปล่อยราคาไม่ได้', W.post({ token: W.T.gm, action: 'release', id: 'Q1' }).error === 'ACCESS_DENIED');
+r = W.post({ token: W.T.non, action: 'release', id: 'Q1' }); q = W.Q();
 const rel = q.find(x => x.Event === 'PRICE_RELEASED');
 ok('ปล่อยราคา → PRICE_RELEASED แท็ก Sales ผู้ขอ + บอกให้ดูราคาบนเว็บ', r.ok && rel && /<at email=boss@m\.co>/.test(rel.Payload) && /ดูราคาได้แล้วบนเว็บ/.test(W.card(rel).text) && /✅ ปล่อยราคา/.test(W.card(rel).text), rel && W.card(rel).text);
 W.saveQT('Q2', 'Submitted'); W.saveQT('Q2', 'In Progress'); q = W.Q();
@@ -177,7 +181,7 @@ ok('live แต่ตั้งค่าผิด → ไม่ยิง · RETRY
 console.log('== 6) Bot B เตือนงานเกินกำหนด (ไม่รวม follow-up ของ Sales) ==');
 W = world();
 Object.assign(W.props, { LARK_BOT_URL: HK('botA-5678'), LARK_REMINDER_URL: HK('botB-5678') });
-W.saveQT('S1', 'Submitted'); W.saveQT('S2', 'Submitted'); W.saveQT('S3', 'In Progress'); W.saveQT('S4', 'Pending', { releasedTo: 'boss' });
+W.saveQT('S1', 'Submitted'); W.saveQT('S2', 'Submitted'); W.saveQT('S3', 'In Progress'); seedSave(W.sheets, { id: 'S4', docType: 'QT', docNo: 'QT-S4', status: 'Pending', releasedTo: 'boss', salesUserId: 'boss', sales: 'BOSS', title: 'Rooftop S4', customer: 'CP Group', assignedTo: 'src', detail: JSON.stringify({ id: 'S4', docType: 'QT', status: 'Pending', approvalRoles: ['Procurement Mgr', 'BD Mgr'], header: { currency: 'THB' }, lines: [{ code: 'SG110CX', qty: 9, up: 100 }] }) });   // v5.9: ใบที่ปล่อยราคาแล้ว = ข้อมูลตั้งต้น (save ตั้ง Pending ไม่ได้)
 const QS = W.sheets['Quotations'], qhh = QS.rows[0];
 const age = (id, days) => { const row = QS.rows.find(x => x[qhh.indexOf('Id')] === id); const d = JSON.parse(row[qhh.indexOf('Detail')]); const at = new Date(Date.now() - days * 86400000).toISOString(); d.statusChangedAt = at; d.statusLog = [{ s: d.status, at }]; row[qhh.indexOf('Detail')] = JSON.stringify(d); };
 age('S1', 12); age('S2', 9); age('S3', 0); age('S4', 30);

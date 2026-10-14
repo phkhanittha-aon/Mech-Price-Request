@@ -1061,3 +1061,118 @@ ALL PHASE 6 CHECKS PASSED
 **เทสต์ใหม่:** `test_v58.js`
 **ผลรัน `bash tests/run_all.sh`:** 30/30 ชุด · 844 assertion ผ่าน · 0 ตก · blob ไม่ถูกแตะ
 **ติดตั้ง:** วาง **Code.gs · Lark.gs · Index.html · Sales.html** → Deploy New version → หน้า Login ขึ้น `build 5.8`
+
+---
+
+# v5.9 — ออดิตชุด 1: ปิดรูด่วน (server ตัดสินสถานะ / อนุมัติ / ปล่อยราคา / ลบ · กันฝังโค้ด)
+
+อ้างอิงผลออดิต `audit/AUDIT_REPORT.md` ข้อ C-1, C-2, C-3 (บางส่วน) และ H-3 · การตัดสินใจของ Aon (14 ต.ค. 2026):
+- **อนุมัติ:** Sourcing Manager → BD Manager · BD อนุมัติแทน Sourcing Manager ได้ · Admin ไม่ใช่ผู้อนุมัติสำรอง
+- **ปล่อยราคา:** NON คนเดียว ไม่มีผู้สำรอง
+- **ลบ:** ใบตั้งแต่ Approved ขึ้นไปห้ามลบ ให้ปิดเป็น Closed
+- **Sales:** ไม่ปิดงานเอง (ยังให้ Sourcing เปลี่ยน Won / Closed)
+
+## เปลี่ยนอะไร
+
+### Server (Code.gs) — client ส่งมาแค่ "ขอ" server ตัดสินเอง
+| เรื่อง | เดิม | ใหม่ |
+|---|---|---|
+| สถานะผ่าน `save` | รับทุกค่าที่ client ส่ง (ตั้ง Approved / Pending เองได้) | Partial Approved / Approved / Pending เกิดจาก `approve` / `release` เท่านั้น → ตอบ `STATUS_LOCKED` |
+| การอนุมัติ / ปล่อยราคาในใบ | `approvalRoles` / `approvals` / `releasedTo` มาจาก client (ล้างหรือปลอมได้) | อ่านจากชีทเสมอ · ส่งกลับไปแก้ = server ล้างการอนุมัติเอง และบันทึก "ส่งตรวจ" เอง |
+| ใบที่อนุมัติแล้ว | แก้ราคาแล้วบันทึกได้ทุกสถานะ | **ตรึงราคา** (mode frozen) · Approved / Partial ส่งกลับไปแก้ได้ (ต้องอนุมัติใหม่) · Pending / Won / Closed แก้ราคาไม่ได้ ใช้ "ทำรอบใหม่" · เปลี่ยนได้แค่สถานะปิดงาน + เจ้าของงาน + หมายเหตุ |
+| SR ที่มี QT แล้ว | กันเฉพาะ Sales · ฝ่ายในเขียนทับได้ | **อ่านอย่างเดียวทุก role** · ผูก QT เพิ่ม / เปลี่ยนเป็น Quoted / Cancelled ได้ · ผูก QT สะสม (ลบการผูกไม่ได้) |
+| ชนิดเอกสาร | SR → QT ด้วย id เดิมได้ | `DOC_TYPE_LOCKED` |
+| ลบ | ทุกคนที่มี writeQuote ลบได้ทันที (ขอลบ → อนุมัติ มีแค่ในหน้าจอ) | Sourcing → `APPROVE_REQUIRED` (ต้องขอลบ) · ใบตั้งแต่ Approved → `DELETE_LOCKED` · SR ที่มี QT → `SR_HAS_QT` |
+| อนุมัติ | กดก่อนหลังได้ (v5.1) | Sourcing Manager → BD Manager · BD กดตอน Sourcing Manager ยังไม่กด = อนุมัติแทนด้วย (`APPROVAL_SUBSTITUTE`, บันทึก onBehalfOf) · Sourcing Manager แทน BD ไม่ได้ · GM แทนได้เหมือนเดิม |
+| ปล่อยราคา | NON + ผู้ปล่อยสำรอง + ผู้บริหาร / Admin | **NON คนเดียว** (`RELEASE_DELEGATE_ENABLED = false` — ค่า `releaseDelegateId` เดิมใน Settings ยังเก็บไว้ ไม่ลบ) |
+| id เอกสารใหม่ | อะไรก็ได้ | `[A-Za-z0-9_-]` เท่านั้น (`BAD_ID`) — ใบเดิมในชีทไม่ถูกตรวจ |
+| ช่องวันที่ (needBy / reqDate / offerDate / created / updated) | อะไรก็ได้ | รับเฉพาะตัวเลข / วันที่ / เวลา · ค่าที่มีโค้ด → ล้างเป็นค่าว่าง |
+| ประวัติในใบ (`auditLogs`) | client ส่งทั้งก้อน (ลบ / แก้ได้) | **ต่อท้ายได้อย่างเดียว** — ของเดิมในชีทคงไว้ทุกรายการ (การเพิ่มรายการปลอมยังทำได้ → ชุด 2 ย้ายประวัติไปให้ server เขียนเอง) |
+| `statusLog` | มาจาก client | server ประทับเองเมื่อสถานะเปลี่ยน |
+| ใบรุ่นเก่าที่คอลัมน์ Status เป็นชื่อเก่า (Sent / Costing / Lost / Done …) | — | server แปลงเป็นชื่อปัจจุบันก่อนตัดสินกติกา (Sent = Pending → ตรึงราคา) · ไม่นับว่าสถานะเปลี่ยน (เวลา SLA ไม่ถูกรีเซ็ต) |
+| แท็บ Log | `save QT-xxx` เฉย ๆ | บอกสถานะ ก่อน → หลัง (เช่น `In Progress → Submitted`) · ลบบอกเลขที่ + สถานะ |
+| คำตอบของ `save` | — | ถ้า server แก้ค่าที่ส่งมา → ส่ง `serverFixed` + ใบฉบับในชีทกลับ ให้หน้าจอแทนที่ของในเครื่อง |
+
+### หน้าเว็บ (Index.html)
+- **ปล่อยราคา:** เรียก action `release` ของ server (เดิมตั้ง Pending ในเครื่องแล้วส่ง save) · ปุ่มแสดงเฉพาะ NON
+- **อนุมัติแบบ offline (`approveLocal`) ถูกลบ:** ต้องออนไลน์จึงอนุมัติได้
+- **ปุ่มอนุมัติของ BD:** ตอน Sourcing Manager ยังไม่กด ปุ่มขึ้นว่า "อนุมัติ (BD Manager) + แทน Sourcing Manager"
+  - ป้ายแสดง "(BD Manager แทน)"
+- **ตัวเลือกสถานะ:** กรองตามกติกาของ server · ใบ Pending เลือกได้แค่ Won / Closed
+- **ใบที่ปล่อยราคาแล้ว:** กด "แก้" แล้วขึ้นว่าแก้ราคาไม่ได้ พร้อมปุ่ม **⧉ ทำรอบใหม่**
+- **ใบที่อนุมัติแล้ว:** แก้แล้ว "บันทึกร่าง" = ส่งกลับไปทำราคา (ต้องอนุมัติใหม่)
+- **ปุ่มลบ / ขอลบ:** หายไปจากใบตั้งแต่ Approved และจาก SR ที่มี QT · หน้าใบแสดง "🔒 ลบไม่ได้"
+- **server ปฏิเสธถาวร:** ได้แก่ `STATUS_LOCKED` / `SR_LOCKED` / `DELETE_LOCKED` / `ACCESS_DENIED` ฯลฯ
+  - ไม่เข้าคิวซิงค์ (เดิมเข้าคิวแล้วส่งซ้ำ 12 ครั้งก่อนทิ้งเงียบ ๆ)
+  - แจ้งผู้ใช้ แล้วโหลดฉบับในชีทกลับมาแทน
+- **ตั้งค่า:** ช่อง "ผู้ปล่อยราคาสำรอง" เปลี่ยนเป็นข้อความว่าไม่มีผู้สำรอง
+- **ปุ่ม "แชร์เพิ่ม" ถูกปิด:** ปุ่มนี้คือผู้บริหารให้สิทธิ์เห็นราคาแก่ Sales คนอื่นเพิ่มเติม ซึ่งเท่ากับปล่อยราคาแทน NON
+  - ขัดกับ "NON คนเดียว" และ server ไม่รับ releasedTo จาก save แล้ว
+  - ถ้ายังต้องใช้ ให้ทำเป็น action ของ server ที่ NON เป็นคนกด (บอกได้)
+- **กันฝังโค้ด (XSS):**
+  - `esc()` escape `'` ด้วย
+  - ปุ่ม onclick ที่ฝังค่า 107 จุดเปลี่ยนเป็น `jsa()` (สตริง JS ที่ปลอดภัย)
+  - escape ช่องวันที่ / created / updated / exrate
+
+### แอป Sales (Sales.html)
+- **คิว "🔓 รอคุณปล่อยราคา (n)"** บนหน้า "งานของฉัน" ของ NON
+  - เดิมหน้านี้กรองตามเจ้าของงาน → NON ที่เป็น role Sales ไม่เห็นใบที่ต้องปล่อยเลย (เดิมผู้บริหารปล่อยแทนใน Index ได้ จึงไม่มีใครเห็นปัญหา)
+- กันฝังโค้ด: ปุ่ม onclick 18 จุดเปลี่ยนเป็น `jsa()`
+- ข้อความ error ใหม่: `SR_HAS_QT` / `BAD_ID`
+
+## ข้อมูลเดิม
+- **ไม่เปลี่ยน:** header ของทุกแท็บ · ชื่อ key ใน localStorage (รวม `syncQueue`) · โครงสร้าง object · blob `CATALOG` / `LOGO` / `EXCEL_LEGACY_LINES` (blob_hash ผ่าน)
+- **ใบเดิมในชีท:** อ่านได้เหมือนเดิม · id ที่นอกรูปแบบใช้ต่อได้ (ตรวจเฉพาะใบใหม่)
+- **Settings.releaseDelegateId:** ค่าเดิมยังอยู่ แค่ไม่ถูกใช้ (เปิดกลับได้ด้วย `RELEASE_DELEGATE_ENABLED = true`)
+- **FX:** ไม่มีโค้ดส่วนอัตราแลกเปลี่ยนถูกแตะ · `fx_test` (CNY → THB = 5.00) ผ่านเหมือนเดิม
+
+## Assertion เดิมที่แก้ (ตั้งใจ — ทุกจุดมีหมายเหตุ "v5.9 (ตั้งใจ)" ในไฟล์)
+ไม่มีเทสต์ถูกลบ เทสต์ที่ "ใช้ช่องโหว่เดิมสร้างข้อมูลตั้งต้น" (save เป็น Approved / Pending) เปลี่ยนไปใส่แถวตรงลงชีทจำลองด้วย `tests/seed.js` (= ข้อมูลที่มีอยู่แล้วในชีท)
+
+| เทสต์ | เดิม | ใหม่ | เหตุผล |
+|---|---|---|---|
+| smoke_roles | GM ปล่อยราคาก่อนอนุมัติ → NOT_APPROVED · BD กดก่อน → Partial Approved | NON → NOT_APPROVED (+ ข้อใหม่: GM / PM ปล่อยไม่ได้) · BD กดก่อน → Approved (แทน Sourcing Manager) · QT4 Pending ใส่ตรงลงชีท | ปล่อยราคาได้เฉพาะ NON · ลำดับอนุมัติใหม่ |
+| test_backend | approvals 2 รายการ · save ใบ Closed เป็น Pending | นับเฉพาะรายการที่มี levelRole · save สถานะเดิม (Closed) | server บันทึก "ส่งตรวจ" เอง · Closed → Pending ไม่ได้แล้ว (เทสต์นี้ตรวจ conflict guard) |
+| test_v42 / e2e_sales / e2e_v47 / e2e_v52 | สร้างใบ Pending ด้วย save | ใส่ตรงลงชีท (seedSave) | save ตั้ง Pending ไม่ได้แล้ว |
+| test_v43 | statusLog = Partial Approved, Approved | Submitted, Partial Approved, Approved | server ประทับ statusLog เองตั้งแต่ตอนบันทึกใบใหม่ |
+| test_v47 | BD อนุมัติก่อน · GM ปล่อยราคา | Sourcing Manager → BD · NON ปล่อย (+ ข้อใหม่: GM ปล่อยไม่ได้) · S4 ใส่ตรงลงชีท | ลำดับใหม่ · NON คนเดียว |
+| test_v50 | ส่วน 4: BD กดก่อน = Partial Approved รอ Sourcing Manager | Sourcing Manager ก่อน = Partial รอ BD · BD กดก่อน = อนุมัติแทน → Approved (+ 3 ข้อใหม่) · approvals นับเฉพาะรายการอนุมัติ · A4 = Sourcing Manager แล้ว GM แทน BD | คำสั่งของ Aon |
+| test_v51 | ใบ D1 Pending ถูกลบด้วย action delete | ตั้ง Deleted=TRUE ตรงในชีท (ข้อมูลที่ลบไว้ก่อน v5.9) | ใบ Pending ลบไม่ได้แล้ว |
+| e2e_v50 | A1: BD กดก่อน → Partial Approved · GM ปล่อย A2 | A1 → Approved (แทน Sourcing Manager) + ข้อใหม่: ปุ่มบอก "+ แทน Sourcing Manager" · NON ปล่อย A2 | ลำดับใหม่ · NON คนเดียว |
+| e2e_v53 | save ใบดีลค่าคอมเป็น Pending | save เป็น In Progress ผ่าน server (ยังตรวจการตัด supplierCom ได้) แล้วตั้ง Status = Pending ในชีท | save ตั้ง Pending ไม่ได้แล้ว |
+
+**เทสต์ใหม่:** `test_v59.js` (server 50 ข้อ) · `e2e_v59.js` (หน้าจอจริง 17 ข้อ) · `tests/seed.js` (ตัวช่วยใส่ข้อมูลตั้งต้น)
+**ผลรัน `bash tests/run_all.sh`:** 32/32 ชุด · 917 assertion ผ่าน · 0 ตก · blob ไม่ถูกแตะ
+**ออดิตซ้ำหลังแก้:**
+- `audit/audit_server.js`: รูข้ามขั้นตอนปิดครบ
+  - เหลือเปิด 3 ข้อตามแผน: เพิ่มประวัติปลอมได้ (ชุด 2) · GP/Total จาก client (ชุด 7) · ราคาฉบับ Sales ไม่ตรวจกับรายการ (ชุด 7)
+- `audit/audit_browser.js`: XSS = 0 ทุกจุด
+
+## UAT checklist
+- [ ] Sourcing ส่งอนุมัติ → Sourcing Manager กด → สถานะ "อนุมัติแล้ว 1 ฝ่าย" รอ BD → BD กด → "อนุมัติแล้ว · รอปล่อยราคา"
+- [ ] ใบใหม่อีกใบ: BD กดก่อน → ปุ่มขึ้น "อนุมัติ (BD Manager) + แทน Sourcing Manager" → กดแล้วผ่านทั้ง 2 ขั้น · ประวัติบอก "BD Manager อนุมัติ (แทน Sourcing Manager)"
+- [ ] GM / Admin / ผู้บริหาร เปิดใบที่อนุมัติแล้ว → **ไม่มีปุ่มปล่อยราคา**
+- [ ] NON เปิดแอป Sales (มือถือ) → หน้า "งานของฉัน" มีกล่อง "🔓 รอคุณปล่อยราคา" → กดปล่อย → Sales เจ้าของงานเห็นราคา
+- [ ] Sourcing เปิดใบ Pending → กด "แก้" → ขึ้น "แก้ราคาไม่ได้" + ปุ่ม "ทำรอบใหม่"
+- [ ] ใบ Pending ตัวเลือกสถานะมีแค่ Won / Closed · ใบ Approved / Pending ไม่มีปุ่มลบ
+- [ ] Sourcing กด "ขอลบ" ใบ In Progress → ผู้บริหารเห็น "อนุมัติลบ" → กด → ใบหาย
+- [ ] SR ที่สร้าง QT แล้ว → ไม่มีปุ่มลบ · แก้ไม่ได้
+- [ ] หน้า Login ขึ้น `build 5.9`
+
+## ข้อควรระวัง (watch-outs)
+- **NON ลา = ไม่มีใครปล่อยราคาได้** (ตามที่สั่ง "ไม่ต้องสำรอง")
+  - ถ้าต้องการชั่วคราว: เปลี่ยนผู้ปล่อยราคาในหน้า ⚙️ ตั้งค่า (ผู้บริหารเปลี่ยนได้) แล้วเปลี่ยนกลับ
+  - หรือเปิด `RELEASE_DELEGATE_ENABLED = true` ใน Code.gs
+- **ต้องออนไลน์จึงอนุมัติ / ปล่อยราคาได้** (เดิมทำในเครื่องแล้วค่อยส่ง)
+- **ใบ Approved ที่เคยถูกแก้ราคาหลังอนุมัติ** (เครื่องที่ยังเปิด v5.8 ค้างไว้) → server ไม่รับการแก้ราคา → ข้อมูลกลับเป็นฉบับในชีท
+  - ให้ทุกคนรีเฟรชหน้าหลัง deploy
+- **รายการในคิวซิงค์ของเครื่องเก่าที่เคยตั้ง Approved / Pending** → ถูกปฏิเสธและทิ้งพร้อมแจ้งเตือน (ไม่ค้างคิว)
+- **ใบรุ่นเก่าที่ Pending แต่ยังไม่เคยปล่อยให้เจ้าของงาน** (REPAIR / legacy) → NON กด "ยืนยันปล่อยราคา" ได้เหมือนเดิม (save ซ่อมให้ไม่ได้แล้ว)
+  - ใบ Pending ที่ยังไม่มีราคาฉบับ Sales → ปุ่ม "สร้างราคาฉบับ Sales" ยังใช้ได้
+  - ใบ Pending ที่มีฉบับ Sales แต่ไม่มีราคา (NO_PRICE) → ต้องใช้ "ทำรอบใหม่" แล้วส่งอนุมัติ (แก้ราคาใบที่ปล่อยแล้วไม่ได้)
+
+## Rollback
+วาง v5.8 กลับ (Code.gs · Index.html · Sales.html — Lark.gs ไม่เปลี่ยน) → Deploy New version
+- ข้อมูลที่บันทึกด้วย v5.9 อ่านได้ใน v5.8 ทุกแถว (ไม่มีคอลัมน์ / key ใหม่)
+
+**ติดตั้ง:** วาง **Code.gs · Index.html · Sales.html** (Lark.gs ไม่เปลี่ยน) → Deploy → Manage deployments → Edit → New version → หน้า Login ขึ้น `build 5.9` → ให้ทุกคนรีเฟรชหน้า

@@ -1,6 +1,7 @@
 // v4.3 — Phase 1 (ผู้รับผิดชอบ + SLA) · C1 (สกุลเงิน) · C2 (รหัสผ่าน) · H4
 // รัน: node tests/test_v43.js Code.gs        (ทดสอบบนเครื่องเท่านั้น ห้าม deploy)
 const { makeRuntime } = require('./gasmock');
+const { seedSave } = require('./seed');
 const crypto = require('crypto');
 const { ctx, sheets } = makeRuntime(process.argv[2] || 'Code.gs');
 const H = s => crypto.createHash('sha256').update(s + 'mgs-internal-2025').digest('hex');
@@ -69,7 +70,8 @@ addU('sourcing1', 'Chatraporn', 'Sourcing'); addU('sales_non', 'NON', 'Sales Man
 const login = id => post({ action: 'login', user: id, passHash: H('pw123456') }).token;
 const tS = login('sourcing1'), tN = login('sales_non'), tB = login('sales_boss'), tA = login('admin');
 const mk = (id, st, cur, rel, extra) => Object.assign({ id, docType: 'QT', docNo: id, status: st, releasedTo: rel, approvalRoles: [], header: { title: id, customer: 'C', salesUserId: 'sales_boss', currency: cur, rates: { USD: 36, CNY: 5 } }, lines: [] }, extra || {});
-const save = (q, sd, total) => post({ token: tS, action: 'save', id: q.id, docNo: q.id, status: q.status, salesUserId: 'sales_boss', releasedTo: (q.releasedTo || []).join('|'), currency: q.header.currency, total: total || 1000, detail: JSON.stringify(q), salesDetail: sd || '' });
+// v5.9: save ตั้ง Approved / Pending / Won เองไม่ได้แล้ว → ใบสถานะเหล่านี้ใส่ตรงลงชีท (= ข้อมูลรุ่นเก่าที่มีอยู่แล้ว)
+const save = (q, sd, total) => (['Partial Approved', 'Approved', 'Pending', 'Won'].includes(q.status) ? (p => seedSave(sheets, p)) : post)({ token: tS, action: 'save', id: q.id, docNo: q.id, status: q.status, salesUserId: 'sales_boss', releasedTo: (q.releasedTo || []).join('|'), currency: q.header.currency, total: total || 1000, detail: JSON.stringify(q), salesDetail: sd || '' });
 const SD = (id, cur, total) => JSON.stringify({ id, header: { currency: cur }, lines: [{ code: 'A', qty: 1, unitPrice: total, amount: total }], total });
 save(mk('L1', 'Pending', 'THB', []), '');                                 // รุ่นเก่า ไม่มีราคาฉบับ Sales
 save(mk('L2', 'Pending', 'THB', []), SD('L2', 'THB', 1000));               // มีราคาฉบับ Sales แต่ยังไม่ปล่อย
@@ -95,7 +97,8 @@ ok('ปล่อยราคาไม่แก้สถานะ L2 (คง Pend
 const tPr = login('procurement'), tBd = login('bd');
 post({ token: tPr, action: 'approve', id: 'S1' }); r = post({ token: tBd, action: 'approve', id: 'S1' });
 const dS1 = JSON.parse(row('S1')[Qh.indexOf('Detail')]);
-ok('approve_ บันทึก statusLog (Partial Approved → Approved) + follow = RELEASER', dS1.statusLog.map(e => e.s).join() === 'Partial Approved,Approved' && r.follow.owner === 'RELEASER', dS1.statusLog);
+// v5.9 (ตั้งใจ): statusLog เป็นข้อมูลที่ server ดูแล — server ประทับ "Submitted" ตอนบันทึกใบใหม่ด้วย (เดิมมาจาก client) จึงมี 3 รายการ
+ok('approve_ บันทึก statusLog (Submitted → Partial Approved → Approved) + follow = RELEASER', dS1.statusLog.map(e => e.s).join() === 'Submitted,Partial Approved,Approved' && r.follow.owner === 'RELEASER', dS1.statusLog);
 ok('write endpoints คืน follow (save)', !!save(mk('S2', 'In Progress', 'THB', [])).follow);
 
 /* ---------- 5) รหัสผ่าน (C2) ---------- */

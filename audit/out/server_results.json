@@ -85,10 +85,10 @@
    "sales_non": "ALLOW",
    "smgr": "DENY",
    "src": "DENY",
-   "pm": "ERR:NOT_APPROVED",
-   "bd": "ERR:NOT_APPROVED",
-   "gm": "ERR:NOT_APPROVED",
-   "adm": "ERR:NOT_APPROVED"
+   "pm": "DENY",
+   "bd": "DENY",
+   "gm": "DENY",
+   "adm": "DENY"
   },
   "POST delete QT": {
    "boss": "ALLOW",
@@ -244,18 +244,18 @@
    "resp": "src"
   },
   {
-   "label": "BD อนุมัติก่อน",
+   "label": "Sourcing Mgr อนุมัติก่อน",
    "id": "QT1",
    "status": "Partial Approved",
    "owner": "MANAGEMENT",
    "actor": "roles",
    "actorIds": [
-    "pm"
+    "bd"
    ],
    "resp": "src"
   },
   {
-   "label": "Sourcing Mgr อนุมัติครบ",
+   "label": "BD อนุมัติครบ",
    "id": "QT1",
    "status": "Approved",
    "owner": "RELEASER",
@@ -296,42 +296,57 @@
   },
   {
    "label": "statusLog QT",
-   "entries": []
+   "entries": [
+    "In Progress",
+    "Submitted",
+    "Partial Approved",
+    "Approved",
+    "Pending",
+    "Won"
+   ]
   }
  ],
  "bypass": [
   {
    "name": "Sourcing บันทึกใบใหม่เป็น \"Approved\" ตรง ๆ (ไม่ผ่านอนุมัติ 2 ฝ่าย)",
-   "vulnerable": true,
+   "vulnerable": false,
    "ev": {
-    "ok": true,
-    "status": "Approved",
-    "approvals": []
+    "ok": false
    }
   },
   {
    "name": "Sourcing บันทึกเป็น \"Pending\" + releasedTo=Sales → Sales เห็นราคาโดยไม่มีใครอนุมัติ/ปล่อย",
-   "vulnerable": true,
+   "vulnerable": false,
    "ev": {
-    "status": "Pending",
-    "salesSees": true
+    "salesSees": false
    }
   },
   {
    "name": "Sourcing บันทึกใบที่อนุมัติไปแล้ว 1 ฝ่าย → ล้างการอนุมัติ/ประวัติอนุมัติทิ้งได้",
-   "vulnerable": true,
+   "vulnerable": false,
    "ev": {
-    "approvalsAfter": 0
+    "approvalsAfter": 3
    }
   },
   {
-   "name": "client ส่ง auditLogs มาเองได้ (server ไม่ต่อท้ายให้ · ประวัติแก้/ลบได้)",
+   "name": "client ลบ / เขียนทับประวัติเดิมในใบ (auditLogs)",
+   "vulnerable": false,
+   "ev": [
+    {
+     "timestamp": "2026-10-14T02:10:52.155Z",
+     "user": "Chatraporn",
+     "action": "ประวัติจริง"
+    }
+   ]
+  },
+  {
+   "name": "client เพิ่มรายการประวัติปลอมต่อท้ายได้ (ประวัติยังมาจาก client — แก้จริงในชุด 2: แท็บ AuditTrail ที่ server เขียนเอง)",
    "vulnerable": true,
    "ev": [
     {
-     "timestamp": "2020-01-01",
+     "timestamp": "2099-01-01",
      "user": "ปลอม",
-     "action": "แก้ประวัติ"
+     "action": "เพิ่มประวัติปลอม"
     }
    ]
   },
@@ -346,17 +361,17 @@
   },
   {
    "name": "ฝ่ายใน (Sourcing อีกคน) เขียนทับ SR หลังมี QT แล้ว (หลักฐานคำขอลูกค้าถูกแก้)",
-   "vulnerable": true,
+   "vulnerable": false,
    "ev": {
     "ok": true
    }
   },
   {
    "name": "ฝ่ายในเปลี่ยนชนิดเอกสาร SR → QT (Approved) ด้วย id เดิม",
-   "vulnerable": true,
+   "vulnerable": false,
    "ev": {
-    "docType": "QT",
-    "status": "Approved"
+    "docType": "SR",
+    "status": "Quoted"
    }
   },
   {
@@ -378,12 +393,53 @@
    }
   },
   {
+   "name": "ผู้บริหาร / Admin (pm) ปล่อยราคาแทน NON",
+   "vulnerable": false,
+   "ev": {
+    "ok": false,
+    "error": "ACCESS_DENIED",
+    "code": 403,
+    "need": "releaser"
+   }
+  },
+  {
+   "name": "ผู้บริหาร / Admin (bd) ปล่อยราคาแทน NON",
+   "vulnerable": false,
+   "ev": {
+    "ok": false,
+    "error": "ACCESS_DENIED",
+    "code": 403,
+    "need": "releaser"
+   }
+  },
+  {
+   "name": "ผู้บริหาร / Admin (gm) ปล่อยราคาแทน NON",
+   "vulnerable": false,
+   "ev": {
+    "ok": false,
+    "error": "ACCESS_DENIED",
+    "code": 403,
+    "need": "releaser"
+   }
+  },
+  {
+   "name": "ผู้บริหาร / Admin (adm) ปล่อยราคาแทน NON",
+   "vulnerable": false,
+   "ev": {
+    "ok": false,
+    "error": "ACCESS_DENIED",
+    "code": 403,
+    "need": "releaser"
+   }
+  },
+  {
    "name": "Sales ที่ไม่ใช่ผู้ปล่อยราคา กดปล่อยราคา",
    "vulnerable": false,
    "ev": {
     "ok": false,
     "error": "ACCESS_DENIED",
-    "code": 403
+    "code": 403,
+    "need": "releaser"
    }
   },
   {
@@ -405,10 +461,10 @@
    }
   },
   {
-   "name": "ราคาที่ Sales เห็น (SalesDetail) ส่งมาจาก client แยกจาก Detail — ไม่ตรวจว่าตรงกับรายการจริง",
+   "name": "ราคาที่ Sales เห็น (SalesDetail) มาจาก client แยกจาก Detail — server ไม่ตรวจว่าตรงกับรายการจริง (แก้ในชุด 7: server คำนวณเอง)",
    "vulnerable": true,
    "ev": {
-    "salesSees": "{\"id\":\"B6\",\"lines\":[{\"code\":\"X\",\"unitPrice\":1,\"amount\":1}],\"total\":1}"
+    "salesSees": "{\"id\":\"B6\",\"lines\":[{\"code\":\"X\",\"unitPrice\":1,\"amount\":1}],\"total\":1,\"approvals\":[{\"by\":\"Chatraporn\",\"userId\":\"src\",\"role\":\"Sourcing\",\"act\":\"ส่งตรวจ\",\"at\":\"2026-10-14T02:10:52.165Z\"},{\"by\":\"Procure\",\"userId\":\"pm\",\"role\":\"Procurement Mgr\",\"level\":1,\"levelRole\":\"Procurement Mgr\",\"act\":\"อนุมัติ\",\"at\":\"2026-10-14T02:10:52.166Z\"},{\"by\":\"BD\",\"userId\":\"bd\",\"role\":\"BD Mgr\",\"level\":2,\"levelRole\":\"BD Mgr\",\"act\":\"อนุมัติ\",\"at\":\"2026-10-14T02:10:52.166Z\"}],\"status\":\"Pending\",\"_sv\":3,\"stage\":\"Approved\",\"followStatus\":\"Sent\",\"rev\":2,\"updated\":\"2026-10-14\",\"updatedAt\":\"2026-10-14T02:10:52.167Z\",\"statusChangedAt\":\"2026-10-14T02:10:52.167Z\",\"statusLog\":[{\"s\":\"Partial Approved\",\"at\":\"2026-10-14T02:10:52.166Z\"},{\"s\":\"Approved\",\"at\":\"2026-10-14T02:10:52.166Z\"},{\"s\":\"Pending\",\"at\":\"2026-10-14T02:10:52.167Z\"}],\"releasedTo\":[\"boss\"],\"releasedAt\":\"2026-10-14T02:10:52.167Z\",\"releasedBy\":\"sales_non\"}"
    }
   }
  ],
@@ -434,7 +490,7 @@
   {
    "case": "QT: base เดียวกัน 2 คน",
    "first": true,
-   "second": true
+   "second": "CONFLICT"
   },
   {
    "case": "QT: ไม่ส่ง baseUpdatedAt",
@@ -481,28 +537,28 @@
  "auditTrail": [
   {
    "logRows": [
-    "2026-10-13T14:43:47.095Z | lark-config |  | - | mode dryrun · ยังไม่ได้ตั้ง LARK_BOT_URL (Bot A ในกลุ่มคำขอราคา) — ส่งจริงไม่ได้",
-    "2026-10-13T14:43:47.095Z | setup |  | - | schema v4.2 (RBAC + Live Sync + Email login)",
-    "2026-10-13T14:43:47.103Z | login | boss | BOSS | Sales · password",
-    "2026-10-13T14:43:47.110Z | login | pair | PAIR | Sales · password",
-    "2026-10-13T14:43:47.117Z | login | sales_non | NON | Sales · password",
-    "2026-10-13T14:43:47.124Z | login | smgr | SalesMgr | Sales Manager · password",
-    "2026-10-13T14:43:47.131Z | login | src | Chatraporn | Sourcing · password",
-    "2026-10-13T14:43:47.137Z | login | src2 | Napasorn | Sourcing · password",
-    "2026-10-13T14:43:47.144Z | login | pm | Procure | Procurement Mgr · password",
-    "2026-10-13T14:43:47.150Z | login | bd | BD | BD Mgr · password",
-    "2026-10-13T14:43:47.157Z | login | gm | GM | GM · password",
-    "2026-10-13T14:43:47.164Z | login | adm | Admin | Admin · password",
-    "2026-10-13T14:43:47.165Z | saveSR SR-2610-001 | SR1 | BOSS | ",
-    "2026-10-13T14:43:47.167Z | save SR-2610-001 | SR1 | Chatraporn | ",
-    "2026-10-13T14:43:47.168Z | save QT-QT1 | QT1 | Chatraporn | ",
-    "2026-10-13T14:43:47.169Z | save SR-2610-001 | SR1 | Chatraporn | ",
-    "2026-10-13T14:43:47.170Z | save QT-QT1 | QT1 | Chatraporn | ",
-    "2026-10-13T14:43:47.171Z | approve QT-QT1 | QT1 | BD | BD Mgr [BD Mgr] → Partial Approved",
-    "2026-10-13T14:43:47.172Z | approve QT-QT1 | QT1 | Procure | Procurement Mgr [Procurement Mgr] → Approved",
-    "2026-10-13T14:43:47.173Z | release QT-QT1 | QT1 | NON | boss",
-    "2026-10-13T14:43:47.175Z | salesPatch QT-QT1 | QT1 | BOSS | salesUpdate",
-    "2026-10-13T14:43:47.176Z | save QT-QT1 | QT1 | Chatraporn | "
+    "2026-10-14T02:10:51.946Z | lark-config |  | - | mode dryrun · ยังไม่ได้ตั้ง LARK_BOT_URL (Bot A ในกลุ่มคำขอราคา) — ส่งจริงไม่ได้",
+    "2026-10-14T02:10:51.947Z | setup |  | - | schema v4.2 (RBAC + Live Sync + Email login)",
+    "2026-10-14T02:10:51.957Z | login | boss | BOSS | Sales · password",
+    "2026-10-14T02:10:51.967Z | login | pair | PAIR | Sales · password",
+    "2026-10-14T02:10:51.976Z | login | sales_non | NON | Sales · password",
+    "2026-10-14T02:10:51.985Z | login | smgr | SalesMgr | Sales Manager · password",
+    "2026-10-14T02:10:51.994Z | login | src | Chatraporn | Sourcing · password",
+    "2026-10-14T02:10:52.004Z | login | src2 | Napasorn | Sourcing · password",
+    "2026-10-14T02:10:52.013Z | login | pm | Procure | Procurement Mgr · password",
+    "2026-10-14T02:10:52.021Z | login | bd | BD | BD Mgr · password",
+    "2026-10-14T02:10:52.030Z | login | gm | GM | GM · password",
+    "2026-10-14T02:10:52.038Z | login | adm | Admin | Admin · password",
+    "2026-10-14T02:10:52.039Z | saveSR SR-2610-001 | SR1 | BOSS | ",
+    "2026-10-14T02:10:52.043Z | save SR-2610-001 | SR1 | Chatraporn | Submitted → Accepted ",
+    "2026-10-14T02:10:52.045Z | save QT-QT1 | QT1 | Chatraporn | ใหม่ → In Progress ",
+    "2026-10-14T02:10:52.046Z | save SR-2610-001 | SR1 | Chatraporn | Accepted → Quoted ",
+    "2026-10-14T02:10:52.047Z | save QT-QT1 | QT1 | Chatraporn | In Progress → Submitted ",
+    "2026-10-14T02:10:52.049Z | approve QT-QT1 | QT1 | Procure | Procurement Mgr [Procurement Mgr] → Partial Approved",
+    "2026-10-14T02:10:52.050Z | approve QT-QT1 | QT1 | BD | BD Mgr [BD Mgr] → Approved",
+    "2026-10-14T02:10:52.052Z | release QT-QT1 | QT1 | NON | boss",
+    "2026-10-14T02:10:52.054Z | salesPatch QT-QT1 | QT1 | BOSS | salesUpdate",
+    "2026-10-14T02:10:52.055Z | save QT-QT1 | QT1 | Chatraporn | Pending → Won [frozen] "
    ]
   }
  ],
@@ -546,25 +602,25 @@
  ],
  "growth": {
   "QT_5lines_20audit": {
-   "detailChars": 4510,
+   "detailChars": 4621,
    "salesDetailChars": 118,
    "auditKept": 20,
    "oversize": false
   },
   "QT_10lines_60audit": {
-   "detailChars": 11214,
+   "detailChars": 11325,
    "salesDetailChars": 119,
    "auditKept": 60,
    "oversize": false
   },
   "QT_30lines_100audit": {
-   "detailChars": 21854,
+   "detailChars": 21965,
    "salesDetailChars": 119,
    "auditKept": 100,
    "oversize": false
   },
   "QT_80lines_100audit": {
-   "detailChars": 34954,
+   "detailChars": 35065,
    "salesDetailChars": 119,
    "auditKept": 100,
    "oversize": false
@@ -600,19 +656,19 @@
    "logged": 0
   },
   "src2": {
-   "qtApproved": "ลบได้",
-   "srWithQt": "ลบได้",
-   "logged": 2
+   "qtApproved": "APPROVE_REQUIRED",
+   "srWithQt": "APPROVE_REQUIRED",
+   "logged": 0
   },
   "pm": {
-   "qtApproved": "ลบได้",
-   "srWithQt": "ลบได้",
-   "logged": 2
+   "qtApproved": "DELETE_LOCKED",
+   "srWithQt": "SR_HAS_QT",
+   "logged": 0
   },
   "adm": {
-   "qtApproved": "ลบได้",
-   "srWithQt": "ลบได้",
-   "logged": 2
+   "qtApproved": "DELETE_LOCKED",
+   "srWithQt": "SR_HAS_QT",
+   "logged": 0
   }
  }
 }

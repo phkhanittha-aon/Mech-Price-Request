@@ -132,6 +132,8 @@ main{max-width:1180px;margin:0 auto;padding:18px 16px 96px}
 .flow-steps li::before{content:'';position:absolute;top:12px;left:-50%;right:50%;height:2px;background:var(--line-2)}
 .flow-steps li:first-child::before{display:none}
 .flow-steps li.done::before,.flow-steps li.now::before{background:var(--green)}
+.relq{margin:12px 0 16px;padding:12px;border:1.5px solid var(--blue,#2b6cb0);border-radius:12px;background:var(--blue-soft)}
+.relq-h{font-weight:700;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:baseline}
 .flow-steps li.pair::before{height:0;background:none;border-top:2px dashed var(--line-2)}   /* อนุมัติ 2 ฝ่ายพร้อมกัน (ก่อนหลังได้) */
 .flow-steps .dot{position:relative;z-index:1;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;font-weight:700;background:var(--surface);border:2px solid var(--line-2);color:var(--muted)}
 .flow-steps li.done .dot{background:var(--green);border-color:var(--green);color:#fff}
@@ -278,7 +280,7 @@ table.pt .r{text-align:right}
        Sourcing / Manager (GM, Admin, Procurement Mgr, BD Mgr) → เห็นทุกคน + ขอราคาแทน Sales ได้
    - แอปนี้ไม่เคยได้รับต้นทุน / %GP รายบรรทัด (server ส่งเฉพาะ SalesDetail)
    ============================================================ */
-const APP_VERSION='5.8';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Index.html
+const APP_VERSION='5.9';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Index.html
 const BUILD='2026-10-11 · Sales build 5.8 · ติดตามสถานะคำขอราคา';
 const CLOUD_URL='https://script.google.com/macros/s/AKfycby6ZckOc1mv5eI8PDzcgscWCBqYyOWCgXTohIaqczJuIbKIQ597C8zQ_frMHpZhLHZV/exec';
 const HASH_SALT='mgs-internal-2025';                 // ต้องตรงกับ Index.html
@@ -294,7 +296,8 @@ const ERR_TH={ACCESS_DENIED:'บัญชีของคุณไม่มีส
   NO_SALES_COPY:'ใบนี้ยังไม่มีราคาฉบับ Sales — แจ้ง Sourcing ให้เปิดใบแล้วกดบันทึกอีกครั้ง',
   SR_LOCKED:'คำขอนี้ถูก Sourcing รับงานไปแล้ว แก้ไข/ลบไม่ได้ — ถ้าต้องเปลี่ยน ให้แจ้ง Sourcing',
   BAD_VALUE:'ค่าที่พิมพ์ใช้ไม่ได้ — ตรวจตัวสะกดแล้วลองใหม่',NOT_FOUND:'ไม่พบรายการนี้แล้ว (อาจถูกลบ) — กดรีเฟรช',
-  DATA_RESET:'คำขอนี้ถูกล้างออกจากระบบแล้ว (ผู้ดูแลล้างข้อมูลชุดใหม่) — กดขอราคาใหม่แทน'
+  DATA_RESET:'คำขอนี้ถูกล้างออกจากระบบแล้ว (ผู้ดูแลล้างข้อมูลชุดใหม่) — กดขอราคาใหม่แทน',
+  SR_HAS_QT:'คำขอนี้มีใบเสนอราคาแล้ว — ลบไม่ได้',BAD_ID:'รหัสคำขอไม่ถูกต้อง — ปิดแอปแล้วเปิดใหม่ แล้วกดขอราคาอีกครั้ง'
 };
 function errText(res){
   const code=res&&(res.error||res.code);
@@ -320,6 +323,8 @@ const LOGO=/*LOGO*/"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANwAAACcCAYAAA
 
 const $=s=>document.querySelector(s);
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* v5.9: ค่าที่ฝังในปุ่ม onclick="f(…)" ต้องเป็นสตริง JS ที่ปลอดภัย — esc() อย่างเดียวไม่พอ (เบราว์เซอร์แปลง &#39; กลับเป็น ' ก่อนรัน) */
+const jsa=v=>esc(JSON.stringify(v==null?'':String(v)));
 /* ============================================================ MGS.fmt / MGS.parse (v4.6 Phase 4)
    ตัวจัดรูปแบบตัวเลข/ตัวเงิน "ตัวเดียวทั้งระบบ" — สำเนาเดียวกับใน Index.html ทุกตัวอักษร (ไฟล์ HTML ของ Apps Script แชร์ script กันไม่ได้)
    tests/test_v46.js ตรวจว่าสองไฟล์ยังเหมือนกัน · fmt() / money() ด้านล่างเป็นชื่อเดิมที่ชี้มาที่นี่
@@ -714,8 +719,8 @@ function render(){
   const navs=[{h:'/me',p:'me',ic:'🗂',t:'งานของฉัน'},{h:'/request',p:'request',ic:'➕',t:'ขอราคาใหม่'}];
   if(canTeam())navs.push({h:'/team',p:'team',ic:'👥',t:'ทีมขาย'});
   const on=n=>(n.p===r.page)||(n.p==='me'&&r.page==='sales'&&r.id===S.user.id)||(n.p==='team'&&r.page==='sales'&&r.id!==S.user.id);
-  $('#tabs').innerHTML=navs.map(n=>`<button class="tab ${on(n)?'on':''}" onclick="${n.p==='request'?'newRequest()':`go('${n.h}')`}">${n.ic} ${n.t}</button>`).join('');
-  $('#bnav').innerHTML=navs.map(n=>`<button class="${on(n)?'on':''}" onclick="${n.p==='request'?'newRequest()':`go('${n.h}')`}"><span class="ic">${n.ic}</span>${n.t}</button>`).join('');
+  $('#tabs').innerHTML=navs.map(n=>`<button class="tab ${on(n)?'on':''}" onclick="${n.p==='request'?'newRequest()':`go(${jsa(n.h)})`}">${n.ic} ${n.t}</button>`).join('');
+  $('#bnav').innerHTML=navs.map(n=>`<button class="${on(n)?'on':''}" onclick="${n.p==='request'?'newRequest()':`go(${jsa(n.h)})`}"><span class="ic">${n.ic}</span>${n.t}</button>`).join('');
   const m=$('#main');
   if(r.page==='team')m.innerHTML=viewTeam();
   else if(r.page==='request'){m.innerHTML=viewRequest();fillRequestForm();}
@@ -744,9 +749,10 @@ function viewPerson(pid){
     <div class="avatar lg">${esc((u.name||'?')[0].toUpperCase())}</div>
     <div style="flex:1;min-width:200px"><h1>${mine?'งานของฉัน':'หน้าของ '+esc(u.name)}</h1>
       <div class="hint">${esc(u.name)}${u.email?' · '+esc(u.email):''} · <span class="tag ${u.role==='Sales'?'orange':'blue'}" style="font-size:10.5px">${esc(ROLE_TH[u.role]||u.role)}</span></div></div>
-    ${!mine?`<button class="btn sm ghost" onclick="copyText('${esc(link)}','คัดลอกลิงก์หน้านี้แล้ว')" title="ส่งให้ Sales คนนี้เปิดหน้าของตัวเอง">🔗 คัดลอกลิงก์</button>`:''}
-    ${mine||canRequestForOthers()?`<button class="btn sm" onclick="newRequest('${esc(mine?'':pid)}')">➕ ขอราคาใหม่${mine?'':' ให้ '+esc(u.name)}</button>`:''}
+    ${!mine?`<button class="btn sm ghost" onclick="copyText(${jsa(link)},'คัดลอกลิงก์หน้านี้แล้ว')" title="ส่งให้ Sales คนนี้เปิดหน้าของตัวเอง">🔗 คัดลอกลิงก์</button>`:''}
+    ${mine||canRequestForOthers()?`<button class="btn sm" onclick="newRequest(${jsa(mine?'':pid)})">➕ ขอราคาใหม่${mine?'':' ให้ '+esc(u.name)}</button>`:''}
   </div>
+  ${relQueueHTML(mine)}
   <div class="kpis">
     ${kpiBox('all','งานที่เปิดอยู่',all.filter(r=>stageOf(r).key!=='done').length,'คำขอ + ใบเสนอราคา')}
     ${kpiBox('wait','กำลังรอราคา',wait.length,waitOver?('⛔ เกินกำหนด '+waitOver+' (ทีมภายในกำลังเร่ง)'):'อยู่ที่ Sourcing / ผู้จัดการ')}
@@ -755,18 +761,27 @@ function viewPerson(pid){
     ${kpiBox('done','ปิดการขายได้',won.length,money(won.reduce((s,r)=>s+valueTHB(r),0),'THB'))}
   </div>
   <div class="toolbar">
-    <input class="inp search" placeholder="🔍 ค้นหา ลูกค้า / โครงการ / เลขเอกสาร" value="${esc(S.search)}" oninput="S.search=this.value;rerenderList('${esc(pid)}')">
+    <input class="inp search" placeholder="🔍 ค้นหา ลูกค้า / โครงการ / เลขเอกสาร" value="${esc(S.search)}" oninput="S.search=this.value;rerenderList(${jsa(pid)})">
     <select class="inp" style="width:auto" onchange="S.filter=this.value;render()">${FILTERS.map(f=>`<option value="${f.k}" ${S.filter===f.k?'selected':''}>${f.t}</option>`).join('')}</select>
     <span class="hint">${list.length} รายการ${lv.length?` · <span class="lv-over-t">⛔ เกินกำหนด ${lv.filter(r=>fol(r).level==='over').length}</span> · <span class="lv-watch-t">⚠ เฝ้าระวัง ${lv.filter(r=>fol(r).level==='watch').length}</span>`:''}</span>
   </div>
   <div class="jobs" id="jobList">${jobsHTML(list)}</div>`;
+}
+/* v5.9: คิว "รอคุณปล่อยราคา" ของ NON — ใบที่อนุมัติครบแล้วเป็นงานของ Sales คนอื่น (หน้า "งานของฉัน" กรองตามเจ้าของงาน จึงไม่เคยแสดง)
+   ตอนนี้ NON ปล่อยราคาคนเดียว (ผู้บริหารปล่อยแทนไม่ได้แล้ว) → แสดงทุกใบที่ server บอกว่าคุณปล่อยได้ (row.canRelease) ไว้บนสุด */
+function relQueueHTML(mine){
+  if(!mine)return '';
+  const rel=Object.values(S.rows).filter(r=>!r.deleted&&r.canRelease&&ownerOf(r)!==S.user.id);
+  if(!rel.length)return '';
+  return `<div class="relq"><div class="relq-h">🔓 รอคุณปล่อยราคา (${rel.length}) <span class="hint">ใบที่อนุมัติครบ 2 ฝ่ายแล้ว — ตรวจราคาแล้วกดปล่อยให้ Sales เจ้าของงาน</span></div>
+    <div class="jobs">${rel.map(jobCard).join('')}</div></div>`;
 }
 function rerenderList(pid){
   const html=viewPerson(pid);const tmp=document.createElement('div');tmp.innerHTML=html;
   const nl=tmp.querySelector('#jobList');if(nl&&$('#jobList'))$('#jobList').innerHTML=nl.innerHTML;
 }
 function kpiBox(k,l,v,s,color){
-  return `<div class="kpi ${S.filter===k?'on':''}" onclick="S.filter='${k}';render()"><div class="l">${l}</div>
+  return `<div class="kpi ${S.filter===k?'on':''}" onclick="S.filter=${jsa(k)};render()"><div class="l">${l}</div>
     <div class="v" style="${color?'color:var(--'+color+')':''}">${v}</div><div class="s">${s}</div></div>`;
 }
 function jobsHTML(list){
@@ -789,14 +804,14 @@ function jobCard(r){
   const lvl=lvKey?`<span class="lvb ${lvKey}">${LEVEL[lvKey].icon} ${LEVEL[lvKey].th}</span>`:'';
   const acts=[];
   if(isSR(r)){
-    acts.push(`<button class="btn sm ghost" onclick="openDetail('${r.id}')">ดูรายละเอียด</button>`);
-    if(srEditable(r))acts.push(`<button class="btn sm ghost" onclick="editRequest('${r.id}')">✏️ แก้ไข</button>`,
-      `<button class="btn sm ghost" style="color:var(--red)" onclick="deleteRequest('${r.id}')">ลบ</button>`);
+    acts.push(`<button class="btn sm ghost" onclick="openDetail(${jsa(r.id)})">ดูรายละเอียด</button>`);
+    if(srEditable(r))acts.push(`<button class="btn sm ghost" onclick="editRequest(${jsa(r.id)})">✏️ แก้ไข</button>`,
+      `<button class="btn sm ghost" style="color:var(--red)" onclick="deleteRequest(${jsa(r.id)})">ลบ</button>`);
   }else{
-    if(shown)acts.push(`<button class="btn sm" onclick="openDetail('${r.id}')">💰 ดูราคา</button>`);
-    else acts.push(`<button class="btn sm ghost" onclick="openDetail('${r.id}')">ดูรายละเอียด</button>`);
-    if(f.owner==='SALES'&&(ownerOf(r)===S.user.id||canTeam()))acts.push(`<button class="btn sm ${need?'red':'ghost'}" onclick="openUpdate('${r.id}')">📝 อัปเดตความคืบหน้า</button>`);
-    if(r.canRelease)acts.push(`<button class="btn sm blue" onclick="releasePrice('${r.id}')">🔓 ${String(r.status)==='Pending'?'ยืนยันปล่อยราคาให้':'ปล่อยราคาให้'} ${esc(userName(ownerOf(r))||r.sales||'Sales')}</button>`);
+    if(shown)acts.push(`<button class="btn sm" onclick="openDetail(${jsa(r.id)})">💰 ดูราคา</button>`);
+    else acts.push(`<button class="btn sm ghost" onclick="openDetail(${jsa(r.id)})">ดูรายละเอียด</button>`);
+    if(f.owner==='SALES'&&(ownerOf(r)===S.user.id||canTeam()))acts.push(`<button class="btn sm ${need?'red':'ghost'}" onclick="openUpdate(${jsa(r.id)})">📝 อัปเดตความคืบหน้า</button>`);
+    if(r.canRelease)acts.push(`<button class="btn sm blue" onclick="releasePrice(${jsa(r.id)})">🔓 ${String(r.status)==='Pending'?'ยืนยันปล่อยราคาให้':'ปล่อยราคาให้'} ${esc(userName(ownerOf(r))||r.sales||'Sales')}</button>`);
   }
   return `<div class="job ${need?'lv-over':(lvKey?'lv-'+lvKey:'')} ${flash?'flash':''}">
     <div class="job-top"><div style="min-width:0"><div class="job-t">${esc(titleOf(r))}</div><div class="job-c">${esc(custOf(r))}</div></div>
@@ -825,7 +840,7 @@ function viewTeam(){
       won:rs.filter(r=>r.status==='Won').length};
   }).sort((a,b)=>b.upd-a.upd||b.open-a.open);
   return `<div class="person"><div style="flex:1"><h1>ทีมขาย</h1><div class="hint">เลือก Sales เพื่อเปิดหน้าของคนนั้น · ข้อมูลอัปเดตอัตโนมัติ</div></div></div>
-  <div class="team" style="margin-top:16px">${people.map(p=>`<div class="tcard" onclick="go('/sales/${encodeURIComponent(p.id)}')">
+  <div class="team" style="margin-top:16px">${people.map(p=>`<div class="tcard" onclick="go(${jsa('/sales/'+encodeURIComponent(p.id))})">
     <div class="row"><div class="avatar">${esc((p.name||'?')[0].toUpperCase())}</div>
       <div style="flex:1;min-width:0"><b>${esc(p.name)}</b><div class="hint">${esc((p.u&&p.u.email)||(p.id?p.id:'งานที่ยังไม่ผูก Sales'))}</div></div>
       ${p.upd?`<span class="tag red">ค้างอัปเดต ${p.upd}</span>`:''}</div>
@@ -868,8 +883,8 @@ function openDetail(id){
       ${upd?`<div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)"><b style="font-size:13px">อัปเดตล่าสุด</b>
         <div class="hint" style="font-size:12.5px;color:var(--ink-2)">${esc(upd.stage||'')} — ${esc(upd.note||'')}${upd.next?' · ถัดไป: '+esc(upd.next):''} <span class="hint">(${esc(upd.byName||'')} · ${esc(agoTH(upd.at))})</span></div></div>`:''}</div>
     <div class="modal-f">
-      ${shown&&['Approved','Pending','Won','Closed'].indexOf(String(r.status))>=0?`<button class="btn ghost" onclick="copyQuote('${r.id}')">📋 คัดลอกเป็นข้อความ</button>`:''}
-      ${!isSR(r)&&fol(r).owner==='SALES'?`<button class="btn ghost" onclick="closeModal();openUpdate('${r.id}')">📝 อัปเดตความคืบหน้า</button>`:''}
+      ${shown&&['Approved','Pending','Won','Closed'].indexOf(String(r.status))>=0?`<button class="btn ghost" onclick="copyQuote(${jsa(r.id)})">📋 คัดลอกเป็นข้อความ</button>`:''}
+      ${!isSR(r)&&fol(r).owner==='SALES'?`<button class="btn ghost" onclick="closeModal();openUpdate(${jsa(r.id)})">📝 อัปเดตความคืบหน้า</button>`:''}
       <button class="btn" onclick="closeModal()">ปิด</button></div>`,true);
 }
 function copyQuote(id){
@@ -896,7 +911,7 @@ function openUpdate(id){
       <div class="field" style="flex:1"><label class="lbl">ขั้นตอนถัดไป</label><select class="inp" id="up_next">${NEXT_STEPS.map(x=>`<option ${u.next===x?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
       <div class="field" style="flex:1"><label class="lbl">วันที่นัดติดตาม</label><input class="inp" id="up_date" type="date" value="${esc(followDate(r))}"></div></div>
   </div>
-  <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" id="upBtn" onclick="saveUpdate('${r.id}')">บันทึกการอัปเดต</button></div>`);
+  <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" id="upBtn" onclick="saveUpdate(${jsa(r.id)})">บันทึกการอัปเดต</button></div>`);
 }
 async function saveUpdate(id){
   const r=S.rows[id];if(!r)return;
@@ -917,7 +932,7 @@ function releasePrice(id){
   modal(`<div class="modal-h"><h3>ยืนยันการปล่อยราคา</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-b" style="line-height:1.9">ปล่อยราคาใบ <b>${esc(r.docNo||'')}</b> ให้ <b style="color:var(--blue)">${esc(owner)}</b><br>
       มูลค่ารวม <b>${money(valueOf(r)||r.salesValue,curOf(r))}</b> · ${String(r.status)==='Pending'?'ใบรุ่นเก่า — เป็นการยืนยันสิทธิ์เห็นราคาให้เจ้าของงาน':'สถานะจะเปลี่ยนเป็น “พร้อมเสนอลูกค้า”'}</div>
-    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn blue" id="relBtn" onclick="doRelease('${r.id}')">🔓 ยืนยันปล่อยราคา</button></div>`);
+    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn blue" id="relBtn" onclick="doRelease(${jsa(r.id)})">🔓 ยืนยันปล่อยราคา</button></div>`);
 }
 async function doRelease(id){
   $('#relBtn').disabled=true;
@@ -1064,7 +1079,7 @@ function deleteRequest(id){
   const r=S.rows[id];if(!r)return;
   modal(`<div class="modal-h"><h3>ลบคำขอราคา?</h3><div class="spacer"></div><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-b">ลบ <b>${esc(titleOf(r))}</b> (${esc(r.docNo||'')}) — ลบได้เพราะ Sourcing ยังไม่รับงาน</div>
-    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn red" onclick="doDelete('${r.id}')">ลบคำขอ</button></div>`);
+    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn red" onclick="doDelete(${jsa(r.id)})">ลบคำขอ</button></div>`);
 }
 async function doDelete(id){
   closeModal();const res=await api({action:'delete',id});

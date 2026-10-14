@@ -2,6 +2,7 @@
 // รัน: node tests/test_v50.js $PWD   (ทดสอบบนเครื่องเท่านั้น ห้าม deploy)
 const fs = require('fs'), crypto = require('crypto');
 const { makeRuntime } = require('./gasmock');
+const { seedSave } = require('./seed');
 const DIR = process.argv[2] || '.';
 let fails = 0;
 const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (!c && x !== undefined ? '  -> ' + JSON.stringify(x).slice(0, 500) : '')); if (!c) fails++; };
@@ -24,7 +25,8 @@ function world(users) {
   const det = id => JSON.parse(QS.rows.find(x => x[qh.indexOf('Id')] === id)[qh.indexOf('Detail')]);
   const sr = (id, groupType, lines, status, tk) => post({ token: T[tk || 'boss'], action: 'saveSR', id, status: status || 'Submitted',
     detail: JSON.stringify({ status: status || 'Submitted', header: { title: 'Req ' + id, customer: 'CP', groupType }, lines: lines || [{ desc: 'x', qty: 1 }] }) });
-  const qt = (id, status, extra) => post(Object.assign({ token: T.src, action: 'save', id, docType: 'QT', docNo: 'QT-' + id, title: 'T ' + id, customer: 'CP', sales: 'BOSS',
+  // v5.9: save ตั้ง Partial Approved / Approved / Pending / Won เองไม่ได้แล้ว → ใบสถานะเหล่านี้ใส่ตรงลงชีท (= ข้อมูลที่มีอยู่แล้ว)
+  const qt = (id, status, extra) => (['Partial Approved', 'Approved', 'Pending', 'Won'].includes(status) ? (p => seedSave(sheets, p)) : post)(Object.assign({ token: T.src, action: 'save', id, docType: 'QT', docNo: 'QT-' + id, title: 'T ' + id, customer: 'CP', sales: 'BOSS',
     salesUserId: 'boss', assignedTo: 'src', status, currency: 'THB', total: 1000, cost: 800, profit: 200, gp: 20, round: 1,
     detail: JSON.stringify({ id, docType: 'QT', status, approvalRoles: [], header: { currency: 'THB' }, lines: [{ up: 1, qty: 1 }] }),
     salesDetail: JSON.stringify({ id, status, total: 1000, lines: [{ unitPrice: 1000 }] }) }, extra || {}));
@@ -97,32 +99,39 @@ W.qt('A1', 'Submitted');
 let f = W.get('quotations', W.T.pm).quotations.find(x => x.id === 'A1').follow;
 ok('ส่งขออนุมัติ → ขั้นที่ 2 รอทั้ง 2 ฝ่าย (0/2) · ผู้ดำเนินการ = Sourcing Manager / BD Manager', f.step === 2 && f.label === 'รอ Sourcing Manager + BD Manager อนุมัติ (0/2)' &&
   f.actor.kind === 'roles' && f.actor.roles.join() === 'Procurement Mgr,BD Mgr' && /Sourcing Manager · Procure/.test(f.actor.label) && /BD Manager · BD/.test(f.actor.label), f);
-r = W.post({ token: W.T.bd, action: 'approve', id: 'A1' });
-ok('BD Manager กดก่อนได้ → Partial Approved · ยังรอ Sourcing Manager', r.ok && r.status === 'Partial Approved' && r.missing.join() === 'Procurement Mgr' && r.missingLabel === 'Sourcing Manager' && r.follow.step === 3, r);
-ok('…ป้าย "รอ Sourcing Manager อนุมัติ (1/2)" · approvedRoles = BD', r.follow.label === 'รอ Sourcing Manager อนุมัติ (1/2)' && r.follow.approvedRoles.join() === 'BD Mgr' && r.follow.actor.roles.join() === 'Procurement Mgr', r.follow);
-ok('BD กดซ้ำ → ALREADY_APPROVED', W.post({ token: W.T.bd, action: 'approve', id: 'A1' }).error === 'ALREADY_APPROVED');
-f = W.get('salesview', W.T.boss).quotations.find(x => x.id === 'A1').follow;
-ok('Sales เห็นว่ารอ Sourcing Manager อยู่ แต่ไม่เห็นราคา', f.label === 'รอ Sourcing Manager อนุมัติ (1/2)' && !W.get('salesview', W.T.boss).quotations.find(x => x.id === 'A1').salesDetail, f);
+// v5.9 (ตั้งใจ — Aon สั่ง): ลำดับ Sourcing Manager → BD Manager · BD อนุมัติแทน Sourcing Manager ได้ (เดิม v5.1 BD กดก่อน = Partial Approved รอ Sourcing Manager)
+const apr = id => W.det(id).approvals.filter(a => a.levelRole);       // v5.9: approvals มีรายการ "ส่งตรวจ" ที่ server บันทึกด้วย → นับเฉพาะรายการอนุมัติ
 r = W.post({ token: W.T.pm, action: 'approve', id: 'A1' });
-ok('Sourcing Manager อนุมัติทีหลัง → Approved · ขั้นที่ 4 รอปล่อยราคา (NON)', r.ok && r.status === 'Approved' && r.complete && r.follow.step === 4 && r.follow.actor.kind === 'releaser' && /NON/.test(r.follow.actor.label), r.follow);
-let ap = W.det('A1').approvals;
-ok('ประวัติอนุมัติ: ตามลำดับที่กดจริง (BD ก่อน แล้ว Sourcing Manager) พร้อมผู้กด', ap.map(a => a.role).join() === 'BD Mgr,Procurement Mgr' && ap.every(a => a.by && a.at), ap);
-W.qt('A1b', 'Submitted'); W.post({ token: W.T.pm, action: 'approve', id: 'A1b' }); r = W.post({ token: W.T.bd, action: 'approve', id: 'A1b' });
-ok('ลำดับปกติ (Sourcing Manager ก่อน) ก็ได้ผลเดียวกัน', r.ok && r.status === 'Approved' && W.det('A1b').approvalRoles.join() === 'Procurement Mgr,BD Mgr');
+ok('Sourcing Manager อนุมัติก่อน → Partial Approved · ยังรอ BD Manager', r.ok && r.status === 'Partial Approved' && r.missing.join() === 'BD Mgr' && r.missingLabel === 'BD Manager' && r.follow.step === 3, r);
+ok('…ป้าย "รอ BD Manager อนุมัติ (1/2)" · approvedRoles = Sourcing Manager', r.follow.label === 'รอ BD Manager อนุมัติ (1/2)' && r.follow.approvedRoles.join() === 'Procurement Mgr' && r.follow.actor.roles.join() === 'BD Mgr', r.follow);
+ok('Sourcing Manager กดซ้ำ → ALREADY_APPROVED', W.post({ token: W.T.pm, action: 'approve', id: 'A1' }).error === 'ALREADY_APPROVED');
+f = W.get('salesview', W.T.boss).quotations.find(x => x.id === 'A1').follow;
+ok('Sales เห็นว่ารอ BD Manager อยู่ แต่ไม่เห็นราคา', f.label === 'รอ BD Manager อนุมัติ (1/2)' && !W.get('salesview', W.T.boss).quotations.find(x => x.id === 'A1').salesDetail, f);
+r = W.post({ token: W.T.bd, action: 'approve', id: 'A1' });
+ok('BD Manager อนุมัติต่อ → Approved · ขั้นที่ 4 รอปล่อยราคา (NON)', r.ok && r.status === 'Approved' && r.complete && r.follow.step === 4 && r.follow.actor.kind === 'releaser' && /NON/.test(r.follow.actor.label), r.follow);
+let ap = apr('A1');
+ok('ประวัติอนุมัติ: ตามลำดับที่กดจริง (Sourcing Manager แล้ว BD) พร้อมผู้กด', ap.map(a => a.role).join() === 'Procurement Mgr,BD Mgr' && ap.every(a => a.by && a.at && !a.onBehalfOf), ap);
+W.qt('A1b', 'Submitted'); r = W.post({ token: W.T.bd, action: 'approve', id: 'A1b' });
+ok('v5.9: BD กดก่อน → อนุมัติแทน Sourcing Manager + ของตัวเอง → Approved ในครั้งเดียว', r.ok && r.status === 'Approved' && r.approvedLevels.join() === 'Procurement Mgr,BD Mgr' && W.det('A1b').approvalRoles.join() === 'Procurement Mgr,BD Mgr', r);
+ap = apr('A1b');
+ok('…ประวัติแยก 2 บรรทัด: BD อนุมัติแทน Sourcing Manager (onBehalfOf) + BD อนุมัติ', ap.length === 2 && ap[0].role === 'BD Mgr' && ap[0].onBehalfOf === 'Procurement Mgr' && /อนุมัติแทน Sourcing Manager/.test(ap[0].act) && ap[1].levelRole === 'BD Mgr' && !ap[1].onBehalfOf, ap);
+ok('…Log ในใบบอกว่า BD อนุมัติแทน', (W.det('A1b').auditLogs || []).some(a => /BD Manager อนุมัติ \(แทน Sourcing Manager\)/.test(a.action)), W.det('A1b').auditLogs);
+ok('Sourcing Manager อนุมัติแทน BD ไม่ได้ (กดแล้วได้แค่ขั้นของตัวเอง)', (() => { W.qt('A1c', 'Submitted'); const x = W.post({ token: W.T.pm, action: 'approve', id: 'A1c' }); return x.status === 'Partial Approved' && x.approvedLevels.join() === 'Procurement Mgr'; })());
 // GM
 W.qt('A2', 'Submitted');
 r = W.post({ token: W.T.gm, action: 'approve', id: 'A2' });
 ok('GM อนุมัติแทน (ปกติ) = 1 ฝ่ายที่ยังขาด (Sourcing Manager) → Partial Approved · บันทึกว่าอนุมัติแทน', r.ok && r.status === 'Partial Approved' && r.approvedLevels.join() === 'Procurement Mgr' &&
-  (a => a.role === 'GM' && a.onBehalfOf === 'Procurement Mgr' && /อนุมัติแทน Sourcing Manager/.test(a.act))(W.det('A2').approvals[0]), W.det('A2').approvals);
+  (a => a.role === 'GM' && a.onBehalfOf === 'Procurement Mgr' && /อนุมัติแทน Sourcing Manager/.test(a.act))(apr('A2')[0]), W.det('A2').approvals);
 r = W.post({ token: W.T.gm, action: 'approve', id: 'A2' });
-ok('GM กดอีกครั้ง → แทน BD Manager → Approved', r.ok && r.status === 'Approved' && W.det('A2').approvals[1].onBehalfOf === 'BD Mgr');
+ok('GM กดอีกครั้ง → แทน BD Manager → Approved', r.ok && r.status === 'Approved' && apr('A2')[1].onBehalfOf === 'BD Mgr');
 W.qt('A3', 'Submitted');
 r = W.post({ token: W.T.gm, action: 'approve', id: 'A3', all: true });
-ok('GM "อนุมัติแทนทั้ง 2 ฝ่าย" (all) → Approved ในครั้งเดียว · ประวัติแยก 2 บรรทัด', r.ok && r.status === 'Approved' && W.det('A3').approvals.length === 2 && W.det('A3').approvals.every(a => a.role === 'GM' && a.onBehalfOf));
+ok('GM "อนุมัติแทนทั้ง 2 ฝ่าย" (all) → Approved ในครั้งเดียว · ประวัติแยก 2 บรรทัด', r.ok && r.status === 'Approved' && apr('A3').length === 2 && apr('A3').every(a => a.role === 'GM' && a.onBehalfOf));
 ok('Log บันทึกว่า GM อนุมัติแทน', (W.det('A3').auditLogs || []).some(a => /GM อนุมัติแทน Sourcing Manager \+ BD Manager/.test(a.action)), W.det('A3').auditLogs);
-W.qt('A4', 'Submitted'); W.post({ token: W.T.bd, action: 'approve', id: 'A4' });
+// v5.9 (ตั้งใจ): เดิมใช้ "BD ผ่านแล้ว" (BD กดก่อน = ตอนนี้ผ่านทั้ง 2 ขั้น) → เปลี่ยนเป็น Sourcing Manager ผ่านแล้ว GM แทน BD
+W.qt('A4', 'Submitted'); W.post({ token: W.T.pm, action: 'approve', id: 'A4' });
 r = W.post({ token: W.T.gm, action: 'approve', id: 'A4' });
-ok('BD ผ่านแล้ว GM กดแทน → แทนฝ่ายที่ยังขาด (Sourcing Manager) → Approved', r.ok && r.status === 'Approved' && W.det('A4').approvals[1].onBehalfOf === 'Procurement Mgr');
+ok('Sourcing Manager ผ่านแล้ว GM กดแทน → แทนฝ่ายที่ยังขาด (BD Manager) → Approved', r.ok && r.status === 'Approved' && apr('A4')[1].onBehalfOf === 'BD Mgr');
 // ข้อมูลเก่า
 W.qt('A5', 'Partial Approved', { detail: JSON.stringify({ id: 'A5', docType: 'QT', status: 'Partial Approved', approvalRoles: ['BD Mgr'], header: {}, lines: [] }) });
 f = W.get('quotations', W.T.pm).quotations.find(x => x.id === 'A5').follow;

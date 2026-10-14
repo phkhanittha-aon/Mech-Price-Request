@@ -3,6 +3,7 @@
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const DIR = process.argv[2] || '.';
 const { makeRuntime } = require(path.join(DIR, 'tests/gasmock.js'));
+const { seedSave } = require(path.join(DIR, 'tests/seed.js'));   // v5.9: ใบที่อนุมัติ/ปล่อยแล้ว = ข้อมูลตั้งต้นในชีท (save ตั้งสถานะเหล่านี้ไม่ได้แล้ว)
 const H = s => crypto.createHash('sha256').update(s + 'mgs-internal-2025').digest('hex');
 const R = { matrix: {}, leaks: [], loop: [], bypass: [], idem: [], conc: [], auth: [], auditTrail: [], keys: [], config: [], growth: {} };
 const log = (...a) => console.log(...a);
@@ -21,7 +22,10 @@ function world() {
   const rowOf = id => QS.rows.find(x => x[qh.indexOf('Id')] === id);
   const col = (id, h) => { const r = rowOf(id); return r ? r[qh.indexOf(h)] : undefined; };
   const det = id => JSON.parse(col(id, 'Detail') || '{}');
-  return Object.assign(rt, { post, get, T, QS, qh, rowOf, col, det });
+  const seed = (id, status, extra, dextra) => seedSave(sheets, Object.assign({ id, docType: 'QT', docNo: 'QT-' + id, status, salesUserId: 'boss', sales: 'BOSS', title: 'Proj ' + id, customer: 'CP Group',
+    releasedTo: ['Pending', 'Won'].includes(status) ? 'boss' : '', detail: qtDetail(id, status, Object.assign({ approvalRoles: ['Procurement Mgr', 'BD Mgr'], releasedTo: ['Pending', 'Won'].includes(status) ? ['boss'] : [] }, dextra || {})),
+    salesDetail: JSON.stringify({ id, status, lines: [{ code: 'SG110CX', qty: 2, unitPrice: 22500, amount: 45000 }], total: 45000 }) }, extra || {}));
+  return Object.assign(rt, { post, get, T, QS, qh, rowOf, col, det, seed });
 }
 const qtDetail = (id, status, extra) => JSON.stringify(Object.assign({ id, _v: 2, _pm: 2, _sv: 3, docType: 'QT', docNo: 'QT-' + id, status, round: 1, approvalRoles: [], approvals: [], releasedTo: [],
   header: { ref: 'QT-' + id, title: 'Proj ' + id, customer: 'CP Group', salesUserId: 'boss', sales: 'BOSS', currency: 'THB', groupType: 'Inverter', rates: { USD: 36, CNY: 5 } },
@@ -117,8 +121,8 @@ log('\n== 3) ทั้งลูป SR → QT → อนุมัติ → ป�
   who('SR1', 'SR หลังผูก QT');
   saveQT(W, W.T.src, 'QT1', 'Submitted', { assignedTo: 'src', baseUpdatedAt: W.col('QT1', 'UpdatedAt') }, { srId: 'SR1' });
   who('QT1', 'QT ส่งขออนุมัติ');
-  r = W.post({ token: W.T.bd, action: 'approve', id: 'QT1' }); who('QT1', 'BD อนุมัติก่อน');
-  r = W.post({ token: W.T.pm, action: 'approve', id: 'QT1' }); who('QT1', 'Sourcing Mgr อนุมัติครบ');
+  r = W.post({ token: W.T.pm, action: 'approve', id: 'QT1' }); who('QT1', 'Sourcing Mgr อนุมัติก่อน');   // v5.9: ลำดับ Sourcing Manager → BD
+  r = W.post({ token: W.T.bd, action: 'approve', id: 'QT1' }); who('QT1', 'BD อนุมัติครบ');
   r = W.post({ token: W.T.sales_non, action: 'release', id: 'QT1' }); who('QT1', 'NON ปล่อยราคา');
   const bossSees = W.get('salesview', W.T.boss).quotations.find(q => q.id === 'QT1');
   R.loop.push({ label: 'Sales เห็นราคา', ok: !!(bossSees && /unitPrice/.test(bossSees.salesDetail)) }); log('  Sales เห็นราคาหลังปล่อย:', !!(bossSees && /unitPrice/.test(bossSees.salesDetail)));
@@ -150,9 +154,11 @@ log('\n== 4) พยายามข้ามขั้นตอน / เขีย�
   saveQT(W, W.T.src, 'B3', 'Submitted'); W.post({ token: W.T.pm, action: 'approve', id: 'B3' });
   r = saveQT(W, W.T.src, 'B3', 'Submitted', { baseUpdatedAt: W.col('B3', 'UpdatedAt') }, { approvalRoles: [], approvals: [] });
   B('Sourcing บันทึกใบที่อนุมัติไปแล้ว 1 ฝ่าย → ล้างการอนุมัติ/ประวัติอนุมัติทิ้งได้', W.det('B3').approvals.length === 0, { approvalsAfter: W.det('B3').approvals.length });
-  r = saveQT(W, W.T.src, 'B4', 'Submitted', {}, { auditLogs: [] });
-  saveQT(W, W.T.src, 'B4', 'Submitted', { baseUpdatedAt: W.col('B4', 'UpdatedAt') }, { auditLogs: [{ timestamp: '2020-01-01', user: 'ปลอม', action: 'แก้ประวัติ' }] });
-  B('client ส่ง auditLogs มาเองได้ (server ไม่ต่อท้ายให้ · ประวัติแก้/ลบได้)', W.det('B4').auditLogs.length === 1 && W.det('B4').auditLogs[0].user === 'ปลอม', W.det('B4').auditLogs);
+  r = saveQT(W, W.T.src, 'B4', 'Submitted', {}, { auditLogs: [{ timestamp: new Date().toISOString(), user: 'Chatraporn', action: 'ประวัติจริง' }] });
+  saveQT(W, W.T.src, 'B4', 'Submitted', { baseUpdatedAt: W.col('B4', 'UpdatedAt') }, { auditLogs: [] });
+  B('client ลบ / เขียนทับประวัติเดิมในใบ (auditLogs)', !W.det('B4').auditLogs.some(a => a.action === 'ประวัติจริง'), W.det('B4').auditLogs);
+  saveQT(W, W.T.src, 'B4', 'Submitted', { baseUpdatedAt: W.col('B4', 'UpdatedAt') }, { auditLogs: [{ timestamp: '2099-01-01', user: 'ปลอม', action: 'เพิ่มประวัติปลอม' }] });
+  B('client เพิ่มรายการประวัติปลอมต่อท้ายได้ (ประวัติยังมาจาก client — แก้จริงในชุด 2: แท็บ AuditTrail ที่ server เขียนเอง)', W.det('B4').auditLogs.some(a => a.user === 'ปลอม'), W.det('B4').auditLogs.slice(-1));
   // SR read-only หลังมี QT
   W.post({ token: W.T.boss, action: 'saveSR', id: 'SRX', status: 'Submitted', detail: JSON.stringify({ header: { title: 'Original', customer: 'CP', groupType: 'Inverter' }, lines: [{ desc: 'Inverter', qty: 4 }] }) });
   const d = W.det('SRX'); d.quoteIds = ['QTX']; d.status = 'Quoted'; d.assignedTo = 'src';
@@ -165,20 +171,24 @@ log('\n== 4) พยายามข้ามขั้นตอน / เขีย�
   r = W.post({ token: W.T.src, action: 'save', id: 'QT-OVR', docType: 'QT', status: 'In Progress', salesUserId: 'boss', detail: qtDetail('QT-OVR', 'In Progress') });
   r = W.post({ token: W.T.src, action: 'save', id: 'SRX', docType: 'QT', status: 'Approved', salesUserId: 'boss', detail: qtDetail('SRX', 'Approved') });
   B('ฝ่ายในเปลี่ยนชนิดเอกสาร SR → QT (Approved) ด้วย id เดิม', W.col('SRX', 'DocType') === 'QT', { docType: W.col('SRX', 'DocType'), status: W.col('SRX', 'Status') });
-  r = W.post({ token: W.T.boss, action: 'saveSR', id: 'B1', status: 'Submitted', detail: JSON.stringify({ docType: 'SR', header: { title: 'x' }, lines: [] }) });
-  B('Sales เขียนทับใบ QT ผ่าน saveSR', W.col('B1', 'DocType') !== 'QT', r);
-  r = W.post({ token: W.T.pair, action: 'salesPatch', id: 'B2', patch: JSON.stringify({ salesNote: 'แอบแก้งานคนอื่น' }) });
-  B('Sales คนอื่นแก้หมายเหตุงานของ BOSS', String(W.col('B2', 'SalesNote')) === 'แอบแก้งานคนอื่น', r);
-  r = W.post({ token: W.T.pair, action: 'release', id: 'B1' });
+  W.seed('BA', 'Approved'); W.seed('BP', 'Pending');                         // v5.9: ใบอนุมัติแล้ว / ปล่อยแล้ว = ข้อมูลตั้งต้นในชีท
+  r = W.post({ token: W.T.boss, action: 'saveSR', id: 'BA', status: 'Submitted', detail: JSON.stringify({ docType: 'SR', header: { title: 'x' }, lines: [] }) });
+  B('Sales เขียนทับใบ QT ผ่าน saveSR', W.col('BA', 'DocType') !== 'QT', r);
+  r = W.post({ token: W.T.pair, action: 'salesPatch', id: 'BP', patch: JSON.stringify({ salesNote: 'แอบแก้งานคนอื่น' }) });
+  B('Sales คนอื่นแก้หมายเหตุงานของ BOSS', String(W.col('BP', 'SalesNote')) === 'แอบแก้งานคนอื่น', r);
+  ['pm', 'bd', 'gm', 'adm'].forEach(u => { const x = W.post({ token: W.T[u], action: 'release', id: 'BA' }); B('ผู้บริหาร / Admin (' + u + ') ปล่อยราคาแทน NON', x.ok === true, x); });
+  r = W.post({ token: W.T.pair, action: 'release', id: 'BA' });
   B('Sales ที่ไม่ใช่ผู้ปล่อยราคา กดปล่อยราคา', r.ok === true, r);
   r = W.post({ token: W.T.src, action: 'approve', id: 'B3' });
   B('Sourcing กดอนุมัติ', r.ok === true, r);
   r = W.post({ token: W.T.src, action: 'save', id: 'B5', docType: 'QT', status: 'In Progress', salesUserId: 'boss', total: 1, cost: 999999, profit: -999998, gp: -99, detail: qtDetail('B5', 'In Progress') });
   B('Total/Cost/Profit/GP ในชีทมาจาก client ทั้งหมด (server ไม่คำนวณ/ตรวจ) — ตัวเลขไม่ตรงกับรายการได้', +W.col('B5', 'Cost') === 999999, { Cost: W.col('B5', 'Cost'), GP: W.col('B5', 'GP') });
-  r = W.post({ token: W.T.src, action: 'save', id: 'B6', docType: 'QT', status: 'Pending', releasedTo: 'boss', salesUserId: 'boss', detail: qtDetail('B6', 'Pending', { releasedTo: ['boss'] }),
+  // v5.9: ทางตรง (save เป็น Pending) ถูกปิดแล้ว → ทดสอบทางที่ยังเหลือ: ส่งราคาฉบับ Sales ปลอมตอนทำราคา แล้วผ่านอนุมัติ + ปล่อยตามปกติ
+  r = W.post({ token: W.T.src, action: 'save', id: 'B6', docType: 'QT', status: 'Submitted', salesUserId: 'boss', detail: qtDetail('B6', 'Submitted'),
     salesDetail: JSON.stringify({ id: 'B6', lines: [{ code: 'X', unitPrice: 1, amount: 1 }], total: 1 }) });
+  W.post({ token: W.T.pm, action: 'approve', id: 'B6' }); W.post({ token: W.T.bd, action: 'approve', id: 'B6' }); W.post({ token: W.T.sales_non, action: 'release', id: 'B6' });
   const sv6 = W.get('salesview', W.T.boss).quotations.find(q => q.id === 'B6');
-  B('ราคาที่ Sales เห็น (SalesDetail) ส่งมาจาก client แยกจาก Detail — ไม่ตรวจว่าตรงกับรายการจริง', sv6 && /"unitPrice":1/.test(sv6.salesDetail), { salesSees: sv6 && sv6.salesDetail });
+  B('ราคาที่ Sales เห็น (SalesDetail) มาจาก client แยกจาก Detail — server ไม่ตรวจว่าตรงกับรายการจริง (แก้ในชุด 7: server คำนวณเอง)', sv6 && /"unitPrice":1/.test(sv6.salesDetail), { salesSees: sv6 && sv6.salesDetail });
 }
 
 /* ======================================================= 5) กดซ้ำ / ส่งซ้ำ */
@@ -299,7 +309,7 @@ R.del = {};
 {
   for (const u of ['boss', 'smgr', 'src2', 'pm', 'adm']) {
     const W = world();
-    saveQT(W, W.T.src, 'DQ', 'Approved');                                  // QT ของ src ที่อนุมัติแล้ว
+    W.seed('DQ', 'Approved');                                                 // QT ที่อนุมัติแล้ว (ข้อมูลตั้งต้นในชีท)
     W.post({ token: W.T.boss, action: 'saveSR', id: 'DSR', status: 'Submitted', detail: JSON.stringify({ header: { title: 'x', customer: 'CP', groupType: 'Inverter' }, lines: [{ desc: 'a', qty: 1 }] }) });
     W.post({ token: W.T.src, action: 'saveSR', id: 'DSR', status: 'Quoted', assignedTo: 'src', quoteIds: ['DQ'], detail: JSON.stringify({ header: { title: 'x', customer: 'CP', groupType: 'Inverter' }, lines: [{ desc: 'a', qty: 1 }], quoteIds: ['DQ'] }) });
     const a = W.post({ token: W.T[u], action: 'delete', id: 'DQ' }), b = W.post({ token: W.T[u], action: 'delete', id: 'DSR' });

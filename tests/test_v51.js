@@ -2,6 +2,7 @@
 // รัน: node tests/test_v51.js $PWD   (ทดสอบบนเครื่องเท่านั้น ห้าม deploy)
 const crypto = require('crypto');
 const { makeRuntime } = require('./gasmock');
+const { seedSave } = require('./seed');
 const DIR = process.argv[2] || '.';
 let fails = 0;
 const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (!c && x !== undefined ? '  -> ' + JSON.stringify(x).slice(0, 500) : '')); if (!c) fails++; };
@@ -18,7 +19,8 @@ const tok = u => post({ action: 'login', user: u, passHash: H('pw123456') }).tok
 const T = { src: tok('src'), pm: tok('pm'), gm: tok('gm'), boss: tok('boss') };
 const QS = sheets['Quotations'], qh = () => QS.rows[0], col = n => qh().indexOf(n);
 const rowOf = id => QS.rows.find(r => r[0] === id);
-const qt = (id, status, extra) => post(Object.assign({ token: T.src, action: 'save', id, docType: 'QT', docNo: 'QT-' + id, status, salesUserId: 'boss', title: 'T ' + id, customer: 'CP', total: 1000, gp: 20,
+// v5.9: save ตั้ง Approved / Pending / Won เองไม่ได้แล้ว → ใบสถานะเหล่านี้ใส่ตรงลงชีท (= ข้อมูลที่มีอยู่แล้ว)
+const qt = (id, status, extra) => (['Partial Approved', 'Approved', 'Pending', 'Won'].includes(status) ? (p => seedSave(sheets, p)) : post)(Object.assign({ token: T.src, action: 'save', id, docType: 'QT', docNo: 'QT-' + id, status, salesUserId: 'boss', title: 'T ' + id, customer: 'CP', total: 1000, gp: 20,
   releasedTo: status === 'Pending' ? 'boss' : '',
   detail: JSON.stringify(Object.assign({ id, docType: 'QT', docNo: 'QT-' + id, status, approvalRoles: [], releasedTo: status === 'Pending' ? ['boss'] : [], header: { currency: 'THB', salesUserId: 'boss' }, lines: [{ desc: 'x', qty: 1, up: 800 }] }, (extra && extra.d) || {})),
   salesDetail: JSON.stringify({ id, status, total: 1000, lines: [{ desc: 'x', qty: 1, unitPrice: 1000, amount: 1000 }] }) }, (extra && extra.p) || {}));
@@ -27,7 +29,8 @@ const qt = (id, status, extra) => post(Object.assign({ token: T.src, action: 'sa
 post({ token: T.boss, action: 'saveSR', id: 'SR1', status: 'Submitted', detail: JSON.stringify({ status: 'Submitted', header: { title: 'Req1', customer: 'CP', groupType: 'Inverter' }, lines: [{ desc: 'Inv', qty: 1 }] }) });
 post({ token: T.boss, action: 'saveSR', id: 'SR2', status: 'Submitted', detail: JSON.stringify({ status: 'Submitted', header: { title: 'Req2', customer: 'CP', groupType: 'Inverter' }, lines: [{ desc: 'Inv', qty: 1 }] }) });
 qt('P1', 'Pending', { d: { srId: 'SR1' } }); qt('P2', 'Pending'); qt('A1', 'Approved'); qt('W1', 'Won'); qt('IP', 'In Progress'); qt('D1', 'Pending');
-post({ token: T.src, action: 'delete', id: 'D1' });
+// v5.9: ใบ Pending ลบไม่ได้แล้ว (DELETE_LOCKED) → ใบที่ถูกลบไว้ก่อน v5.9 = ข้อมูลเดิมในชีท (Deleted=TRUE)
+(r => { r[col('Deleted')] = 'TRUE'; r[col('DeletedAt')] = new Date().toISOString(); r[col('DeletedBy')] = 'seed'; })(rowOf('D1'));
 sheets['NotifyQueue'].rows.push(['n1', 'QT_SUBMITTED', 'A1', 'k', 'BOT', 't', '{}', 'PENDING', 0, '', '', '', '']);
 const before = clone(QS.rows), usersBefore = clone(U.rows), productsBefore = clone(sheets['Products'].rows);
 const sr2DocNo = JSON.parse(rowOf('SR2')[col('Detail')]).docNo;
@@ -96,7 +99,7 @@ s = post({ token: T.src, action: 'save', id: 'NEW1', docType: 'QT', docNo: 'QT-N
 ok('ใบใหม่ (ไม่มี baseUpdatedAt) → บันทึกได้ตามปกติ', s.ok && !!rowOf('NEW1'));
 s = post({ token: T.src, action: 'save', id: 'P2', docType: 'QT', docNo: 'QT-P2', status: 'Pending', releasedTo: 'boss', salesUserId: 'boss', baseUpdatedAt: get('quote', T.src, 'P2').quote.updatedAt,
   detail: JSON.stringify({ id: 'P2', docType: 'QT', status: 'Pending', header: {}, lines: [] }) });
-ok('ใบที่ยังอยู่ (P2) แก้ต่อได้ตามปกติ', s.ok, s);
+ok('ใบที่ยังอยู่ (P2) แก้ต่อได้ตามปกติ', s.ok, s);   // v5.9: ใบ Pending บันทึกได้ (สถานะเดิม) แต่ราคา/รายการถูกตรึงตามชีท (mode frozen)
 s = post({ token: T.boss, action: 'saveSR', id: 'SR2', status: 'Submitted', detail: JSON.stringify({ docNo: sr2DocNo, status: 'Submitted', header: { title: 'Req2' }, lines: [] }) });
 ok('Sales แก้คำขอที่ถูกล้าง (มีเลข SR แล้ว) → DATA_RESET · ไม่ถูกสร้างกลับ', !s.ok && s.error === 'DATA_RESET' && !rowOf('SR2'), s);
 s = post({ token: T.boss, action: 'saveSR', id: 'SR9', status: 'Submitted', detail: JSON.stringify({ status: 'Submitted', header: { title: 'ใหม่', customer: 'CP' }, lines: [{ desc: 'x', qty: 1 }] }) });

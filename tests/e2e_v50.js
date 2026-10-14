@@ -68,10 +68,14 @@ const shot = async (p, n) => { if (OUT) await p.screenshot({ path: OUT + '/v50_'
   const stOf = id => String(sheets['Quotations'].rows.find(r => r[0] === id)[sheets['Quotations'].rows[0].indexOf('Status')]);
   ok('A2 (Sourcing Manager อนุมัติแล้ว) → BD กด → Approved (server)', stOf('A2') === 'Approved');
   await bd.evaluate(() => openQuote('A1')); await bd.waitForTimeout(600);
+  // v5.9 (ตั้งใจ — Aon สั่ง): ลำดับ Sourcing Manager → BD Manager · BD อนุมัติแทน Sourcing Manager ได้ (เดิม v5.1 BD กดก่อน = Partial Approved)
+  ok('A1 (Sourcing Manager ยังไม่กด): ปุ่มของ BD บอกชัดว่าอนุมัติแทน Sourcing Manager ด้วย', await bd.locator('button:has-text("อนุมัติ (BD Manager) + แทน Sourcing Manager")').count() >= 1);
   await bd.locator('button:has-text("อนุมัติ (BD Manager)")').first().click(); await bd.waitForTimeout(900);
   txt = await bd.textContent('#content');
-  ok('A1: BD กดก่อน Sourcing Manager → Partial Approved · ป้าย "✓ BD Manager อนุมัติแล้ว" + "⏳ รอ Sourcing Manager"', stOf('A1') === 'Partial Approved' && /✓ BD Manager อนุมัติแล้ว/.test(txt) && /⏳ รอ Sourcing Manager/.test(txt), txt.slice(0, 400));
-  ok('แถบขั้นตอน: จุด BD Manager เขียว · จุด Sourcing Manager กำลังรอ', await bd.evaluate(() => { const li = document.querySelectorAll('.flow-steps li'); return li[3].classList.contains('done') && li[2].classList.contains('now'); }));
+  const apA1 = JSON.parse(sheets['Quotations'].rows.find(r => r[0] === 'A1')[sheets['Quotations'].rows[0].indexOf('Detail')]).approvals.filter(a => a.levelRole);
+  ok('A1: BD กดก่อน → อนุมัติแทน Sourcing Manager + ของตัวเอง → Approved (server) · หน้าจอขึ้น "อนุมัติแล้ว · รอปล่อยราคา"', stOf('A1') === 'Approved' && /รอปล่อยราคา/.test(txt) &&
+    apA1.length === 2 && apA1[0].onBehalfOf === 'Procurement Mgr' && apA1[0].role === 'BD Mgr', [stOf('A1'), apA1]);
+  ok('แถบขั้นตอน: จุด Sourcing Manager + BD Manager เขียวทั้งคู่', await bd.evaluate(() => { const li = document.querySelectorAll('.flow-steps li'); return li[2].classList.contains('done') && li[3].classList.contains('done'); }));
   ok('BD ไม่มีปุ่มอนุมัติซ้ำ', !(await bd.locator('button:has-text("อนุมัติ (BD Manager)")').count()));
 
   console.log('== GM อนุมัติแทน ==');
@@ -80,7 +84,9 @@ const shot = async (p, n) => { if (OUT) await p.screenshot({ path: OUT + '/v50_'
   ok('GM เห็นปุ่ม "อนุมัติแทน Sourcing Manager" และ "แทนทั้ง 2 ฝ่าย"', await gm.locator('button:has-text("อนุมัติแทน Sourcing Manager")').count() === 1 && await gm.locator('button:has-text("แทนทั้ง 2 ฝ่าย")').count() === 1);
   await gm.locator('button:has-text("แทนทั้ง 2 ฝ่าย")').click(); await gm.waitForTimeout(900);
   const dA3 = JSON.parse(sheets['Quotations'].rows.find(r => r[0] === 'A3')[sheets['Quotations'].rows[0].indexOf('Detail')]);
-  ok('GM แทนทั้ง 2 ฝ่าย → Approved · ประวัติ 2 บรรทัด "อนุมัติแทน"', dA3.status === 'Approved' && dA3.approvals.length === 2 && dA3.approvals.every(a => a.onBehalfOf), dA3.approvals);
+  // v5.9: approvals มีรายการ "ส่งตรวจ" ที่ server บันทึกเองด้วย → นับเฉพาะรายการอนุมัติ (มี levelRole)
+  const apA3 = dA3.approvals.filter(a => a.levelRole);
+  ok('GM แทนทั้ง 2 ฝ่าย → Approved · ประวัติ 2 บรรทัด "อนุมัติแทน"', dA3.status === 'Approved' && apA3.length === 2 && apA3.every(a => a.onBehalfOf), dA3.approvals);
 
   console.log('== คิวคำขอราคาของ Sourcing ==');
   const s2 = await loginIndex(b, 'src2');
@@ -105,7 +111,7 @@ const shot = async (p, n) => { if (OUT) await p.screenshot({ path: OUT + '/v50_'
     await pm.evaluate(() => autoRouteOf('Mounting').name === 'Napasorn' && autoRouteOf('Inverter').name === 'Chatraporn'), txt.slice(0, 200));
   ok('ชื่อที่แสดง: Sourcing Manager (role Procurement Mgr)', await pm.evaluate(() => roleTH(CURRENT.role) === 'Sourcing Manager'));
   console.log('== v5.1 ล้างข้อมูลเหลือ Pending: เครื่องที่เปิดค้างอยู่ ==');
-  post({ token: tok('gm'), action: 'release', id: 'A2' });                       // A2 → Pending (ใบเดียวที่จะเหลือ)
+  post({ token: tok('sales_non'), action: 'release', id: 'A2' });                // A2 → Pending (ใบเดียวที่จะเหลือ) · v5.9: ปล่อยราคาได้เฉพาะ NON (เดิมใช้ GM)
   await bd.evaluate(() => { pollChanges(true); }); await bd.waitForTimeout(800);
   await bd.evaluate(() => setQueue([{ payload: { action: 'save', id: 'A1', docType: 'QT', status: 'Approved', baseUpdatedAt: '2026-01-01T00:00:00.000Z', detail: JSON.stringify({ id: 'A1', docType: 'QT', status: 'Approved', header: {}, lines: [] }) }, at: Date.now(), tries: 0 }]));
   const nBefore = await bd.evaluate(() => QUOTES.length);

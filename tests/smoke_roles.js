@@ -6,6 +6,7 @@
 // รัน: node tests/smoke_roles.js $PWD   (ทดสอบบนเครื่องเท่านั้น ห้าม deploy)
 const crypto = require('crypto');
 const { makeRuntime } = require('./gasmock');
+const { seedSave } = require('./seed');
 const DIR = process.argv[2] || '.';
 const { ctx, sheets } = makeRuntime(DIR + '/Code.gs');
 const H = s => crypto.createHash('sha256').update(s + 'mgs-internal-2025').digest('hex');
@@ -113,7 +114,9 @@ f = fol('boss', 'QT1');
 // v5.1 (ตั้งใจ): อนุมัติ 2 ฝ่ายก่อนหลังได้ → ป้ายบอกฝ่ายที่ยังรอ + จำนวนที่ผ่าน
 ok('ส่งขออนุมัติ: งานอยู่ที่ผู้จัดการ (MANAGEMENT) ไม่ใช่ Sales — รอทั้ง 2 ฝ่าย', f.owner === 'MANAGEMENT' && f.label === 'รอ Sourcing Manager + BD Manager อนุมัติ (0/2)' && f.step === 2, f);
 ok('ฝั่งผู้จัดการ (quotations): ใบนี้อยู่ในคิวของผู้อนุมัติ', (get('quotations', T.pm).quotations.find(q => q.id === 'QT1') || {}).follow.owner === 'MANAGEMENT');
-ok('ปล่อยราคาก่อนอนุมัติไม่ได้ (NOT_APPROVED)', post({ token: T.gm, action: 'release', id: 'QT1' }).error === 'NOT_APPROVED');
+// v5.9 (ตั้งใจ): ปล่อยราคาได้เฉพาะ NON — เดิมใช้ GM ทดสอบ NOT_APPROVED · ตอนนี้ GM ถูกปฏิเสธตั้งแต่สิทธิ์ จึงทดสอบด้วย NON แทน
+ok('ปล่อยราคาก่อนอนุมัติไม่ได้ (NOT_APPROVED)', asSales('sales_non', () => post({ token: T.sales_non, action: 'release', id: 'QT1' })).error === 'NOT_APPROVED');
+ok('v5.9: GM / ผู้บริหารปล่อยราคาไม่ได้ (เฉพาะ NON)', denied(post({ token: T.gm, action: 'release', id: 'QT1' })) && denied(post({ token: T.pm, action: 'release', id: 'QT1' })));
 ok('Sourcing อนุมัติไม่ได้', denied(post({ token: T.src, action: 'approve', id: 'QT1' })));
 r = post({ token: T.pm, action: 'approve', id: 'QT1' });
 ok('Procurement อนุมัติก่อน → Partial Approved (รอ BD)', r.ok && r.status === 'Partial Approved' && r.missing.join() === 'BD Mgr', r);
@@ -142,10 +145,11 @@ saveQT(T.src, 'QT2b', 'Submitted'); r = post({ token: T.gm, action: 'approve', i
 ok('GM อนุมัติแทนทั้ง 2 ฝ่ายในครั้งเดียว (all)', r.ok && r.status === 'Approved' && r.complete);
 // อนุมัติพร้อมกัน 2 ฝ่าย (atomic) — ลำดับสลับ
 // v5.1 (ตั้งใจ): ผู้ใช้แจ้ง "BD กดก่อน Sourcing Manager ได้" — กลับเป็นก่อนหลังได้เหมือน v4.x (v5.0 เคยบังคับลำดับ)
+// v5.9 (ตั้งใจ — Aon สั่ง): ลำดับ Sourcing Manager → BD Manager · BD อนุมัติแทน Sourcing Manager ได้ → BD กดก่อน = ผ่านทั้ง 2 ขั้นในครั้งเดียว
 saveQT(T.src, 'QT3', 'Submitted'); r = post({ token: T.bd, action: 'approve', id: 'QT3' });
-ok('ลำดับสลับ (BD ก่อน Sourcing Manager) → ได้ · Partial Approved รอ Sourcing Manager', r.ok && r.status === 'Partial Approved' && r.missing.join() === 'Procurement Mgr', r);
+ok('BD กดก่อน Sourcing Manager → อนุมัติแทน Sourcing Manager ด้วย → Approved', r.ok && r.status === 'Approved' && r.approvedLevels.join() === 'Procurement Mgr,BD Mgr', r);
 r = post({ token: T.pm, action: 'approve', id: 'QT3' });
-ok('…Sourcing Manager ตามมา → Approved · approvalRoles ครบไม่หาย', r.ok && r.status === 'Approved' && r.approvalRoles.sort().join() === 'BD Mgr,Procurement Mgr');
+ok('…Sourcing Manager กดทีหลัง → ใบอนุมัติครบแล้ว (NOT_IN_APPROVAL) · approvalRoles ครบไม่หาย', r.error === 'NOT_IN_APPROVAL' && JSON.parse(cellOf('QT3', 'Detail')).approvalRoles.sort().join() === 'BD Mgr,Procurement Mgr', r);
 // follow-up ต่อ: ไม่อัปเดตเกินกำหนด → งานค้างของ Sales
 const det = JSON.parse(cellOf('QT1', 'Detail')); const old = new Date(Date.now() - 10 * 86400000).toISOString();
 det.statusChangedAt = old; det.statusLog = (det.statusLog || []).concat([{ s: 'Pending', at: old }]); rowOf('QT1')[qh.indexOf('Detail')] = JSON.stringify(det);
@@ -155,7 +159,8 @@ r = asSales('boss', () => post({ token: T.boss, action: 'salesPatch', id: 'QT1',
 f = fol('boss', 'QT1');
 ok('Sales อัปเดตความคืบหน้า → หายจากงานค้าง · ฟิลด์อื่นที่แนบมา (up / cost) ถูกตัดทิ้ง', r.ok && !f.actionable && f.level === 'ok' && JSON.parse(cellOf('QT1', 'Detail')).lines[0].up === 3000, f);
 // ใบรุ่นเก่า Pending ที่ไม่มีฉบับ Sales
-saveQT(T.src, 'QT4', 'Pending', { salesDetail: '' });
+// v5.9: save ตั้ง Pending เองไม่ได้แล้ว → ใบรุ่นเก่าใส่ตรงลงชีท (ข้อมูลเดิมที่มีอยู่แล้ว)
+seedSave(sheets, { id: 'QT4', docType: 'QT', docNo: 'QT-QT4', status: 'Pending', salesUserId: 'boss', sales: 'BOSS', title: 'Old', customer: 'CP', detail: qtDetail('QT4', 'Pending'), salesDetail: '' });
 ok('ใบรุ่นเก่า Pending ไม่มีราคาฉบับ Sales → งานของ Sourcing (REPAIR) ไม่ใช่งานค้างของ Sales', (fol('boss', 'QT4') || {}).owner === 'REPAIR');
 
 /* ------------------------------------------------------------------ C) price projection scan */

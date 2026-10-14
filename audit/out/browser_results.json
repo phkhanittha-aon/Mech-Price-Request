@@ -124,7 +124,7 @@
     ],
     [
      "mgs_quotes",
-     6683
+     3505
     ],
     [
      "mgs_token",
@@ -196,7 +196,7 @@
     ],
     [
      "mgs_quotes",
-     6683
+     3505
     ],
     [
      "mgs_token",
@@ -268,7 +268,7 @@
     ],
     [
      "mgs_quotes",
-     6683
+     3505
     ],
     [
      "mgs_token",
@@ -342,7 +342,7 @@
     ],
     [
      "mgs_quotes",
-     6683
+     3505
     ],
     [
      "mgs_token",
@@ -416,7 +416,7 @@
     ],
     [
      "mgs_quotes",
-     6683
+     3505
     ],
     [
      "mgs_token",
@@ -457,13 +457,13 @@
    "editQT": 0,
    "openSR": 0,
    "preview": 0,
-   "needBy_in_srqueue": 3,
-   "evilId_click": 1,
-   "offerDate_in_preview": 4,
-   "reqDate_in_editor": 1,
+   "needBy_in_srqueue": 0,
+   "evilId_click": 0,
+   "offerDate_in_preview": 0,
+   "reqDate_in_editor": 0,
    "serverAccepted": {
     "needBy": true,
-    "evilId": true
+    "evilId": false
    }
   },
   "sales": {
@@ -492,16 +492,16 @@
  },
  "size": {
   "Index.html": {
-   "bytes": 912043,
-   "lines": 6641
+   "bytes": 919662,
+   "lines": 6674
   },
   "Sales.html": {
-   "bytes": 191914,
-   "lines": 1128
+   "bytes": 194072,
+   "lines": 1143
   },
   "Code.gs": {
-   "bytes": 169441,
-   "lines": 2239
+   "bytes": 187964,
+   "lines": 2424
   },
   "Lark.gs": {
    "bytes": 71009,

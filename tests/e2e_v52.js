@@ -3,6 +3,7 @@
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), crypto = require('crypto');
 const { makeRuntime } = require('./gasmock');
+const { seedSave } = require('./seed');
 const [, , DIR, OUT] = process.argv;
 const { ctx, sheets, props } = makeRuntime(DIR + '/Code.gs');
 const H = s => crypto.createHash('sha256').update(s + 'mgs-internal-2025').digest('hex');
@@ -16,7 +17,8 @@ const T = { src: tok('src'), pm: tok('pm'), boss: tok('boss') };
 const hd = (t) => ({ ref: 'P.' + t, title: t, customer: t, salesUserId: 'boss', sales: 'BOSS', currency: 'THB', groupType: 'Inverter', reqDate: '2026-06-01' });
 const line = { code: 'SG110CX', desc: 'Inverter 110kW', group: 'INVERTER', qty: 2, uom: 'pcs', up: 1000, costCur: 'THB', dutyPct: 0, clearancePct: 0, opPct: 20, freep: 0, extras: [] };
 // ใบ Pending รุ่นเก่า: บันทึกโดย client เก่าที่ไม่ส่ง salesDetail → แท็บ SalesDetail ว่าง
-const save = (id, title, lines, extra) => post(Object.assign({ token: T.src, action: 'save', id, docType: 'QT', docNo: 'P.' + title, status: 'Pending', salesUserId: 'boss', title, customer: title,
+// v5.9: save ตั้ง Pending เองไม่ได้แล้ว → ใบ Pending (รุ่นเก่า / ปล่อยแล้ว) ใส่ตรงลงชีทเป็นข้อมูลตั้งต้น
+const save = (id, title, lines, extra) => seedSave(sheets, Object.assign({ token: T.src, action: 'save', id, docType: 'QT', docNo: 'P.' + title, status: 'Pending', salesUserId: 'boss', title, customer: title,
   detail: JSON.stringify({ id, _v: 2, _pm: 2, _sv: 3, docType: 'QT', docNo: 'P.' + title, status: 'Pending', round: 1, approvalRoles: [], approvals: [], releasedTo: [], header: hd(title), lines, remarks: [], auditLogs: [], globalExtras: [] }) }, extra || {}));
 save('L1', 'ไทยเบฟ', [line]);                       // มีราคาในใบ → ซ่อมได้ด้วยปุ่ม
 save('L2', 'KKE', []);                              // ไม่มีรายการราคาเลย → ต้องใส่ราคาเอง

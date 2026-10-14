@@ -110,12 +110,16 @@ const snap = () => NORMAL_CASES().map(([n, q]) => { stampComGrades(q); const t =
   const det = { id: 'CQ1', _v: 2, docType: 'QT', docNo: 'QT-COM1', status: 'Pending', round: 1, approvals: [], releasedTo: ['boss'],
     header: { ref: 'QT-COM1', title: 'ดีลค่าคอม', customer: 'CP', salesUserId: 'boss', sales: 'BOSS', currency: 'THB', groupType: 'Inverter', dealType: 'commission', supplierCom: { pct: 5, amount: 0, cur: 'THB', basis: 'supplier', supplier: 'Sungrow', note: 'จ่ายหลังชำระ' } },
     lines: [{ code: 'A', desc: 'Inv', qty: 2, up: 1000, opPct: 20, costCur: 'THB' }], remarks: [], auditLogs: [], globalExtras: [] };
-  const sv = post({ token: T.src, action: 'save', id: 'CQ1', docType: 'QT', docNo: 'QT-COM1', status: 'Pending', salesUserId: 'boss', releasedTo: 'boss', title: 'ดีลค่าคอม', customer: 'CP',
+  // v5.9: save ตั้ง Pending เองไม่ได้แล้ว → บันทึกผ่าน server เป็น In Progress (ทดสอบการตัด supplierCom ของ server เหมือนเดิม)
+  //       แล้วตั้งสถานะในชีทเป็น Pending + ReleasedTo ตรง ๆ แทนขั้นอนุมัติ / ปล่อยราคา (เทสต์นี้ตรวจการแสดงผล ไม่ใช่ขั้นอนุมัติ)
+  det.status = 'In Progress';
+  const sv = post({ token: T.src, action: 'save', id: 'CQ1', docType: 'QT', docNo: 'QT-COM1', status: 'In Progress', salesUserId: 'boss', releasedTo: 'boss', title: 'ดีลค่าคอม', customer: 'CP',
     total: 2000, cost: 2000, profit: 100, gp: 5, detail: JSON.stringify(det), salesDetail: JSON.stringify(Object.assign({}, r.proj, { id: 'CQ1', header: { title: 'ดีลค่าคอม', supplierCom: { pct: 5 } } })) });
   ok('บันทึกใบดีลค่าคอมได้ (ไม่ต้องมีคอลัมน์ใหม่)', sv.ok !== false, sv);
   const QS = sheets['Quotations'], qh = QS.rows[0];
   ok('Header ของแท็บ Quotations ไม่เปลี่ยน (ไม่มีคอลัมน์ใหม่)', !qh.some(h => /deal|supplier/i.test(h)), qh);
   QS.rows.find(x => x[0] === 'CQ1')[qh.indexOf('ReleasedTo')] = 'boss';
+  QS.rows.find(x => x[0] === 'CQ1')[qh.indexOf('Status')] = 'Pending';
   const sd = String(QS.rows.find(x => x[0] === 'CQ1')[qh.indexOf('SalesDetail')]);
   ok('SalesDetail บนชีท: ตัด supplierCom ที่ client ส่งมาเกิน (server projection) แต่คงป้าย comDeal', !/supplierCom|Sungrow/.test(sd) && /"comDeal":true/.test(sd), sd.slice(0, 300));
   const bossRow = get('salesview', T.boss).quotations.find(x => x.id === 'CQ1') || {};

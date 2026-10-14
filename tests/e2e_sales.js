@@ -1,6 +1,7 @@
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), crypto = require('crypto');
 const { makeRuntime } = require('./gasmock');
+const { seedSave } = require('./seed');
 const [, , DIR, OUT] = process.argv;
 const { ctx, sheets } = makeRuntime(DIR + '/Code.gs');
 const H = s => crypto.createHash('sha256').update(s + 'mgs-internal-2025').digest('hex');
@@ -14,7 +15,8 @@ const tS = post({ action: 'login', user: 'sourcing1', passHash: H('secret99') })
 const now = new Date().toISOString(), today = now.slice(0, 10);
 const qd = { id: 'Q1', docType: 'QT', docNo: 'QT-IN-2610-001', status: 'Pending', releasedTo: ['sales_boss'], approvalRoles: ['Procurement Mgr', 'BD Mgr'], header: { title: 'Factory Rooftop', customer: 'CP Group', salesUserId: 'sales_boss', sales: 'BOSS', currency: 'THB', incoterm: 'CIF at MGS', validity: 30, groupType: 'Inverter' }, lines: [{ code: 'SG110CX', desc: 'Inverter', qty: 2, up: 3000, costCur: 'USD', opPct: 20 }], remarks: [], auditLogs: [] };
 const sd = { id: 'Q1', docType: 'QT', docNo: 'QT-IN-2610-001', status: 'Pending', releasedTo: ['sales_boss'], header: qd.header, lines: [{ code: 'SG110CX', desc: 'Inverter 110kW', qty: 2, uom: 'pcs', unitPrice: 135000, amount: 270000, warranty: '10 YEAR' }], total: 270000, extrasTotal: 0, remarks: ['Price valid 30 days'] };
-post({ token: tS, action: 'save', id: 'Q1', docNo: 'QT-IN-2610-001', status: 'Pending', salesUserId: 'sales_boss', releasedTo: 'sales_boss', title: 'Factory Rooftop', customer: 'CP Group', total: 270000, gp: 20, detail: JSON.stringify(qd), salesDetail: JSON.stringify(sd) });
+// v5.9: save ตั้ง Pending เองไม่ได้แล้ว (ต้องอนุมัติ + NON ปล่อย) → ใบที่ปล่อยราคาแล้วใส่ตรงลงชีทเป็นข้อมูลตั้งต้น
+seedSave(sheets, { token: tS, action: 'save', id: 'Q1', docNo: 'QT-IN-2610-001', status: 'Pending', salesUserId: 'sales_boss', releasedTo: 'sales_boss', title: 'Factory Rooftop', customer: 'CP Group', total: 270000, gp: 20, detail: JSON.stringify(qd), salesDetail: JSON.stringify(sd) });
 
 const files = { '/': fs.readFileSync(DIR + '/Index.html', 'utf8'), '/sales': fs.readFileSync(DIR + '/Sales.html', 'utf8') };
 const srv = http.createServer((q, r) => { r.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); r.end(files[q.url.split('?')[0].split('#')[0]] || files['/']); }).listen(0);

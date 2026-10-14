@@ -42,6 +42,15 @@
  *     · ทั้ง SR และ QT วิ่งถึงผู้ดูแลหมวดของรายการส่วนใหญ่ในใบ (routeFor_) · QT ที่มีผู้รับงานแล้ว (AssignedTo) ใช้คนนั้น
  *     · row.follow.resp = ผู้รับผิดชอบเอกสาร (ทุกขั้น) · follow.actor.uids = Id ของคนที่ต้องทำต่อ → หน้าติดตามงานกรอง "งานของฉัน" ได้ตรง
  *     · ไม่มีคอลัมน์ใหม่ · ใบเก่าที่ไม่มี routedSig ยังใช้ผู้รับเดิมตราบที่กลุ่มงานไม่เปลี่ยน (ไม่ย้ายงานที่ส่งไปแล้ว)
+ *  Q) v5.9 (ออดิตชุด 1 — ปิดรูด่วน): server ตัดสินสถานะเอง client ส่งมาแค่ "ขอ"
+ *     · save ตั้ง Partial Approved / Approved / Pending ไม่ได้ (STATUS_LOCKED) — เกิดจาก approve_ / release_ เท่านั้น
+ *       ReleasedTo / approvalRoles / approvals / statusLog อ่านจากชีทเสมอ · ส่งกลับไปแก้ = server ล้างการอนุมัติเอง
+ *     · ใบที่อนุมัติแล้ว: ราคา/รายการถูกตรึง (mode frozen) · ปล่อยราคาแล้วแก้ราคาไม่ได้ ใช้ "ทำรอบใหม่"
+ *     · SR ที่มี QT แล้วอ่านอย่างเดียวทุก role (SR_LOCKED) · เปลี่ยนชนิดเอกสาร SR ↔ QT ไม่ได้ (DOC_TYPE_LOCKED)
+ *     · ลบ: Sourcing ต้องขอลบ (APPROVE_REQUIRED) · ใบตั้งแต่ Approved ห้ามลบ ให้ปิดเป็น Closed (DELETE_LOCKED) · SR ที่มี QT ห้ามลบ
+ *     · อนุมัติ: Sourcing Manager → BD Manager · BD อนุมัติแทน Sourcing Manager ได้ · ปล่อยราคา: NON คนเดียว (ไม่มีผู้สำรอง)
+ *     · id เอกสารใหม่ต้องเป็น [A-Za-z0-9_-] (BAD_ID) · ช่องวันที่ในใบรับเฉพาะรูปแบบวันที่ (กันฝังโค้ด)
+ *     · ประวัติในใบ (auditLogs) ต่อท้ายได้อย่างเดียว · Log บันทึกสถานะ ก่อน → หลัง
  *  P) v5.8: การ์ดเตือนงานเกินกำหนด (Reminder) วันละรอบเดียว จ.–ศ. (ค่าเริ่มต้น 09:00 · ตั้งได้ในหน้าตั้งค่า Lark Bot · LARK_REMIND_HOUR)
  *  O) v5.7: การ์ด Lark ถูกปฏิเสธทั้งใบเมื่อมี @อีเมลที่ไม่ใช่บัญชี Lark (code 11246 · ErrCode 100290) → ส่งซ้ำแบบไม่แท็กอัตโนมัติ
  *     + ปุ่ม "ตรวจอีเมลทีละคน" ในหน้าตั้งค่า Lark Bot (larkCheckEmails_) บอกว่าอีเมลของใครแท็กไม่ได้
@@ -71,7 +80,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '5.8';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '5.9';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -137,7 +146,7 @@ var MASTER_SETTINGS_KEY = { incoterm:'incoterms', priceTerm:'priceTerms', uom:'u
  * BUSINESS RULE: เพิ่ม role ใหม่ได้โดยเติมบรรทัดเดียวที่นี่
  *   viewCost      = เห็นต้นทุน / GP / กำไร / โครงสร้างราคาภายใน
  *   writeQuote    = สร้าง-แก้ใบเสนอราคาเต็มใบ
- *   approve       = อนุมัติราคา / ปล่อยราคาแทน gatekeeper
+ *   approve       = อนุมัติราคา (v5.9: ปล่อยราคาได้เฉพาะ NON — ดู release_)
  *   manageUsers   = จัดการผู้ใช้ (เป็น role เดียวที่ได้รับ PassHash)
  *   manageSetting = แก้ค่า default / ตารางคอมมิชชั่น
  *   viewAllSales  = เห็นงานของ Sales ทุกคน
@@ -181,7 +190,7 @@ function seesFullData_(sess) {
   return !!(sess && sess.caps && FULL_DATA_TIERS.indexOf(sess.caps.tier) >= 0 && sess.caps.viewCost);
 }
 
-/* ---- อนุมัติ 2 ฝ่าย (v5.1: กดก่อนหลังได้ ต้องครบทั้งคู่) — ต้องตรงกับ REQUIRED_APPROVAL_ROLES / APPROVAL_OVERRIDE_ROLES ใน Index.html
+/* ---- อนุมัติ 2 ฝ่าย (v5.1: ต้องครบทั้งคู่ · v5.9: ลำดับ Sourcing Manager → BD Manager, BD อนุมัติแทนได้ — APPROVAL_SUBSTITUTE) — ต้องตรงกับ REQUIRED_APPROVAL_ROLES / APPROVAL_OVERRIDE_ROLES ใน Index.html
  * ลำดับใน array = ลำดับที่แสดง (Sourcing Manager ก่อน BD Manager) และฝ่ายที่ GM อนุมัติแทนก่อนเมื่อกดทีละฝ่าย
  * approvalRoles ในใบ = ระดับที่ผ่านแล้ว (ชื่อ role ของระดับนั้น) · approvals = ใครกดจริง (GM อนุมัติแทนมี onBehalfOf)
  * ข้อมูลเก่า: approvalRoles มี 'GM' = GM อนุมัติแทนครบทุกระดับ (รุ่น v4.x) ยังอ่านได้เหมือนเดิม */
@@ -199,6 +208,67 @@ function approvalStep_(roles) {
            approved:approved, complete:!missing.length, legacyOverride:legacyOverride };
 }
 var PRICE_STATES = ['Approved', 'Pending', 'Won', 'Closed'];
+
+/* ---- v5.9 (ออดิตชุด 1): server เป็นผู้ตัดสินสถานะ / การอนุมัติ / การปล่อยราคา — client ส่งมาแค่ "ขอ"
+ * ลำดับอนุมัติ: Sourcing Manager (Procurement Mgr) → BD Manager · BD อนุมัติแทน Sourcing Manager ได้ (กดครั้งเดียวผ่านทั้ง 2 ขั้น)
+ * ปล่อยราคา: NON (gatekeeper) คนเดียว · ไม่มีผู้ปล่อยราคาสำรอง (ค่า releaseDelegateId เดิมยังอยู่ใน Settings แต่ไม่ถูกใช้) */
+var APPROVAL_SUBSTITUTE = { 'BD Mgr':['Procurement Mgr'] };   // role → ระดับที่อนุมัติแทนได้ (ต้องเป็นระดับก่อนหน้าตัวเอง)
+var RELEASE_DELEGATE_ENABLED = false;                          // v5.9: ไม่มีผู้ปล่อยราคาสำรอง (Aon สั่ง) — เปิดกลับ = true
+/* สถานะที่เกิดได้จาก approve_ / release_ เท่านั้น — action save ตั้งเองไม่ได้ */
+var QT_SERVER_ONLY_STATUSES = ['Partial Approved', 'Approved', 'Pending'];
+/* save ตั้งสถานะใบที่ยังไม่ผ่านอนุมัติได้แค่นี้ (Closed = ปิดงานกลางทาง เช่น ลูกค้ายกเลิก) */
+var QT_SAVE_STATUSES = ['Requested', 'In Progress', 'Submitted', 'Closed'];
+/* ใบที่อนุมัติแล้ว: ตัวเลข/รายการถูกตรึง — save เปลี่ยนได้แค่สถานะปิดงาน + เจ้าของงาน + หมายเหตุ
+ * Approved → ส่งกลับไปแก้ (In Progress / Submitted) ได้ = ต้องอนุมัติใหม่ทั้ง 2 ขั้น
+ * Pending / Won / Closed → แก้ราคาไม่ได้ ใช้ "ทำรอบใหม่" (ใบใหม่ parentId เดิม) */
+var QT_FROZEN_NEXT = {
+  'Partial Approved': ['Partial Approved', 'In Progress', 'Submitted', 'Closed'],
+  'Approved':         ['Approved', 'In Progress', 'Submitted', 'Closed'],
+  'Pending':          ['Pending', 'Won', 'Closed'],
+  'Won':              ['Won', 'Closed'],
+  'Closed':           ['Closed']
+};
+/* ห้ามลบใบตั้งแต่อนุมัติครบแล้ว — ให้ปิดเป็น Closed แทน (Aon สั่ง v5.9) */
+var QT_NO_DELETE_STATUSES = ['Approved', 'Pending', 'Won', 'Closed'];
+/* ข้อมูลในใบที่ server ดูแลเอง — ค่าจาก client ถูกแทนด้วยค่าในชีทเสมอ */
+var QT_SERVER_KEYS = ['approvalRoles', 'approvals', 'releasedTo', 'releasedAt', 'releasedBy', 'statusLog', 'statusChangedAt',
+                      'deleted', 'deletedAt', 'deletedBy'];
+/* ใบที่ถูกตรึง: field ที่ client ยังเปลี่ยนได้ */
+var QT_FROZEN_EDITABLE = ['stage', 'followStatus', 'salesNote', 'updated', 'rev'];
+/* ชื่อสถานะรุ่นเก่าในคอลัมน์ Status → ชื่อปัจจุบัน (ตรงกับ LEGACY_STATUS_MAP ใน Index.html) — ใช้ตัดสินกติกาสถานะของใบเก่า */
+var QT_LEGACY_STATUS = { 'Costing':'In Progress', 'Draft':'In Progress', 'Sent':'Pending', 'Lost':'Closed', 'Delivered':'Won', 'Done':'Won' };
+/* SR ที่มี QT แล้ว = หลักฐานคำขอลูกค้า → อ่านอย่างเดียว · เปลี่ยนได้แค่การผูก QT / สถานะ */
+var SR_LINKED_EDITABLE = ['stage', 'followStatus', 'updated', 'rev'];
+var SR_LINKED_STATUSES = ['Quoted', 'Cancelled'];
+/** id เอกสารใหม่ต้องเป็นตัวอักษร/ตัวเลข/ขีด เท่านั้น — กันการฝังโค้ดผ่าน id (ข้อมูลเก่าที่มีอยู่แล้วไม่ถูกตรวจ) */
+var DOC_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+/** วันที่ในใบ: รับเฉพาะตัวเลข/ขีด/จุด/ทับ/เวลา — อย่างอื่น (เช่น <img …>) ถูกล้างเป็นค่าว่าง ไม่แตะรูปแบบวันที่เดิมที่ถูกต้อง */
+var DOC_DATE_KEYS = ['needBy', 'reqDate', 'offerDate', 'validUntil', 'dueDate'];
+function cleanDateish_(v) {
+  if (v === null || v === undefined || v === '') return v;
+  var s = String(v);
+  return (s.length <= 40 && /^[0-9TZ:\-\/\.\s+]*$/.test(s)) ? v : '';
+}
+function sanitizeDocDates_(doc) {
+  if (!doc || typeof doc !== 'object') return doc;
+  var H = doc.header;
+  if (H && typeof H === 'object') DOC_DATE_KEYS.forEach(function (k) { if (H.hasOwnProperty(k)) H[k] = cleanDateish_(H[k]); });
+  ['created', 'updated'].forEach(function (k) { if (doc.hasOwnProperty(k)) doc[k] = cleanDateish_(doc[k]); });
+  return doc;
+}
+function isArr_(a) { return Object.prototype.toString.call(a) === '[object Array]'; }
+/** ประวัติในใบ: ต่อท้ายได้อย่างเดียว — ของเดิมในชีทคงไว้ทุกรายการ รับเฉพาะรายการใหม่ที่เวลาหลังรายการล่าสุด */
+function appendOnlyLogs_(stored, incoming) {
+  stored = isArr_(stored) ? stored.slice() : [];
+  if (!isArr_(incoming)) return stored;
+  var last = stored.length ? String(stored[stored.length - 1].timestamp || '') : '';
+  var seen = {};
+  stored.forEach(function (x) { seen[JSON.stringify(x)] = 1; });
+  var add = incoming.filter(function (x) {
+    return x && typeof x === 'object' && !seen[JSON.stringify(x)] && String(x.timestamp || '') > last;
+  }).slice(-50);
+  return stored.concat(add);
+}
 
 /* ============================================================ CONFIG — ค่าตั้งต้นรวมไว้ที่เดียว
  * SLA (วันทำการ จ.–ศ., ยังไม่รวมวันหยุดนักขัตฤกษ์) ต่อผู้รับผิดชอบ — แก้ได้ที่นี่ หรือใส่ Settings.sla = {...} ทับ
@@ -648,12 +718,12 @@ function saveQuote_(p, sess) {
   if (!p.id) return { ok:false, error:'missing id' };
   var sh = sheet_(SH.QUOTES), idx = headerIndex_(sh);
   var row = findRow_(sh, idx, 'Id', p.id);
+  var cur = row ? sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0] : null;
 
   // CONFLICT GUARD (optimistic lock): client ส่ง baseUpdatedAt = UpdatedAt ของ Sheet ที่ตัวเองเห็นล่าสุด
   // ถ้าบน Sheet มีคนเขียนหลังจากนั้น (แก้ราคา / อนุมัติ / ปล่อยราคา / Sales อัปเดต) → ไม่เขียนทับ ตอบ 409
   // ไม่ส่ง baseUpdatedAt (ใบใหม่ / client รุ่นเก่า) = ข้ามการตรวจ เหมือนพฤติกรรมเดิม
   if (row && p.baseUpdatedAt && !p.force) {
-    var cur = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
     var curRaw = cell_(cur, idx, 'UpdatedAt');
     var curMs = toMs_(curRaw), baseMs = toMs_(p.baseUpdatedAt);
     // ถ้า Sheets แปลง ISO string เป็น Date เอง ความละเอียดอาจหาย → เผื่อ 1 วินาทีกัน conflict หลอก
@@ -671,47 +741,147 @@ function saveQuote_(p, sess) {
     var ep = dataEpoch_();
     if (ep.atMs && toMs_(p.baseUpdatedAt) <= ep.atMs) return { ok:false, error:'DATA_RESET', code:409, id:p.id, dataEpoch:ep.epoch };
   }
-  var prevStatus = row ? String(sh.getRange(row, idx['Status']).getValue() || '') : '';   // v4.7: ใช้ตัดสินว่าต้องแจ้งเตือนไหม
+  // v5.9: id ของเอกสารใหม่ต้องเป็นตัวอักษร/ตัวเลขเท่านั้น (id ถูกฝังในปุ่มหน้าเว็บ — กันการฝังโค้ด)
+  if (!row && !DOC_ID_RE.test(String(p.id))) return { ok:false, error:'BAD_ID', code:400 };
+
+  // v5.9: ชนิดเอกสารของแถวเดิมเปลี่ยนไม่ได้ (SR ↔ QT) — SR คือหลักฐานคำขอลูกค้า
+  var docType = String(p.docType || 'QT') === 'SR' ? 'SR' : 'QT';
+  if (row && (String(cell_(cur, idx, 'DocType') || 'QT') === 'SR' ? 'SR' : 'QT') !== docType)
+    return { ok:false, error:'DOC_TYPE_LOCKED', code:409, serverType:String(cell_(cur, idx, 'DocType') || 'QT') };
+
+  var doc; try { doc = JSON.parse(String(p.detail || '')); } catch (e) { doc = null; }
+  if (!doc || typeof doc !== 'object' || isArr_(doc)) return { ok:false, error:'bad detail', code:400 };
+  var prev = null;
+  if (row && idx.Detail) { try { prev = JSON.parse(String(cell_(cur, idx, 'Detail') || '{}')); } catch (e) { prev = null; } }
+  if (prev && (!prev.id || prev._oversize)) prev = null;
+
+  var prevStatus = row ? String(cell_(cur, idx, 'Status') || '') : '';   // v4.7: ใช้ตัดสินว่าต้องแจ้งเตือนไหม
+  var newStatus = String(p.status || doc.status || '') || (docType === 'SR' ? 'Submitted' : 'In Progress');
+  // ใบรุ่นเก่า: คอลัมน์ Status อาจว่าง / เป็นชื่อเก่า (Sent / Costing …) — หน้าเว็บแปลงเป็นชื่อใหม่แล้วส่งมา → เทียบกติกาด้วยชื่อใหม่
+  var prevRule = prevStatus || (row && prev && prev.status ? String(prev.status) : '');
+  if (docType === 'QT') prevRule = QT_LEGACY_STATUS[prevRule] || prevRule;
+
+  /* v5.9: สถานะเปลี่ยนได้ตามกติกาของ server เท่านั้น
+   *  full   = ใบที่ยังไม่อนุมัติ → รับเนื้อหาจาก client (ยกเว้นข้อมูลที่ server ดูแล)
+   *  frozen = ใบที่อนุมัติแล้ว → เนื้อหาคงตามชีท เปลี่ยนได้แค่สถานะปิดงาน / เจ้าของงาน / หมายเหตุ
+   *  srLinked = SR ที่มี QT แล้ว → อ่านอย่างเดียว ผูก QT เพิ่ม / เปลี่ยนสถานะ Quoted · Cancelled ได้ */
+  var mode = 'full';
+  if (docType === 'QT') {
+    var frozenNext = QT_FROZEN_NEXT[prevRule];
+    if (frozenNext) {
+      if (frozenNext.indexOf(newStatus) < 0)
+        return { ok:false, error:'STATUS_LOCKED', code:409, serverStatus:prevStatus, asked:newStatus };
+      if (QT_FROZEN_NEXT[newStatus]) mode = 'frozen';
+    } else if (QT_SAVE_STATUSES.indexOf(newStatus) < 0) {
+      return { ok:false, error:'STATUS_LOCKED', code:409, serverStatus:prevStatus, asked:newStatus,
+               need:QT_SERVER_ONLY_STATUSES.indexOf(newStatus) >= 0 ? (newStatus === 'Pending' ? 'release' : 'approve') : '' };
+    }
+  } else if (prev && ((isArr_(prev.quoteIds) && prev.quoteIds.length) || prevStatus === 'Quoted')) {
+    if (newStatus !== prevStatus && SR_LINKED_STATUSES.indexOf(newStatus) < 0)
+      return { ok:false, error:'SR_LOCKED', code:409, serverStatus:prevStatus, asked:newStatus };
+    mode = 'srLinked';
+  }
+
   var stamp = nowISO_();
+  var sig = function (d) { return JSON.stringify([d.status, d.approvalRoles || [], (d.approvals || []).length, d.releasedTo || [], d.quoteIds || []]); };
+  var sigIn = sig(doc);                                  // ค่าที่ client ส่งมา (ก่อน server แก้) — ใช้ตัดสินว่าต้องส่งใบฉบับในชีทกลับไหม
+  var out;
+  if (mode !== 'full' && prev) {
+    out = JSON.parse(JSON.stringify(prev));
+    (mode === 'frozen' ? QT_FROZEN_EDITABLE : SR_LINKED_EDITABLE).forEach(function (k) { if (doc.hasOwnProperty(k)) out[k] = doc[k]; });
+    if (mode === 'frozen') {                                                    // คำขอลบค้าง: ยกเลิกได้ (หน้าเว็บลบ key ทิ้ง) — การลบจริงถูกกันที่ deleteQuote_
+      if (doc.deleteRequest) out.deleteRequest = doc.deleteRequest; else delete out.deleteRequest;
+    }
+    if (mode === 'frozen' && doc.header && typeof doc.header === 'object') {      // ผูก / เปลี่ยน Sales เจ้าของงาน
+      out.header = out.header || {};
+      if (doc.header.hasOwnProperty('salesUserId')) out.header.salesUserId = doc.header.salesUserId;
+      if (doc.header.hasOwnProperty('sales')) out.header.sales = doc.header.sales;
+    }
+  } else {
+    out = doc;
+  }
+  out.id = p.id; out.docType = docType; out.status = newStatus;
+  if (docType === 'SR' && prev) {                       // การผูก QT สะสมอย่างเดียว ไม่ถูกลบจากฝั่ง client
+    var qids = (isArr_(prev.quoteIds) ? prev.quoteIds : []).slice();
+    (isArr_(doc.quoteIds) ? doc.quoteIds : []).forEach(function (x) { if (x && qids.indexOf(x) < 0) qids.push(x); });
+    if (qids.length || out.hasOwnProperty('quoteIds')) out.quoteIds = qids;
+  }
+  if (docType === 'QT') {
+    QT_SERVER_KEYS.forEach(function (k) { if (prev && prev.hasOwnProperty(k)) out[k] = prev[k]; else delete out[k]; });
+    if (!isArr_(out.approvalRoles)) out.approvalRoles = [];
+    if (!isArr_(out.approvals)) out.approvals = [];
+    if (!isArr_(out.releasedTo)) out.releasedTo = [];
+    // ส่งกลับไปแก้ / ส่งตรวจใหม่ = ต้องอนุมัติใหม่ทั้ง 2 ขั้น (server ล้างเอง client ล้างแทนไม่ได้)
+    if (newStatus !== prevRule && ['Requested', 'In Progress', 'Submitted'].indexOf(newStatus) >= 0) {
+      out.approvalRoles = [];
+      if (newStatus === 'Submitted') out.approvals = out.approvals.concat([{ by:sess.name, userId:sess.userId, role:sess.role, act:'ส่งตรวจ', at:stamp }]);
+    }
+  } else {
+    if (prev && isArr_(prev.statusLog)) out.statusLog = prev.statusLog; else delete out.statusLog;
+    if (prev && prev.statusChangedAt) out.statusChangedAt = prev.statusChangedAt; else delete out.statusChangedAt;
+  }
+  if (newStatus !== prevRule || !row) stampStatus_(out, newStatus, stamp);        // เวลาเปลี่ยนสถานะ (SLA) — server ประทับเอง (ชื่อเก่า → ใหม่ ไม่นับว่าเปลี่ยน)
+  if (prev) out.auditLogs = appendOnlyLogs_(prev.auditLogs, doc.auditLogs);   // ประวัติเดิมแก้ / ลบไม่ได้
+  sanitizeDocDates_(out);
+
   var route = null;
-  if (p.detail && (String(p.docType || '') === 'SR' || String(p.docType || 'QT') === 'QT')) {
+  if (mode === 'full') {
     // v5.0: SR ที่บันทึกจากระบบทำราคา (รับงาน / ส่งต่อ / สร้างแทน Sales) — ผู้รับคำขอตัดสินที่ server เหมือน saveSR_
     // v5.4: QT ก็วิ่งตามหมวดสินค้าเช่นกัน (ใช้เมื่อยังไม่มีผู้รับงาน AssignedTo)
-    try {
-      var srDoc = JSON.parse(p.detail), srPrev = null;
-      if (row && idx.Detail) { try { srPrev = JSON.parse(String(sh.getRange(row, idx.Detail).getValue() || '{}')); } catch (e) { srPrev = null; } }
-      route = applyRoute_(srDoc, srPrev, sess, peopleCtx_());
-      p.detail = JSON.stringify(srDoc);
-    } catch (e) { route = null; }
+    try { route = applyRoute_(out, prev, sess, peopleCtx_()); } catch (e) { route = null; }
   }
-  var detail = safeDetail_(p.detail);
+  var detail = safeDetail_(JSON.stringify(out));
   var salesText = '';
   if (p.salesDetail) {
     try { salesText = safeDetail_(JSON.stringify(stripCost_(JSON.parse(p.salesDetail)))).text; }
     catch (e) { salesText = ''; }
   }
-  var vals = {
-    Id:p.id, DocType:p.docType || 'QT', DocNo:p.docNo || '', Ref:p.ref || '',
-    Title:p.title || '', Customer:p.customer || '', Sales:p.sales || '',
-    SalesUserId:p.salesUserId || '', AssignedTo:p.assignedTo || '',
-    Group:p.group || '', Round:num_(p.round, 1), Currency:p.currency || '',
-    Incoterm:p.incoterm || '', PriceTerm:p.priceTerm || '', Exrate:num_(p.exrate, 0),
-    OfferDate:p.offerDate || '', Stage:p.stage || '', Status:p.status || '',
-    FollowStatus:p.followStatus || '',
-    NeedsApproval:(p.needsApproval == 1 || p.needsApproval === true) ? 'TRUE' : '',
-    ReleasedTo:p.releasedTo || '', SalesNote:p.salesNote || '',
-    Lines:num_(p.lines, 0), Total:num_(p.total, 0), Cost:num_(p.cost, 0),
-    Profit:num_(p.profit, 0), GP:num_(p.gp, 0),
-    Updated:p.updated || todayStr_(), UpdatedAt:stamp, By:sess.name,
-    Detail:detail.text
-  };
-  if (salesText) vals.SalesDetail = salesText;
+  var H = out.header || {};
+  var vals;
+  if (mode === 'full') {
+    vals = {
+      Id:p.id, DocType:docType, DocNo:p.docNo || '', Ref:p.ref || '',
+      Title:p.title || '', Customer:p.customer || '', Sales:p.sales || '',
+      SalesUserId:p.salesUserId || '', AssignedTo:p.assignedTo || '',
+      Group:p.group || '', Round:num_(p.round, 1), Currency:p.currency || '',
+      Incoterm:p.incoterm || '', PriceTerm:p.priceTerm || '', Exrate:num_(p.exrate, 0),
+      OfferDate:cleanDateish_(p.offerDate) || '', Stage:p.stage || '', Status:newStatus,
+      FollowStatus:p.followStatus || '',
+      NeedsApproval:(p.needsApproval == 1 || p.needsApproval === true) ? 'TRUE' : '',
+      ReleasedTo:row ? String(cell_(cur, idx, 'ReleasedTo') || '') : '', SalesNote:p.salesNote || '',
+      Lines:num_(p.lines, 0), Total:num_(p.total, 0), Cost:num_(p.cost, 0),
+      Profit:num_(p.profit, 0), GP:num_(p.gp, 0),
+      Updated:p.updated || todayStr_(), UpdatedAt:stamp, By:sess.name,
+      Detail:detail.text
+    };
+    if (salesText) vals.SalesDetail = salesText;
+  } else {
+    vals = { Status:newStatus, Stage:out.stage || '', FollowStatus:out.followStatus || '',
+             Updated:todayStr_(), UpdatedAt:stamp, By:sess.name, Detail:detail.text };
+    if (mode === 'frozen') { vals.SalesNote = out.salesNote || ''; vals.SalesUserId = H.salesUserId || ''; vals.Sales = H.sales || ''; }
+    // SalesDetail: ใบเก่าที่ยังไม่มีสำเนาของ Sales → รับจาก client (ซ่อมข้อมูล) · มีแล้ว → แก้แค่สถานะ / เจ้าของงาน
+    var sdRaw = idx.SalesDetail ? String(cell_(cur, idx, 'SalesDetail') || '') : '';
+    if (!sdRaw && salesText) vals.SalesDetail = salesText;
+    else if (sdRaw) {
+      try {
+        var sd = JSON.parse(sdRaw);
+        sd.status = newStatus; sd.stage = out.stage; sd.followStatus = out.followStatus; sd.updatedAt = stamp;
+        if (mode === 'frozen' && sd.header && typeof sd.header === 'object') { sd.header.salesUserId = H.salesUserId || null; sd.header.sales = H.sales || ''; }
+        delete sd.auditLogs;
+        vals.SalesDetail = safeDetail_(JSON.stringify(stripCost_(sd))).text;
+      } catch (e) {}
+    }
+  }
   var savedRow = writeRow_(sh, idx, row, vals);
-  logRow_('save', p.docNo || p.ref || '', p.id, sess.name, detail.note + (p.force ? ' (force)' : ''));
-  larkHook_(sh, idx, savedRow, prevStatus, vals.Status, sess, (route && route.forwarded && vals.DocType === 'SR' && vals.Status === 'Submitted') ? { event:'SR_FORWARDED' } : null);
-  var out = { ok:true, id:p.id, trimmed:detail.trimmed, updatedAt:stamp, follow:followForRow_(sh, idx, savedRow) };
-  if (route) { try { var rd = JSON.parse(p.detail); out.routedTo = rd.routedTo || ''; out.routedName = rd.routedName || ''; out.routedWhy = rd.routedWhy || ''; } catch (e) {} }
-  return out;
+  logRow_('save', p.docNo || p.ref || String(cell_(cur || [], idx, 'DocNo') || ''), p.id, sess.name,
+          (prevStatus !== newStatus ? (prevStatus || 'ใหม่') + ' → ' + newStatus + ' ' : '') + (mode !== 'full' ? '[' + mode + '] ' : '') +
+          detail.note + (p.force ? ' (force)' : ''));
+  larkHook_(sh, idx, savedRow, prevStatus, newStatus, sess, (route && route.forwarded && docType === 'SR' && newStatus === 'Submitted') ? { event:'SR_FORWARDED' } : null);
+  var res = { ok:true, id:p.id, trimmed:detail.trimmed, updatedAt:stamp, follow:followForRow_(sh, idx, savedRow), mode:mode };
+  // v5.9: server แก้ค่าที่ client ส่งมา (สถานะ / การอนุมัติ / เนื้อหาที่ถูกตรึง) → ส่งใบฉบับในชีทกลับ ให้ client แทนที่ของในเครื่อง
+  if (mode !== 'full' || sigIn !== sig(out)) { res.detail = detail.text; res.serverFixed = true; }
+  if (route) { res.routedTo = out.routedTo || ''; res.routedName = out.routedName || ''; res.routedWhy = out.routedWhy || ''; }
+  return res;
 }
 
 /** Sales สร้าง/แก้คำขอราคา (SR) ได้ — server บังคับเจ้าของงานและตัดฟิลด์ต้นทุนทิ้งเสมอ */
@@ -723,6 +893,8 @@ function saveSR_(p, sess) {
   var doc;
   try { doc = JSON.parse(p.detail || '{}'); } catch (e) { return { ok:false, error:'bad detail' }; }
   if (String(doc.docType || 'SR') !== 'SR') return { ok:false, error:'ACCESS_DENIED', code:403 };
+  if (!row && !DOC_ID_RE.test(String(p.id))) return { ok:false, error:'BAD_ID', code:400 };   // v5.9: กันฝังโค้ดผ่าน id
+  sanitizeDocDates_(doc);                                                                       // v5.9: วันที่ต้องเป็นวันที่จริง
 
   var prev = null;
   if (!row && doc.docNo) {
@@ -734,6 +906,9 @@ function saveSR_(p, sess) {
     var cur = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
     if (String(cell_(cur, idx, 'DocType')) !== 'SR') return { ok:false, error:'ACCESS_DENIED', code:403 };
     try { prev = JSON.parse(String(cell_(cur, idx, 'Detail') || '{}')); } catch (e) { prev = null; }
+    // v5.9: SR ที่มี QT แล้ว = หลักฐานคำขอลูกค้า → ทุก role แก้ไม่ได้ (เดิมกันเฉพาะ Sales)
+    if (String(cell_(cur, idx, 'Status') || '') === 'Quoted' || (prev && isArr_(prev.quoteIds) && prev.quoteIds.length))
+      return { ok:false, error:'SR_LOCKED', code:409 };
     if (!sess.caps.writeQuote) {
       if (String(cell_(cur, idx, 'SalesUserId')) !== sess.userId) return { ok:false, error:'ACCESS_DENIED', code:403 };
       if (String(cell_(cur, idx, 'AssignedTo') || '')) return { ok:false, error:'SR_LOCKED', code:409 };
@@ -857,7 +1032,8 @@ function release_(p, sess) {
   if (!row) return { ok:false, error:'not found' };
   var cur = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
 
-  if (!(sess.caps.approve || isReleaser_(sess.userId))) return { ok:false, error:'ACCESS_DENIED', code:403 };
+  // v5.9: ผู้ปล่อยราคา = NON (gatekeeper) คนเดียว — ผู้บริหาร / Admin ปล่อยแทนไม่ได้ (Aon สั่ง)
+  if (!isReleaser_(sess.userId)) return { ok:false, error:'ACCESS_DENIED', code:403, need:'releaser' };
   var stNow = String(cell_(cur, idx, 'Status'));
   // v4.3: ใบ Pending รุ่นเก่าที่ยังไม่ได้ปล่อยให้เจ้าของงานจริง → ผู้ปล่อยราคากด "ยืนยันปล่อยราคา" ได้ (สถานะคง Pending)
   var fNow = followState_(followInfo_(cur, idx), followCfg_(), Date.now());
@@ -928,8 +1104,9 @@ function stampStatus_(d, status, at) {
   if (d.statusLog.length > 40) d.statusLog = d.statusLog.slice(-40);
 }
 
-/** อนุมัติ 2 ฝ่ายแบบ atomic (อยู่ใต้ ScriptLock ของ handle_) — v5.1
- *  Sourcing Manager (Procurement Mgr) + BD Manager ต้องครบทั้งคู่ · กดก่อนหลังได้ · ฝ่ายเดิมกดซ้ำไม่ได้ (ALREADY_APPROVED)
+/** อนุมัติ 2 ฝ่ายแบบ atomic (อยู่ใต้ ScriptLock ของ handle_) — v5.1 · v5.9
+ *  Sourcing Manager (Procurement Mgr) → BD Manager ต้องครบทั้งคู่ · ฝ่ายเดิมกดซ้ำไม่ได้ (ALREADY_APPROVED)
+ *  v5.9: BD Manager อนุมัติแทน Sourcing Manager ได้ (APPROVAL_SUBSTITUTE) — กดครั้งเดียวผ่านทั้ง 2 ขั้น บันทึก onBehalfOf
  *  GM อนุมัติแทนได้ทุกฝ่าย: ปกติ = ฝ่ายแรกที่ยังขาด 1 ฝ่าย · p.all = ทุกฝ่ายที่เหลือในครั้งเดียว — บันทึก onBehalfOf ทุกครั้ง
  *  อ่าน approvalRoles ล่าสุดจาก Sheet → เติมฝ่ายที่ผ่าน → คำนวณสถานะใหม่ → เขียนกลับในครั้งเดียว (กดพร้อมกันก็ไม่หาย) */
 function approve_(p, sess) {
@@ -953,14 +1130,18 @@ function approve_(p, sess) {
   if (!isGM) {
     if (roles.indexOf(role) >= 0 || before.complete) return { ok:false, error:'ALREADY_APPROVED', code:409, approvalRoles:roles, serverStatus:status };
   }
-  var fill = isGM ? (p.all ? before.missing.slice() : (before.next ? [before.next] : [])) : [role];
+  // v5.9: ลำดับ Sourcing Manager → BD Manager · BD อนุมัติแทน Sourcing Manager ได้ (ระดับก่อนหน้าที่ยังขาดถูกเติมพร้อมกัน)
+  var subs = APPROVAL_SUBSTITUTE[role] || [];
+  var fill = isGM ? (p.all ? before.missing.slice() : (before.next ? [before.next] : []))
+                  : before.missing.filter(function (r) { return subs.indexOf(r) >= 0; }).concat([role]);
   var stamp = nowISO_();
   var approvals = (Object.prototype.toString.call(d.approvals) === '[object Array]') ? d.approvals.slice() : [];
   fill.forEach(function (lvRole) {
     if (roles.indexOf(lvRole) < 0) roles.push(lvRole);
+    var behalf = isGM || lvRole !== role;
     var a = { by:sess.name, userId:sess.userId, role:role, level:REQUIRED_APPROVAL_ROLES.indexOf(lvRole) + 1, levelRole:lvRole,
-              act:isGM ? 'อนุมัติแทน ' + roleLabel_(lvRole) : 'อนุมัติ', at:stamp };
-    if (isGM) a.onBehalfOf = lvRole;
+              act:behalf ? 'อนุมัติแทน ' + roleLabel_(lvRole) : 'อนุมัติ', at:stamp };
+    if (behalf) a.onBehalfOf = lvRole;
     approvals.push(a);
   });
   var after = approvalStep_(roles), complete = after.complete;
@@ -971,7 +1152,8 @@ function approve_(p, sess) {
   if (complete) patch.needsApproval = false;
   var lvTxt = fill.map(roleLabel_).join(' + ');
   var audit = { timestamp:stamp, user:sess.name, role:role,
-                action:(isGM ? 'GM อนุมัติแทน ' : 'Approved ') + lvTxt + ': ' + status + ' → ' + newStatus +
+                action:(isGM ? 'GM อนุมัติแทน ' : (fill.length > 1 ? roleLabel_(role) + ' อนุมัติ (แทน ' + fill.slice(0, -1).map(roleLabel_).join(' + ') + ') ' : 'Approved ')) +
+                       lvTxt + ': ' + status + ' → ' + newStatus +
                        (complete ? '' : ' (รอ ' + after.missing.map(roleLabel_).join(', ') + ')') };
   var detailText = patchDetailCells_(sh, idx, row, patch, audit, stamp);
   var vals = { Status:newStatus, Stage:patch.stage, FollowStatus:'Pending',
@@ -992,15 +1174,25 @@ function deleteQuote_(p, sess) {
   if (!row) return { ok:true, id:p.id, note:'not found' };
   var cur = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
 
+  var isSR = String(cell_(cur, idx, 'DocType')) === 'SR', st = String(cell_(cur, idx, 'Status') || '');
   if (!sess.caps.writeQuote) {
-    if (String(cell_(cur, idx, 'DocType')) !== 'SR') return { ok:false, error:'ACCESS_DENIED', code:403 };
+    if (!isSR) return { ok:false, error:'ACCESS_DENIED', code:403 };
     if (String(cell_(cur, idx, 'SalesUserId')) !== sess.userId) return { ok:false, error:'ACCESS_DENIED', code:403 };
     if (String(cell_(cur, idx, 'AssignedTo') || '')) return { ok:false, error:'SR_LOCKED', code:409 };
+  } else if (!sess.caps.approve) {
+    // v5.9: Sourcing ลบเองไม่ได้ — กด "ขอลบ" แล้วให้ผู้บริหารอนุมัติ (เดิมกันไว้แค่หน้าจอ)
+    return { ok:false, error:'APPROVE_REQUIRED', code:403, need:'approve' };
+  }
+  // v5.9: ใบที่อนุมัติครบแล้วห้ามลบ ให้ปิดเป็น Closed แทน · SR ที่มี QT แล้วห้ามลบ (หลักฐานคำขอลูกค้า)
+  if (!isSR && QT_NO_DELETE_STATUSES.indexOf(st) >= 0) return { ok:false, error:'DELETE_LOCKED', code:409, serverStatus:st };
+  if (isSR) {
+    var dd = null; try { dd = JSON.parse(String(cell_(cur, idx, 'Detail') || '{}')); } catch (e) { dd = null; }
+    if (st === 'Quoted' || (dd && isArr_(dd.quoteIds) && dd.quoteIds.length)) return { ok:false, error:'SR_HAS_QT', code:409, serverStatus:st };
   }
   var stamp = nowISO_();
   patchDetailCells_(sh, idx, row, { deleted:true, deletedAt:stamp, deletedBy:sess.name }, null, stamp);
   writeRow_(sh, idx, row, { Deleted:'TRUE', DeletedAt:stamp, DeletedBy:sess.name, UpdatedAt:stamp });
-  logRow_('delete', '', p.id, sess.name, '');
+  logRow_('delete', String(cell_(cur, idx, 'DocNo') || ''), p.id, sess.name, (isSR ? 'SR ' : 'QT ') + st);
   return { ok:true, id:p.id, deleted:true, updatedAt:stamp };
 }
 
@@ -1030,6 +1222,7 @@ function gatekeeperId_() {
 
 /** ผู้ปล่อยราคาสำรอง (delegate) — ใช้ตอน NON ลา ตั้งค่าจากหน้าตั้งค่าของแอปหลัก */
 function releaseDelegateId_() {
+  if (!RELEASE_DELEGATE_ENABLED) return '';               // v5.9: ไม่มีผู้ปล่อยราคาสำรอง (ค่าเดิมใน Settings ยังเก็บไว้ ไม่ถูกลบ)
   try { return String(getSettingsRaw_().releaseDelegateId || ''); }
   catch (e) { return ''; }
 }
@@ -1227,7 +1420,7 @@ function peopleCtx_() {
   if (st.catOwner && typeof st.catOwner === 'object')
     for (var ck in st.catOwner) if (st.catOwner.hasOwnProperty(ck) && st.catOwner[ck]) out.catOwner[upGroup_(ck)] = String(st.catOwner[ck]);
   out.gate = gateFromList_(String(st.releaseGatekeeperId || ''), out.list);
-  out.delegate = String(st.releaseDelegateId || '');
+  out.delegate = RELEASE_DELEGATE_ENABLED ? String(st.releaseDelegateId || '') : '';   // v5.9: ไม่มีผู้ปล่อยราคาสำรอง
   return out;
 }
 /** ผู้รับผิดชอบเอกสารนี้ → { id, name, why, cat } (id ว่าง = ส่งถึงทีม Sourcing) — pure (ไม่มี I/O)

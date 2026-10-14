@@ -14,7 +14,7 @@ run() {   # run "หัวข้อ" "ชื่อเทสต์" คำสั�
   NAMES+=("$topic|$name"); RESULTS+=("$st|$n_pass|$n_fail|$((SECONDS - t0))s|$log")
   printf '%-4s  %-34s %-26s %4s ok %3s fail  %s\n' "$st" "$topic" "$name" "$n_pass" "$n_fail" "$((SECONDS - t0))s"
 }
-echo "MGS Pricing — v5.11 verification · $(date '+%Y-%m-%d %H:%M') · $(git rev-parse --short HEAD 2>/dev/null)"
+echo "MGS Pricing — v5.12 verification · $(date '+%Y-%m-%d %H:%M') · $(git rev-parse --short HEAD 2>/dev/null)"
 echo "logs: $OUT"; echo
 run "1 Smoke ทุก role / สิทธิ์ / projection" "smoke_roles"        node tests/smoke_roles.js "$ROOT"
 run "1 Smoke ทุก role / สิทธิ์ / projection" "test_backend"       node tests/test_backend.js Code.gs
@@ -50,6 +50,7 @@ run "17 v5.9 หน้าจอ: กันฝังโค้ด / ปุ่ม�
 run "18 v5.10 การ์ด Lark: ตาราง / กลุ่มผู้อนุมัติ" "test_v510"          node tests/test_v510.js "$ROOT"
 run "18 v5.10 ส่งอนุมัติจากหน้าเว็บ → การ์ด" "e2e_v510(browser)"  node tests/e2e_v510.js "$ROOT" "$OUT"
 run "19 v5.11 ไม่เด้งป๊อปอัป ค่าที่ถูกซ่อน" "e2e_v511(browser)"  node tests/e2e_v511.js "$ROOT"
+run "20 v5.12 ปิดการขาย / ปิดแล้ว ตรงความจริง" "e2e_v512(browser)"  node tests/e2e_v512.js "$ROOT" "$OUT"
 run "· Layout ทุกหน้า ทุกจอ"                 "layout_audit"       node tests/layout_audit.js "$ROOT" "$OUT"
 # audit_roles เป็นตัวเดินทุกเมนูทุก role (ไม่พิมพ์ PASS) → ตกถ้ามี JavaScript error ในหน้าใดหน้าหนึ่ง
 for i in "${!NAMES[@]}"; do if [[ "${NAMES[$i]}" == *"audit_roles"* ]]; then IFS='|' read -r _ _ _ _ alog <<< "${RESULTS[$i]}";

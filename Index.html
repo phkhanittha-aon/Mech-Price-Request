@@ -644,7 +644,7 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='5.11';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const APP_VERSION='5.12';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
 const BUILD='2026-10-12 · build 5.8 · Reminder วันละครั้ง';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
@@ -1393,6 +1393,14 @@ function localStep(q,owner){
   if(owner==='SALES')return 5;
   return (st==='Closed'&&!(q.releasedTo||[]).length)?-1:5;
 }
+/* v5.12: "ปิดการขายได้" นับเฉพาะใบ Won ที่ผ่านการปล่อยราคาให้ Sales เจ้าของงานแล้ว
+   ใบที่ถูกตั้ง Won ด้วยมือก่อน v5.9 โดยไม่เคยปล่อยราคา = กระบวนการราคายังไม่จบ → ไม่นับเป็นยอดขาย (server ส่ง follow.unpricedWon) */
+function wonUnpriced(q){
+  if(!q||q.docType==='SR'||statusOf(q)!=='Won')return false;
+  const f=q._follow;if(f&&f.unpricedWon!==undefined)return !!f.unpricedWon;
+  const o=q.header&&q.header.salesUserId;return !(o&&(q.releasedTo||[]).indexOf(o)>=0);
+}
+function isWonSale(q){return !!q&&q.docType!=='SR'&&statusOf(q)==='Won'&&!wonUnpriced(q)}
 function followOf(q){
   if(!q)return localFollow({});
   if(q.docType==='SR'&&linkedQTsOf(q).length)return {owner:'DONE',label:'จัดทำใบเสนอราคาแล้ว',actionable:false,level:'ok',waitingDays:0};
@@ -1412,6 +1420,7 @@ function qtStage(q){
 }
 /* ป้ายเตือนข้างสถานะ: บอกตรง ๆ ว่าทำไม Sales ยังไม่เห็นราคา และใครต้องทำอะไร */
 function statusWarn(q){
+  if(wonUnpriced(q))return '<div><span class="tag amber" style="font-size:10px" title="สถานะเป็น Won แต่ไม่เคยผ่านการอนุมัติ / ปล่อยราคาให้ Sales — ไม่นับเป็นยอดขาย · ถ้าไม่ได้ขายจริงให้เปลี่ยนเป็น Closed · ถ้าต้องเสนอราคาให้ทำรอบใหม่">⚠ Won แต่ยังไม่เคยปล่อยราคา</span></div>';   // v5.12
   if(!q||q.docType==='SR'||(q.status||'')!=='Pending')return '';
   const f=followOf(q);
   if(f.owner==='REPAIR')return f.repair==='NO_PRICE'
@@ -1693,7 +1702,8 @@ function srAwaitingIntake(q){return q.docType==='SR'&&q.status==='Submitted'&&!q
 function ballOf(q){
   const f=followOf(q),st=statusOf(q);
   if(f.owner==='DONE'){
-    if(q.docType!=='SR'&&st==='Won')return {who:'done',label:'ปิดการขายสำเร็จ',color:'green',f};
+    if(q.docType!=='SR'&&st==='Won')return isWonSale(q)?{who:'done',label:'ปิดการขายสำเร็จ',color:'green',f}
+      :{who:'done',label:'ปิดงาน — Won แต่ยังไม่เคยปล่อยราคา',color:'amber',f};   // v5.12
     return {who:'done',label:f.label||'ปิดงาน',color:'grey',f};
   }
   const w=waitTxt(f);
@@ -2686,7 +2696,7 @@ function viewSummary(){
   const maxT=Math.max(1,...cats.map(([,v])=>v.total));
   const customers=[...new Set(QUOTES.map(q=>q.header.customer||'—').filter(Boolean))].sort();
   const salesList=[...new Set(QUOTES.map(q=>q.header.sales||'—').filter(Boolean))].sort();
-  const wonTotal=list.filter(q=>q.status==='Won').reduce((s,q)=>s+quoteTHB(q),0);
+  const wonTotal=list.filter(isWonSale).reduce((s,q)=>s+quoteTHB(q),0);   // v5.12: เฉพาะ Won ที่ปล่อยราคาแล้ว
   return `
   <div class="row-flex no-print" style="gap:12px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
     <div class="pill-input" style="max-width:300px;flex:1;min-width:220px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -4169,7 +4179,7 @@ const KANBAN_COLS=[
   {key:'Submitted',   label:'รออนุมัติ 2 ฝ่าย',  match:q=>['Submitted','Partial Approved'].indexOf(statusOf(q))>=0, color:'var(--amber)'},
   {key:'Approved',    label:'รอปล่อยราคา',         match:q=>statusOf(q)==='Approved', color:'var(--blue)'},
   {key:'Pending',     label:'พร้อมเสนอลูกค้า',   match:q=>statusOf(q)==='Pending', color:'var(--green)'},
-  {key:'Won',         label:'ปิดการขายได้',        match:q=>statusOf(q)==='Won', color:'var(--green)'},
+  {key:'Won',         label:'ปิดการขายได้',        match:q=>isWonSale(q), color:'var(--green)'},   // v5.12: Won ที่ไม่เคยปล่อยราคาไม่นับ
 ];
 function kanbanScope(){
   let list=QUOTES.filter(q=>!q.deleted&&q.docType!=='SR');
@@ -4236,7 +4246,7 @@ function teamStats(){
       if(needsSalesUpdate(q))r.needUpd++;
       if(isOverdueFollow(q))r.overdue++;
     }
-    if(st==='Won'){r.won++;r.wonValue+=quoteTHB(q)}
+    if(isWonSale(q)){r.won++;r.wonValue+=quoteTHB(q)}   // v5.12
     const u=lastUpdate(q);
     if(u&&u.at>(r.lastUpd||''))r.lastUpd=u.at;
   });
@@ -6150,7 +6160,7 @@ function viewSalesDashboard(){
   const openCount=all.filter(q=>['Won','Closed'].indexOf(q.status||'')<0).length;
   const waitingRelease=buckets.find(b=>b.key==='release').items.length;
   const followCount=buckets.find(b=>b.key==='follow').items.length;
-  const wonCount=all.filter(q=>(q.status||'')==='Won').length;
+  const wonCount=all.filter(isWonSale).length;   // v5.12
   const overdue=all.filter(q=>q.followUpDate&&q.followUpDate<todayISO()&&['Won','Closed'].indexOf(q.status||'')<0).length;
   const gate=isGatekeeper()?QUOTES.filter(q=>q.docType!=='SR'&&!q.deleted&&(q.status||'')==='Approved'):[];
 

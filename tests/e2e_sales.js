@@ -79,7 +79,8 @@ async function salesLogin(p, email, pw) { await p.fill('#loginUser', email); awa
   await src.evaluate(() => { closeModal(); takeSRAndCost(QUOTES.find(x => x.docType === 'SR' && x.header.customer === 'Thaibev').id); }); await src.waitForTimeout(1200);
   await boss.evaluate(() => poll(true)); await boss.waitForTimeout(800);
   t = await boss.textContent('#main');
-  ok('Sales page shows SR picked up by Sourcing (live)', /ทำใบเสนอราคาแล้ว/.test(t) && t.includes('รอ Sourcing จัดทำราคา'), JSON.stringify(await boss.evaluate(() => Object.values(S.rows).map(r => [r.docNo, r.status, r.follow && r.follow.label, stageOf(r).key]))) + ' | filter=' + await boss.evaluate(() => S.filter));
+  // v5.12 (ตั้งใจ): คำขอที่ทำเป็นใบเสนอราคาแล้วแสดงเป็นงานเดียว (การ์ดใบเสนอราคา + "จากคำขอ SR-…") แทนการ์ด SR "จัดทำใบเสนอราคาแล้ว" ในหมวดปิดแล้ว
+  ok('Sales page shows SR picked up by Sourcing (live)', /จากคำขอ SR-2610-001/.test(t) && t.includes('รอ Sourcing จัดทำราคา') && !/จัดทำใบเสนอราคาแล้ว/.test(t), JSON.stringify(await boss.evaluate(() => Object.values(S.rows).map(r => [r.docNo, r.status, r.follow && r.follow.label, stageOf(r).key]))) + ' | filter=' + await boss.evaluate(() => S.filter));
 
   // 4) Sales Manager: team page + per-salesperson page
   const mgr = await page(b, '/sales');

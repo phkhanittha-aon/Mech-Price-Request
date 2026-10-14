@@ -280,7 +280,7 @@ table.pt .r{text-align:right}
        Sourcing / Manager (GM, Admin, Procurement Mgr, BD Mgr) → เห็นทุกคน + ขอราคาแทน Sales ได้
    - แอปนี้ไม่เคยได้รับต้นทุน / %GP รายบรรทัด (server ส่งเฉพาะ SalesDetail)
    ============================================================ */
-const APP_VERSION='5.11';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Index.html
+const APP_VERSION='5.12';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Index.html
 const BUILD='2026-10-11 · Sales build 5.8 · ติดตามสถานะคำขอราคา';
 const CLOUD_URL='https://script.google.com/macros/s/AKfycby6ZckOc1mv5eI8PDzcgscWCBqYyOWCgXTohIaqczJuIbKIQ597C8zQ_frMHpZhLHZV/exec';
 const HASH_SALT='mgs-internal-2025';                 // ต้องตรงกับ Index.html
@@ -610,10 +610,16 @@ const OWNER_SHORT={SOURCING:'Sourcing',MANAGEMENT:'ผู้อนุมัต�
 /* กลุ่มงานในมุมมองของ Sales
    wait  = กำลังรอราคา (อยู่ที่ Sourcing / ผู้จัดการ / ผู้ปล่อยราคา) — อ่านอย่างเดียว ไม่ใช่งานค้างของ Sales
    draft = ร่างคำขอที่ยังไม่ส่ง · ready = ได้ราคาแล้ว · done = ปิดแล้ว */
+/* v5.12: "ปิดการขายได้" = Won ที่ปล่อยราคาให้เจ้าของงานแล้ว · Won ที่ไม่เคยปล่อยราคา (ตั้งด้วยมือก่อน v5.9) ไม่นับเป็นยอดขาย */
+function wonSale(r){
+  if(isSR(r)||String(r.status||'')!=='Won')return false;
+  const f=fol(r);return f.unpricedWon!==undefined?!f.unpricedWon:priceShown(r);
+}
 function stageOf(r){
   const f=fol(r),st=String(r.status||'');
   if(f.owner==='DONE'){
-    if(!isSR(r)&&st==='Won')return {key:'done',label:'ปิดการขายได้ 🎉',color:'green',f};
+    if(!isSR(r)&&st==='Won')return wonSale(r)?{key:'done',label:'ปิดการขายได้ 🎉',color:'green',f}
+      :{key:'done',label:'ปิดงาน — ยังไม่เคยปล่อยราคา',color:'grey',f};
     return {key:'done',label:f.label||'ปิดงาน',color:'grey',f};
   }
   if(f.owner==='SALES')return isSR(r)?{key:'draft',label:'ร่าง — ยังไม่ได้ส่ง',color:'grey',f}
@@ -671,8 +677,11 @@ function srEditable(r){
   if(r.d&&(r.d.quoteIds||[]).length)return false;
   return ownerOf(r)===S.user.id||canRequestForOthers();
 }
+/* v5.12: คำขอ (SR) ที่ทำเป็นใบเสนอราคาแล้ว และใบเสนอราคานั้นอยู่ในหน้านี้ → แสดงเป็นงานเดียว (การ์ดใบเสนอราคา)
+   เดิมการ์ด SR ไปอยู่ "ปิดแล้ว" ทั้งที่ใบเสนอราคายังทำราคาอยู่ (นับเป็นงานปิดผิด + เห็นงานเดียวกัน 2 ใบ) */
+function srOfQT(q){return isSR(q)?null:Object.values(S.rows).find(x=>isSR(x)&&!x.deleted&&x.d&&(x.d.quoteIds||[]).indexOf(q.id)>=0)||null}   // v5.12: ใบนี้มาจากคำขอไหน
 function rowsOf(personId){
-  return Object.values(S.rows).filter(r=>!r.deleted&&(personId==='*'||ownerOf(r)===personId));
+  return Object.values(S.rows).filter(r=>!r.deleted&&(personId==='*'||ownerOf(r)===personId)&&!(isSR(r)&&flowSrc(r)!==r));
 }
 
 /* ============================================================ ROUTER (รองรับ hash ของหน้า /exec ด้วย google.script.url) */
@@ -734,7 +743,7 @@ function viewPerson(pid){
   const mine=pid===S.user.id;
   const all=rowsOf(pid);
   const by=k=>all.filter(r=>k==='update'?needsUpdate(r):stageOf(r).key===k);
-  const ready=by('ready'),won=all.filter(r=>r.status==='Won'),wait=by('wait');
+  const ready=by('ready'),won=all.filter(wonSale),wait=by('wait');   // v5.12
   const waitOver=wait.filter(r=>fol(r).level==='over').length;
   let list=S.filter==='all'?all.filter(r=>stageOf(r).key!=='done'||daysSince(r.updatedAt)<=30):by(S.filter);
   const lv=list.filter(r=>fol(r).level!=='ok'&&fol(r).owner!=='DONE');
@@ -819,7 +828,7 @@ function jobCard(r){
     <div class="job-mid"><span class="tag ${sg.color}">${esc(sg.label)}</span>${lvl}${unapproved?'<span class="tag red" title="ราคานี้ยังไม่ผ่านการอนุมัติ ห้ามส่งให้ลูกค้า">⚠ ราคายังไม่อนุมัติ</span>':''}</div>
     ${flow}
     <div class="job-mid">${val}</div>
-    <div class="job-meta">${waitLine}${routed}<span>${isSR(r)?'📨 คำขอราคา':'📄 ใบเสนอราคา'}</span>
+    <div class="job-meta">${waitLine}${routed}<span>${isSR(r)?'📨 คำขอราคา':'📄 ใบเสนอราคา'+(srOfQT(r)?' · จากคำขอ '+esc(srOfQT(r).docNo||''):'')}</span>
       ${S.route.page==='sales'&&S.route.id!==S.user.id||canTeam()?`<span>👤 ${esc(userName(ownerOf(r))||r.sales||'ไม่ระบุ')}</span>`:''}
       <span>อัปเดต ${esc(agoTH(r.updatedAt))}</span>
       ${upd?`<span>📝 ${esc(upd.stage||'')} · ${esc(agoTH(upd.at))}</span>`:''}
@@ -837,7 +846,7 @@ function viewTeam(){
     const open=rs.filter(r=>stageOf(r).key!=='done'),ready=rs.filter(r=>stageOf(r).key==='ready');
     return {id,u,name:u?u.name:(id?id:'ไม่ระบุเจ้าของ'),open:open.length,req:rs.filter(r=>stageOf(r).key==='wait').length,
       ready:ready.length,readyVal:ready.reduce((s,r)=>s+valueTHB(r),0),upd:rs.filter(needsUpdate).length,
-      won:rs.filter(r=>r.status==='Won').length};
+      won:rs.filter(wonSale).length};   // v5.12
   }).sort((a,b)=>b.upd-a.upd||b.open-a.open);
   return `<div class="person"><div style="flex:1"><h1>ทีมขาย</h1><div class="hint">เลือก Sales เพื่อเปิดหน้าของคนนั้น · ข้อมูลอัปเดตอัตโนมัติ</div></div></div>
   <div class="team" style="margin-top:16px">${people.map(p=>`<div class="tcard" onclick="go(${jsa('/sales/'+encodeURIComponent(p.id))})">

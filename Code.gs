@@ -42,6 +42,7 @@
  *     · ทั้ง SR และ QT วิ่งถึงผู้ดูแลหมวดของรายการส่วนใหญ่ในใบ (routeFor_) · QT ที่มีผู้รับงานแล้ว (AssignedTo) ใช้คนนั้น
  *     · row.follow.resp = ผู้รับผิดชอบเอกสาร (ทุกขั้น) · follow.actor.uids = Id ของคนที่ต้องทำต่อ → หน้าติดตามงานกรอง "งานของฉัน" ได้ตรง
  *     · ไม่มีคอลัมน์ใหม่ · ใบเก่าที่ไม่มี routedSig ยังใช้ผู้รับเดิมตราบที่กลุ่มงานไม่เปลี่ยน (ไม่ย้ายงานที่ส่งไปแล้ว)
+ *  S) v5.12: Won ที่ไม่เคยปล่อยราคาให้เจ้าของงาน → follow.unpricedWon = true · ป้าย "ปิดงาน — Won แต่ยังไม่เคยปล่อยราคา" (ไม่นับเป็นปิดการขาย)
  *  R) v5.10: การ์ด Lark — รายการสินค้าเป็นตาราง · บอทตัวที่ 3 (Bot C · LARK_APPROVAL_URL) กลุ่มผู้อนุมัติเท่านั้น
  *     การ์ดขออนุมัติแสดง ยอดทั้งโครงการ · กำไร · คอมเรท · ค่าคอม (จาก Detail.apprSummary ที่หน้าเว็บคำนวณ — อยู่ใน COST_KEYS ไม่หลุดถึง Sales)
  *  Q) v5.9 (ออดิตชุด 1 — ปิดรูด่วน): server ตัดสินสถานะเอง client ส่งมาแค่ "ขอ"
@@ -82,7 +83,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '5.11';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '5.12';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -1679,8 +1680,11 @@ function followState_(f, cfg, nowMs) {
   if (stp.handedOff) out.handedOff = true;
   if (stp.approvedRoles) out.approvedRoles = stp.approvedRoles;
   if (owner === 'DONE') {
+    // v5.12: Won ที่ไม่เคยปล่อยราคาให้ Sales เจ้าของงาน (ตั้งสถานะด้วยมือก่อน v5.9 / ข้อมูลเก่า) ≠ ปิดการขายได้ — กระบวนการราคายังไม่จบ
+    var wonNoPrice = !isSR && st === 'Won' && !(!!f.owner && f.releasedTo.indexOf(f.owner) >= 0);
+    if (!isSR && st === 'Won') out.unpricedWon = wonNoPrice;
     out.label = isSR ? ((f.quoteIds && f.quoteIds.length) || st === 'Quoted' ? 'จัดทำใบเสนอราคาแล้ว' : st === 'Cancelled' ? 'ยกเลิกคำขอ' : 'ปิดงานแล้ว')
-                     : (st === 'Won' ? 'ปิดการขายได้' : 'ปิดงาน');
+                     : (st === 'Won' ? (wonNoPrice ? 'ปิดงาน — Won แต่ยังไม่เคยปล่อยราคา' : 'ปิดการขายได้') : 'ปิดงาน');
     out.ownerLabel = out.label;
     return out;
   }

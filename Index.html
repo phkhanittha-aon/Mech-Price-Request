@@ -644,7 +644,7 @@ const $ = s=>document.querySelector(s);
    /exec URL, google.script.run is used automatically (no CORS). This embedded URL is the
    fetch fallback when the file is hosted elsewhere. === */
 /* ป้ายเวอร์ชัน — ใช้เช็คว่า /exec เสิร์ฟไฟล์ใหม่จริงหรือยัง (ดูมุมล่างหน้า Login) */
-const APP_VERSION='5.10';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
+const APP_VERSION='5.11';   // ต้องตรงกับ APP_VERSION ใน Code.gs / Sales.html
 const BUILD='2026-10-12 · build 5.8 · Reminder วันละครั้ง';
 /* ============================================================ RBAC (ฝั่ง client เป็นแค่ "กระจกเงา")
    ตัวจริงที่บังคับสิทธิ์คือ Code.gs — ฝั่งนี้ใช้เพื่อ UX เท่านั้น
@@ -1139,7 +1139,10 @@ async function optAdd(k,v,quiet){
   const res=await postCloud({action:'addMaster',list:k,value:v}),d=(res&&res.data)||{};   // postCloud ห่อคำตอบ server ไว้ใน .data
   if(res&&res.ok){if(d.master)MASTER=d.master;const got=d.value||v;
     if(!quiet)toast((d.existed?'มีในรายการอยู่แล้ว — เลือกให้แล้ว: ':'เพิ่มเข้ารายการแล้ว: ')+got,'good');return got}
-  if(res&&res.error==='VALUE_HIDDEN'){toast('“'+v+'” ถูก Admin ซ่อนไว้ — เลือกค่าอื่น หรือขอให้ Admin แสดงกลับที่หน้า ตั้งค่า','bad');return null}
+  // v5.11: ไม่เด้งป๊อปอัปแดงแล้ว (เดิมเด้งแม้เป็นงานเบื้องหลังแบบเงียบ เช่น ตอนเปิดแอป / พิมพ์หน่วยนับ)
+  //        กดเพิ่มเองในหน้าต่าง "เพิ่มตัวเลือก" → บอกในหน้าต่างนั้นแทน · งานเบื้องหลัง → เงียบ
+  if(res&&res.error==='VALUE_HIDDEN'){const h=!quiet&&document.querySelector('#modalRoot .modal-b .hint');
+    if(h)h.innerHTML='<span style="color:var(--red)">“'+esc(v)+'” ถูกซ่อนจากรายการแล้ว — เลือกค่าอื่น</span>';return null}
   if(res&&(res.error==='BAD_VALUE'||res.error==='ACCESS_DENIED'||res.error==='LIST_LOCKED')){if(!quiet)toast(errText(res),'bad');return null}
   local();if(!quiet)toast('ใช้ค่านี้ในใบนี้แล้ว — เพิ่มเข้ารายการไม่สำเร็จ ('+errText(res)+')','');return v;
 }

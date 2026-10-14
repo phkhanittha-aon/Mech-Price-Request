@@ -41,7 +41,7 @@
  *   ค่าของ v4.9 (LARK_WEBHOOK_*, LARK_APP_ID, LARK_CHAT_*) ไม่ใช้แล้ว — ยกเว้น LARK_WEBHOOK_REQUESTS ใช้แทน Bot A ได้ชั่วคราว
  *************************************************************/
 
-var LARK_VERSION = '5.10';
+var LARK_VERSION = '5.13';
 
 /* ============================================================ 1) EVENT TABLE */
 /**
@@ -239,6 +239,8 @@ function larkMoneyBlock_(m) {
     fields.push(field('ค่าคอม Sales', money(m.comAmt) + ' · คอมเรทเฉลี่ย ' + pct(m.comRate)));
     fields.push(field('กำไรหลังหักค่าคอม', money(Number(m.profit) - Number(m.comAmt))));
   } else fields.push(field('ค่าคอม Sales', '— (ใบนี้บันทึกจากหน้าเว็บรุ่นเก่า · เปิดใบแล้วบันทึกอีกครั้งเพื่อคำนวณ)'));
+  if (Number(m.custCom) > 0) fields.push(field('ค่าคอมให้ลูกค้า', money(m.custCom) + ' · ' + pct(m.custComPct) + ' (บวกในราคาขายแล้ว)'));   // v5.13
+  if (Number(m.excise) > 0) fields.push(field('สรรพสามิต + มหาดไทย', money(m.excise) + ' (รวมในต้นทุน)'));
   var out = [{ tag:'hr' }, { tag:'markdown', content:'💰 **ตัวเลขสำหรับผู้อนุมัติ** (กลุ่มนี้เท่านั้น)' }, { tag:'div', fields:fields }];
   var cats = (m.byCat || []).filter(function (c) { return c && c.cat; });
   if (cats.length && !m.comDeal) {
@@ -342,7 +344,8 @@ function larkMoneyFromRow_(r, idx) {
   var s = (d.apprSummary && typeof d.apprSummary === 'object') ? d.apprSummary : null, H = d.header || {};
   var lowGp = String(cell_(r, idx, 'NeedsApproval') || '').toUpperCase() === 'TRUE';
   if (s) return { cur:s.cur || H.currency || 'THB', total:s.total, profit:s.profit, gp:s.gp, comAmt:s.comAmt, comRate:s.comRate, byCat:s.byCat || [],
-                  comDeal:!!s.comDeal, supplierCom:s.supplierCom, supplierComPct:s.supplierComPct, lowGp:lowGp };
+                  comDeal:!!s.comDeal, supplierCom:s.supplierCom, supplierComPct:s.supplierComPct, lowGp:lowGp,
+                  custCom:s.custCom, custComPct:s.custComPct, excise:s.excise };                           // v5.13
   return { cur:String(cell_(r, idx, 'Currency') || H.currency || 'THB'), total:num_(cell_(r, idx, 'Total'), 0), profit:num_(cell_(r, idx, 'Profit'), 0),
            gp:num_(cell_(r, idx, 'GP'), 0), comAmt:null, comRate:null, byCat:[], lowGp:lowGp };
 }

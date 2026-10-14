@@ -42,6 +42,8 @@
  *     · ทั้ง SR และ QT วิ่งถึงผู้ดูแลหมวดของรายการส่วนใหญ่ในใบ (routeFor_) · QT ที่มีผู้รับงานแล้ว (AssignedTo) ใช้คนนั้น
  *     · row.follow.resp = ผู้รับผิดชอบเอกสาร (ทุกขั้น) · follow.actor.uids = Id ของคนที่ต้องทำต่อ → หน้าติดตามงานกรอง "งานของฉัน" ได้ตรง
  *     · ไม่มีคอลัมน์ใหม่ · ใบเก่าที่ไม่มี routedSig ยังใช้ผู้รับเดิมตราบที่กลุ่มงานไม่เปลี่ยน (ไม่ย้ายงานที่ส่งไปแล้ว)
+ *  T) v5.13: ดีล "ให้ค่าคอมลูกค้า" (H.dealType='custcom' · H.customerCom · L.custCom) · ค่าใช้จ่ายปันเข้าราคา / เฉพาะรายการที่เลือก (globalExtras[].mode/lines)
+ *     · ภาษีสรรพสามิต + มหาดไทย (L.excise · H.exciseRates) — คำนวณฝั่งหน้าเว็บ · server เพิ่มคีย์ใน COST_KEYS (ไม่หลุดถึง Sales)
  *  S) v5.12: Won ที่ไม่เคยปล่อยราคาให้เจ้าของงาน → follow.unpricedWon = true · ป้าย "ปิดงาน — Won แต่ยังไม่เคยปล่อยราคา" (ไม่นับเป็นปิดการขาย)
  *  R) v5.10: การ์ด Lark — รายการสินค้าเป็นตาราง · บอทตัวที่ 3 (Bot C · LARK_APPROVAL_URL) กลุ่มผู้อนุมัติเท่านั้น
  *     การ์ดขออนุมัติแสดง ยอดทั้งโครงการ · กำไร · คอมเรท · ค่าคอม (จาก Detail.apprSummary ที่หน้าเว็บคำนวณ — อยู่ใน COST_KEYS ไม่หลุดถึง Sales)
@@ -83,7 +85,7 @@
  *  5) ในระบบหลัก (Admin) กด "สร้างข้อมูลสำหรับ Sales" หนึ่งครั้ง เพื่อ backfill ใบเก่า
  *************************************************************/
 
-var APP_VERSION = '5.12';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
+var APP_VERSION = '5.13';   // ต้องตรงกับ APP_VERSION ใน Index.html / Sales.html (แสดงที่หน้า login และ ?diag=1)
 var SHEET_ID = '';
 var DEFAULT_PAGE = '';
 var TZ = 'Asia/Bangkok';
@@ -289,6 +291,7 @@ var COST_KEYS = ['up','costcur','dutypct','clearancepct','freep','oppct','extras
   'gp','gppct','gppercent','margin','purchasecost','supplierprice','supplier','landedcost',
   'internaldiscount','commission','comgroup','boiprice','defaultprice','needsapproval',
   'rawup','approvalroles','auditlogs','globalextras','apprsummary',
+  'customercom','custcom','custcompct','excise','exciserates','interiortax','lineexcise','embedpu','embedalloc',   // v5.13
   'suppliercom'];   // v5.3 ค่าคอมที่ Supplier จ่าย MGS (ดีลค่าคอม) — ข้อมูลภายใน
 
 function stripCost_(v) {
